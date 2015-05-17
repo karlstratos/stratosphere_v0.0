@@ -11,6 +11,9 @@ WARN = -Wall
 
 # Flags passed to the C++ compiler.
 CFLAGS = -isystem $(GTEST)/include $(WARN) -std=c++11
+ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
+	CFLAGS += -stdlib=libc++
+endif
 
 # Top-level commands.
 TESTS = util_test

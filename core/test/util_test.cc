@@ -13,7 +13,7 @@
 class StringTokenization : public testing::Test {
 protected:
     virtual void SetUp() {
-	example_ = "I have	some tabs	and spaces";
+	example_ = "I have	some\n tabs	and spaces";
     }
     string example_;
 };
@@ -21,7 +21,7 @@ protected:
 // Checks spliting by a string delimiter.
 TEST_F(StringTokenization, SplitByString) {
     vector<string> tokens_by_phrase;
-    util_string::split_by_string(example_, "some tabs", &tokens_by_phrase);
+    util_string::split_by_string(example_, "some\n tabs", &tokens_by_phrase);
     EXPECT_EQ(2, tokens_by_phrase.size());
     EXPECT_EQ("I have\t", tokens_by_phrase[0]);
     EXPECT_EQ("\tand spaces", tokens_by_phrase[1]);
@@ -30,7 +30,7 @@ TEST_F(StringTokenization, SplitByString) {
     util_string::split_by_string(example_, " ", &tokens_by_space);
     EXPECT_EQ(4, tokens_by_space.size());
     EXPECT_EQ("I", tokens_by_space[0]);
-    EXPECT_EQ("have	some", tokens_by_space[1]);
+    EXPECT_EQ("have	some\n", tokens_by_space[1]);
     EXPECT_EQ("tabs	and", tokens_by_space[2]);
     EXPECT_EQ("spaces", tokens_by_space[3]);
 }
