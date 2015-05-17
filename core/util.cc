@@ -4,6 +4,7 @@
 
 #include <dirent.h>
 #include <math.h>
+#include <string.h>
 #include <sys/stat.h>
 
 namespace util_string {
