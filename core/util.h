@@ -8,15 +8,28 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <math.h>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 using namespace std;
 
-namespace util {
+// Assert macro that allows adding a message to an assertion upon failure. It
+// implictly performs string conversion: ASSERT(x > 0, "Negative x: " << x);
+#ifndef NDEBUG
+#   define ASSERT(condition, message) \
+    do { \
+        if (! (condition)) { \
+            cerr << "Assertion `" #condition "` failed in " << __FILE__ \
+                      << " line " << __LINE__ << ": " << message << endl; \
+            exit(EXIT_FAILURE); \
+        } \
+    } while (false)
+#else
+#   define ASSERT(condition, message) do { } while (false)
+#endif
+
+namespace util_string {
     // Splits a line by char delimiters.
     void split_by_chars(const string &line, const string &char_delimiters,
 			vector<string> *tokens);
@@ -50,6 +63,23 @@ namespace util {
 
     // Converts a double vector to string.
     string convert_to_string(const vector<double> &sequence);
-}  // namespace util
+}  // namespace util_string
+
+namespace util_file {
+    // Returns true if the file exists, false otherwise.
+    bool exists(const string &file_path);
+
+    // Returns the type of the given file path: "file", "dir", or "other".
+    string get_file_type(const string &file_path);
+
+    // Lists files. If given a single file, the list contains the path to that
+    // file. If given a directory, the list contains the paths to the files
+    // inside that directory (non-recursively).
+    void list_files(const string &file_path, vector<string> *list);
+
+    // Returns the number of lines in a file.
+    size_t get_num_lines(const string &file_path);
+
+}  // namespace util_file
 
 #endif  // CORE_UTIL_H_

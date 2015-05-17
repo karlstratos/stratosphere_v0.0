@@ -2,7 +2,11 @@
 
 #include "util.h"
 
-namespace util {
+#include <dirent.h>
+#include <math.h>
+#include <sys/stat.h>
+
+namespace util_string {
     void split_by_chars(const string &line, const string &char_delimiters,
 			vector<string> *tokens) {
 	tokens->clear();
@@ -89,4 +93,60 @@ namespace util {
 	}
 	return sequence_string;
     }
-}  // namespace util
+}  // namespace util_string
+
+namespace util_file {
+    bool exists(const string &file_path) {
+	struct stat buffer;
+	return (stat(file_path.c_str(), &buffer) == 0);
+    }
+
+    string get_file_type(const string &file_path) {
+	string file_type;
+	struct stat stat_buffer;
+	if (stat(file_path.c_str(), &stat_buffer) == 0) {
+	    if (stat_buffer.st_mode & S_IFREG) {
+		file_type = "file";
+	    } else if (stat_buffer.st_mode & S_IFDIR) {
+		file_type = "dir";
+	    } else {
+		file_type = "other";
+	    }
+	} else {
+	    ASSERT(false, "Problem with " << file_path);
+	}
+	return file_type;
+    }
+
+    void list_files(const string &file_path, vector<string> *list) {
+	(*list).clear();
+	string file_type = get_file_type(file_path);
+	if (file_type == "dir") {
+	    DIR *pDIR = opendir(file_path.c_str());
+	    if (pDIR != NULL) {
+		struct dirent *entry = readdir(pDIR);
+		while (entry != NULL) {
+		    if (strcmp(entry->d_name, ".") != 0 &&
+			strcmp(entry->d_name, "..") != 0) {
+			(*list).push_back(file_path + "/" + entry->d_name);
+		    }
+		    entry = readdir(pDIR);
+		}
+	    }
+	    closedir(pDIR);
+	} else {
+	    (*list).push_back(file_path);
+	}
+    }
+
+    size_t get_num_lines(const string &file_path) {
+	size_t num_lines = 0;
+	string file_type = get_file_type(file_path);
+	ifstream file(file_path, ios::in);
+	if (file_type == "file") {
+	    string line;
+	    while (getline(file, line)) { ++num_lines; }
+	}
+	return num_lines;
+    }
+}  // namespace util_file
