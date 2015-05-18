@@ -140,6 +140,7 @@ namespace util_file {
 	}
     }
 
+    // TODO: change "file" -> "stream"
     size_t get_num_lines(const string &file_path) {
 	size_t num_lines = 0;
 	string file_type = get_file_type(file_path);
@@ -149,5 +150,17 @@ namespace util_file {
 	    while (getline(file, line)) { ++num_lines; }
 	}
 	return num_lines;
+    }
+
+    ostream& binary_write_string(const string &value, ofstream& file) {
+	size_t string_length = value.size();
+	binary_write_primitive(string_length, file);
+	return file.write(value.c_str(), string_length);
+    }
+
+    istream& binary_read_string(istream& file, string *value){
+	size_t string_length;
+	file.read(reinterpret_cast<char*>(&string_length), sizeof(size_t));
+	return file.read(reinterpret_cast<char*>(value), string_length);
     }
 }  // namespace util_file

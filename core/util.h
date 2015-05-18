@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace std;
@@ -50,6 +51,7 @@ namespace util_string {
     // Lowercases a string.
     string lowercase(const string &original_string);
 
+    // Converts a value to string up to a certain number of decimal places.
     template <typename T>
     string to_string_with_precision(const T value,
 				    const size_t num_decimal_places = 6) {
@@ -80,6 +82,65 @@ namespace util_file {
     // Returns the number of lines in a file.
     size_t get_num_lines(const string &file_path);
 
+    // Writes a primitive value to a binary ostream.
+    template<typename T>
+    ostream& binary_write_primitive(const T &value, ostream& file){
+	return file.write(reinterpret_cast<const char *>(&value), sizeof(T));
+    }
+
+    // Reads a primitive value from a binary ostream.
+    template<typename T>
+    istream& binary_read_primitive(istream& file, T *value){
+	return file.read(reinterpret_cast<char*>(value), sizeof(T));
+    }
+
+    // Writes a string to a binary ostream.
+    ostream& binary_write_string(const string &value, ofstream& file);
+
+    // Reads a string from a binary ostream.
+    ostream& binary_read_string(ofstream& file, string *value);
+
+    // Writes a primitive 2-nested unordered_map.
+    template <typename T1, typename T2, typename T3>
+    void binary_write_primitive(
+	const unordered_map<T1, unordered_map<T2, T3> > &table,
+	const string &file_path) {
+	ofstream file(file_path, ios::out | ios::binary);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	binary_write_primitive(table.size(), file);
+	for (const auto &pair1 : table) {
+	    binary_write_primitive(pair1.first, file);
+	    binary_write_primitive(pair1.second.size(), file);
+	    for (const auto &pair2 : pair1.second) {
+		binary_write_primitive(pair2.first, file);
+		binary_write_primitive(pair2.second, file);
+	    }
+	}
+    }
+
+    // Reads a primitive 2-nested unordered_map.
+    template <typename T1, typename T2, typename T3>
+    string binary_read_primitive(
+	const string &file_path,
+	unordered_map<T1, unordered_map<T2, T3> > *table) {
+	table->clear();
+	ifstream file(file_path, ios::in | ios::binary);
+	size_t num_first_keys;
+	binary_read_primitive(file, &num_first_keys);
+	for (size_t i = 0; i < num_first_keys; ++i) {
+	    T1 first_key;
+	    size_t num_second_keys;
+	    binary_read_primitive(file, &first_key);
+	    binary_read_primitive(file, &num_second_keys);
+	    for (size_t j = 0; j < num_second_keys; ++j) {
+		T2 second_key;
+		T3 value;
+		binary_read_primitive(file, &second_key);
+		binary_read_primitive(file, &value);
+		(*table)[first_key][second_key] = value;
+	    }
+	}
+    }
 }  // namespace util_file
 
 #endif  // CORE_UTIL_H_
