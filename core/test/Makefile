@@ -3,6 +3,9 @@
 # Where to find the root of Google Test.
 GTEST = ../../third_party/gtest-1.7.0
 
+# Where to find the Eigen package.
+EIGEN = ../../third_party/eigen-eigen-10219c95fe65
+
 # C++ compiler.
 CC = clang++
 
@@ -16,7 +19,7 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TESTS = util_test
+TESTS = util_test eigen_helper_test
 
 all: $(TESTS)
 
@@ -63,3 +66,12 @@ util_test.o: util_test.cc
 
 ../util.o: ../util.cc ../util.h
 	$(CC) $(CFLAGS) -c $< -o $@
+
+eigen_helper_test: eigen_helper_test.o ../eigen_helper.o gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+eigen_helper_test.o: eigen_helper_test.cc
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+../eigen_helper.o: ../eigen_helper.cc ../eigen_helper.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@

@@ -140,7 +140,6 @@ namespace util_file {
 	}
     }
 
-    // TODO: change "file" -> "stream"
     size_t get_num_lines(const string &file_path) {
 	size_t num_lines = 0;
 	string file_type = get_file_type(file_path);
@@ -153,14 +152,43 @@ namespace util_file {
     }
 
     ostream& binary_write_string(const string &value, ofstream& file) {
-	size_t string_length = value.size();
-	binary_write_primitive(string_length, file);
-	return file.write(value.c_str(), string_length);
+	size_t string_length_plus_null = value.size() + 1;  // Include '\0'.
+	binary_write_primitive(string_length_plus_null, file);
+	return file.write(reinterpret_cast<const char *>(&value),
+			  string_length_plus_null);
     }
 
     istream& binary_read_string(istream& file, string *value){
-	size_t string_length;
-	file.read(reinterpret_cast<char*>(&string_length), sizeof(size_t));
-	return file.read(reinterpret_cast<char*>(value), string_length);
+	size_t string_length_plus_null;
+	file.read(reinterpret_cast<char*>(&string_length_plus_null),
+		  sizeof(size_t));
+	return file.read(reinterpret_cast<char*>(value),
+			 string_length_plus_null);
+    }
+
+    void binary_write(const unordered_map<string, size_t> &table,
+		      const string &file_path) {
+	ofstream file(file_path, ios::out | ios::binary);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	binary_write_primitive(table.size(), file);
+	for (const auto &pair : table) {
+	    binary_write_string(pair.first, file);
+	    binary_write_primitive(pair.second, file);
+	}
+    }
+
+    void binary_read(const string &file_path,
+		     unordered_map<string, size_t> *table) {
+	table->clear();
+	ifstream file(file_path, ios::in | ios::binary);
+	size_t num_keys;
+	binary_read_primitive(file, &num_keys);
+	for (size_t i = 0; i < num_keys; ++i) {
+	    string key;
+	    size_t value;
+	    binary_read_string(file, &key);
+	    binary_read_primitive(file, &value);
+	    (*table)[key] = value;
+	}
     }
 }  // namespace util_file

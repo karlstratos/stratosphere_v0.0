@@ -4,9 +4,6 @@
 
 #include "gtest/gtest.h"
 
-//#include <stdio.h>
-//#include <stdlib.h>
-
 #include "../util.h"
 
 // Test class for string tokenization.
@@ -118,6 +115,108 @@ TEST(UtilFile, FileExists) {
     remove(file_path.c_str());
     EXPECT_FALSE(util_file::exists(file_path));
 }
+
+// Test class for file writing/reading.
+class FileWritingReading : public testing::Test {
+protected:
+    virtual void SetUp() {
+	flat_[0.31] = 7;
+	double_nested_[0][-3] = 0.0;
+	double_nested_[100][-2] = 1.0 / 3.0;
+	flat_string_to_size_t_["The"] = 0;
+	flat_string_to_size_t_["elephant"] = 1;
+	flat_string_to_size_t_["saw"] = 2;
+	flat_string_to_size_t_["."] = 3;
+    }
+    unordered_map<float, size_t> flat_;
+    unordered_map<size_t, unordered_map<int, double> > double_nested_;
+    unordered_map<string, size_t> flat_string_to_size_t_;
+    double tol_ = 1e-6;
+};
+
+// Checks writing/reading a flat unordered_map of primitive types.
+TEST_F(FileWritingReading, FlatUnorderedMapPrimitive) {
+    string file_path = tmpnam(nullptr);
+    util_file::binary_write_primitive(flat_, file_path);
+
+    unordered_map<float, size_t> table;
+    util_file::binary_read_primitive(file_path, &table);
+    EXPECT_EQ(1, table.size());
+    EXPECT_EQ(7, table[0.31]);
+    remove(file_path.c_str());
+}
+
+// Checks writing/reading a 2-nested unordered_map of primitive types.
+TEST_F(FileWritingReading, DoubleNestedUnorderedMapPrimitive) {
+    string file_path = tmpnam(nullptr);
+    util_file::binary_write_primitive(double_nested_, file_path);
+
+    unordered_map<size_t, unordered_map<int, double> > table;
+    util_file::binary_read_primitive(file_path, &table);
+    EXPECT_EQ(2, table.size());
+    EXPECT_EQ(1, table[0].size());
+    EXPECT_NEAR(0.0, table[0][-3], tol_);
+    EXPECT_EQ(1, table[100].size());
+    EXPECT_NEAR(1.0 / 3.0, table[100][-2], tol_);
+    remove(file_path.c_str());
+}
+
+// Checks writing/reading a flat (string, size_t) unordered_map.
+TEST_F(FileWritingReading, FlatUnorderedMapStringSizeT) {
+    string file_path = tmpnam(nullptr);
+    util_file::binary_write(flat_string_to_size_t_, file_path);
+
+    unordered_map<string, size_t> table;
+    util_file::binary_read(file_path, &table);
+    EXPECT_EQ(4, table.size());
+    EXPECT_EQ(0, table["The"]);
+    EXPECT_EQ(1, table["elephant"]);
+    EXPECT_EQ(2, table["saw"]);
+    EXPECT_EQ(3, table["."]);
+    remove(file_path.c_str());
+}
+
+// Checks sorting a vector of pairs by the second values.
+TEST(UtilMisc, SortVectorOfPairsBySecondValues) {
+    double tol = 1e-6;
+    vector<pair<string, double> > pairs;
+    pairs.emplace_back("a", 3.0);
+    pairs.emplace_back("b", 0.09);
+    pairs.emplace_back("c", 100);
+
+    // Sort in increasing magnitude.
+    sort(pairs.begin(), pairs.end(),
+	 util_misc::sort_pairs_second<string, double>());
+    EXPECT_EQ("b", pairs[0].first);
+    EXPECT_NEAR(0.09, pairs[0].second, tol);
+    EXPECT_EQ("a", pairs[1].first);
+    EXPECT_NEAR(3.0, pairs[1].second, tol);
+    EXPECT_EQ("c", pairs[2].first);
+    EXPECT_NEAR(100.0, pairs[2].second, tol);
+
+    // Sort in decreasing magnitude.
+    sort(pairs.begin(), pairs.end(),
+	 util_misc::sort_pairs_second<string, double, greater<int> >());
+    EXPECT_EQ("c", pairs[0].first);
+    EXPECT_NEAR(100.0, pairs[0].second, tol);
+    EXPECT_EQ("a", pairs[1].first);
+    EXPECT_NEAR(3.0, pairs[1].second, tol);
+    EXPECT_EQ("b", pairs[2].first);
+    EXPECT_NEAR(0.09, pairs[2].second, tol);
+}
+
+// Checks inverting an unordered_map.
+TEST(UtilMisc, InvertUnorderedMap) {
+    unordered_map<string, size_t> table1;
+    table1["a"] = 0;
+    table1["b"] = 1;
+    unordered_map<size_t, string> table2;
+    util_misc::invert(table1, &table2);
+    EXPECT_EQ(2, table2.size());
+    EXPECT_EQ("a", table2[0]);
+    EXPECT_EQ("b", table2[1]);
+}
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -82,23 +82,47 @@ namespace util_file {
     // Returns the number of lines in a file.
     size_t get_num_lines(const string &file_path);
 
-    // Writes a primitive value to a binary ostream.
+    // Writes a primitive value to a binary file.
     template<typename T>
     ostream& binary_write_primitive(const T &value, ostream& file){
 	return file.write(reinterpret_cast<const char *>(&value), sizeof(T));
     }
 
-    // Reads a primitive value from a binary ostream.
+    // Reads a primitive value from a binary file.
     template<typename T>
     istream& binary_read_primitive(istream& file, T *value){
 	return file.read(reinterpret_cast<char*>(value), sizeof(T));
     }
 
-    // Writes a string to a binary ostream.
-    ostream& binary_write_string(const string &value, ofstream& file);
+    // Writes a primitive unordered_map.
+    template <typename T1, typename T2>
+    void binary_write_primitive(const unordered_map<T1, T2> &table,
+				const string &file_path) {
+	ofstream file(file_path, ios::out | ios::binary);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	binary_write_primitive(table.size(), file);
+	for (const auto &pair : table) {
+	    binary_write_primitive(pair.first, file);
+	    binary_write_primitive(pair.second, file);
+	}
+    }
 
-    // Reads a string from a binary ostream.
-    ostream& binary_read_string(ofstream& file, string *value);
+    // Reads a primitive unordered_map.
+    template <typename T1, typename T2>
+    void binary_read_primitive(const string &file_path,
+			       unordered_map<T1, T2> *table) {
+	table->clear();
+	ifstream file(file_path, ios::in | ios::binary);
+	size_t num_keys;
+	binary_read_primitive(file, &num_keys);
+	for (size_t i = 0; i < num_keys; ++i) {
+	    T1 key;
+	    T2 value;
+	    binary_read_primitive(file, &key);
+	    binary_read_primitive(file, &value);
+	    (*table)[key] = value;
+	}
+    }
 
     // Writes a primitive 2-nested unordered_map.
     template <typename T1, typename T2, typename T3>
@@ -120,7 +144,7 @@ namespace util_file {
 
     // Reads a primitive 2-nested unordered_map.
     template <typename T1, typename T2, typename T3>
-    string binary_read_primitive(
+    void binary_read_primitive(
 	const string &file_path,
 	unordered_map<T1, unordered_map<T2, T3> > *table) {
 	table->clear();
@@ -141,6 +165,42 @@ namespace util_file {
 	    }
 	}
     }
+
+    // Writes a string to a binary file.
+    ostream& binary_write_string(const string &value, ofstream& file);
+
+    // Reads a string from a binary file.
+    ostream& binary_read_string(ofstream& file, string *value);
+
+    // Writes a (string, size_t) unordered_map to a binary file.
+    void binary_write(const unordered_map<string, size_t> &table,
+		      const string &file_path);
+
+    // Reads a (string, size_t) unordered_map from a binary file.
+    void binary_read(const string &file_path,
+		     unordered_map<string, size_t> *table);
 }  // namespace util_file
+
+namespace util_misc {
+    // Template for a struct used to sort a vector of pairs by the second
+    // values. Use it like this:
+    //    sort(v.begin(), v.end(), util_misc::sort_pairs_second<int, int>());
+    //    sort(v.begin(), v.end(),
+    //         util_misc::sort_pairs_second<int, int, greater<int> >());
+    template <class T1, class T2, class Predicate = less<T2> >
+    struct sort_pairs_second {
+	bool operator()(const pair<T1, T2> &left, const pair<T1, T2> &right) {
+	    return Predicate()(left.second, right.second);
+	}
+    };
+
+    // Inverts an unordered_map.
+    template <typename T1, typename T2>
+    void invert(const unordered_map<T1, T2> &table1,
+		unordered_map<T2, T1> *table2) {
+	table2->clear();
+	for (const auto &pair : table1) { (*table2)[pair.second] = pair.first; }
+    }
+}  // namespace util_misc
 
 #endif  // CORE_UTIL_H_
