@@ -2,6 +2,8 @@
 
 #include "eigen_helper.h"
 
+#include <random>
+
 namespace eigen_helper {
     void compute_pseudoinverse(const Eigen::MatrixXd &matrix,
 			       Eigen::MatrixXd *matrix_pseudoinverse) {

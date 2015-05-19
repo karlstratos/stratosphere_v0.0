@@ -11,8 +11,6 @@
 
 #include "util.h"
 
-using namespace std;
-
 namespace eigen_helper {
     // Writes an Eigen Matrix object to a binary file.
     template<typename EigenMatrix>

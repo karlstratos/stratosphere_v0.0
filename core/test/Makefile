@@ -19,7 +19,7 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TESTS = util_test eigen_helper_test
+TESTS = util_test eigen_helper_test optimize_test
 
 all: $(TESTS)
 
@@ -74,4 +74,13 @@ eigen_helper_test.o: eigen_helper_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 ../eigen_helper.o: ../eigen_helper.cc ../eigen_helper.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+optimize_test: optimize_test.o ../optimize.o gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+optimize_test.o: optimize_test.cc
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+../optimize.o: ../optimize.cc ../optimize.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
