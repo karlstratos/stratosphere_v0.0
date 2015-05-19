@@ -84,14 +84,14 @@ namespace util_file {
 
     // Writes a primitive value to a binary file.
     template<typename T>
-    ostream& binary_write_primitive(const T &value, ostream& file){
-	return file.write(reinterpret_cast<const char *>(&value), sizeof(T));
+    void binary_write_primitive(const T &value, ostream& file){
+	file.write(reinterpret_cast<const char *>(&value), sizeof(T));
     }
 
     // Reads a primitive value from a binary file.
     template<typename T>
-    istream& binary_read_primitive(istream& file, T *value){
-	return file.read(reinterpret_cast<char*>(value), sizeof(T));
+    void binary_read_primitive(istream& file, T *value){
+	file.read(reinterpret_cast<char*>(value), sizeof(T));
     }
 
     // Writes a primitive unordered_map.
@@ -167,10 +167,10 @@ namespace util_file {
     }
 
     // Writes a string to a binary file.
-    ostream& binary_write_string(const string &value, ofstream& file);
+    void binary_write_string(const string &value, ofstream& file);
 
     // Reads a string from a binary file.
-    ostream& binary_read_string(ofstream& file, string *value);
+    void binary_read_string(ofstream& file, string *value);
 
     // Writes a (string, size_t) unordered_map to a binary file.
     void binary_write(const unordered_map<string, size_t> &table,

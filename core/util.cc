@@ -151,19 +151,19 @@ namespace util_file {
 	return num_lines;
     }
 
-    ostream& binary_write_string(const string &value, ofstream& file) {
-	size_t string_length_plus_null = value.size() + 1;  // Include '\0'.
-	binary_write_primitive(string_length_plus_null, file);
-	return file.write(reinterpret_cast<const char *>(&value),
-			  string_length_plus_null);
+    void binary_write_string(const string &value, ofstream& file) {
+	size_t string_length = value.length();
+	binary_write_primitive(string_length, file);
+	file.write(value.c_str(), string_length);
     }
 
-    istream& binary_read_string(istream& file, string *value){
-	size_t string_length_plus_null;
-	file.read(reinterpret_cast<char*>(&string_length_plus_null),
-		  sizeof(size_t));
-	return file.read(reinterpret_cast<char*>(value),
-			 string_length_plus_null);
+    void binary_read_string(istream& file, string *value){
+	size_t string_length;
+	binary_read_primitive(file, &string_length);
+	char* buffer = new char[string_length];
+	file.read(buffer, string_length);
+	value->assign(buffer, string_length);
+	delete[] buffer;
     }
 
     void binary_write(const unordered_map<string, size_t> &table,

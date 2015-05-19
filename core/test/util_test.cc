@@ -4,6 +4,8 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
+
 #include "../util.h"
 
 // Test class for string tokenization.
