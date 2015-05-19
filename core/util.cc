@@ -6,6 +6,7 @@
 #include <math.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <algorithm>
 
 namespace util_string {
     void split_by_chars(const string &line, const string &char_delimiters,
@@ -192,3 +193,89 @@ namespace util_file {
 	}
     }
 }  // namespace util_file
+
+namespace util_math {
+    double log0(double a) {
+	if (a > 0.0) {
+	    return log(a);
+	} else if (a == 0.0) {
+	    return -numeric_limits<double>::infinity();
+	} else {
+	    ASSERT(false, "Cannot take log of negative value: " << a);
+	}
+    }
+
+    double sum_logs(double log_a, double log_b) {
+	if (log_a < log_b) {
+	    double temp = log_a;
+	    log_a = log_b;
+	    log_b = temp;
+	}
+	if (log_a <= -numeric_limits<double>::infinity()) { return log_a; }
+
+	double negative_difference = log_b - log_a;
+	return (negative_difference < -20) ?
+	    log_a : log_a + log(1.0 + exp(negative_difference));
+    }
+
+    double compute_spearman(const vector<double> &sequence1,
+			    const vector<double> &sequence2) {
+	ASSERT(sequence1.size() == sequence2.size(), "Different lengths: "
+	       << sequence1.size() << " vs " << sequence2.size());
+
+	vector<double> sequence1_transformed;
+	vector<double> sequence2_transformed;
+	transform_average_rank(sequence1, &sequence1_transformed);
+	transform_average_rank(sequence2, &sequence2_transformed);
+
+	size_t num_instances = sequence1.size();
+	double sum_squares = 0;
+	for (size_t i = 0; i < num_instances; ++i) {
+	    sum_squares += pow(sequence1_transformed[i] -
+			       sequence2_transformed[i], 2);
+	}
+	double uncorrelatedness = 6.0 * sum_squares /
+	    (num_instances * (pow(num_instances, 2) - 1));
+	double corrleation = 1.0 - uncorrelatedness;
+	return corrleation;
+    }
+
+    void transform_average_rank(const vector<double> &sequence,
+				vector<double> *transformed_sequence) {
+	transformed_sequence->clear();
+	vector<double> sorted_values = sequence;
+	sort(sorted_values.begin(), sorted_values.end());
+	vector<double> averaged_ranks;
+	size_t index = 0;
+	while (index < sorted_values.size()) {
+	    size_t num_same = 1;
+	    size_t rank_sum = index + 1;
+	    while (index + 1 < sorted_values.size() &&
+		   fabs(sorted_values[index + 1] -
+			sorted_values[index]) < 1e-15) {
+		++index;
+		++num_same;
+		rank_sum += index + 1;
+	    }
+
+	    double averaged_rank = ((double) rank_sum) / num_same;
+	    for (size_t j = 0; j < num_same; ++j) {
+		// Assign the average rank to all tied elements.
+		averaged_ranks.push_back(averaged_rank);
+	    }
+	    ++index;
+	}
+
+	// Map each value to the corresponding index in averaged_ranks. A value
+	// can appear many times but it doesn't matter since it will have the
+	// same averaged rank.
+	unordered_map<double, size_t> value2index;
+	for (size_t index = 0; index < sorted_values.size(); ++index) {
+	    value2index[sorted_values[index]] = index;
+	}
+	for (double value : sequence) {
+	    size_t index = value2index[value];
+	    transformed_sequence->push_back(averaged_ranks[index]);
+	}
+    }
+}  // namespace util_math

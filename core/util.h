@@ -181,13 +181,30 @@ namespace util_file {
 		     unordered_map<string, size_t> *table);
 }  // namespace util_file
 
+namespace util_math {
+    // Returns -inf if a = 0, returns log(a) otherwise (error if a < 0).
+    double log0(double a);
+
+    // Given two log values log(a) and log(b), computes log(a + b) without
+    // exponentiating log(a) and log(b).
+    double sum_logs(double log_a, double log_b);
+
+    // Computes Spearman's rank correlation coefficient between two sequences.
+    double compute_spearman(const vector<double> &sequence1,
+			    const vector<double> &sequence2);
+
+    // Computes the average-rank transformation of a sequence.
+    void transform_average_rank(const vector<double> &sequence,
+				vector<double> *transformed_sequence);
+}  // namespace util_math
+
 namespace util_misc {
     // Template for a struct used to sort a vector of pairs by the second
     // values. Use it like this:
     //    sort(v.begin(), v.end(), util_misc::sort_pairs_second<int, int>());
     //    sort(v.begin(), v.end(),
     //         util_misc::sort_pairs_second<int, int, greater<int> >());
-    template <class T1, class T2, class Predicate = less<T2> >
+    template <typename T1, typename T2, typename Predicate = less<T2> >
     struct sort_pairs_second {
 	bool operator()(const pair<T1, T2> &left, const pair<T1, T2> &right) {
 	    return Predicate()(left.second, right.second);

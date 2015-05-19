@@ -178,6 +178,28 @@ TEST_F(FileWritingReading, FlatUnorderedMapStringSizeT) {
     remove(file_path.c_str());
 }
 
+// Checks the average-rank transform of a sequence.
+TEST(UtilMath, TransformAverageRank) {
+    vector<double> sequence =   {3,  -5,   4,   1,   1,  9,  10,  10};
+    //         Sorted:          {-5,  1,   1,   3,   4,  9,  10,  10}
+    //         Ranks:           <1,   2,   3,   4,   5,  6,   7,   8>
+    //         Average ranks:   <1, 2.5, 2.5,   4,   5,  6, 7.5, 7.5>
+    //         Unsorted:        <4,   1,   5, 2.5, 2.5,  6, 7.5, 7.5>
+    vector<double> average_ranks;
+    util_math::transform_average_rank(sequence, &average_ranks);
+
+    double tol = 1e-10;
+    EXPECT_EQ(8, average_ranks.size());
+    EXPECT_NEAR(4.0, average_ranks[0], tol);
+    EXPECT_NEAR(1.0, average_ranks[1], tol);
+    EXPECT_NEAR(5.0, average_ranks[2], tol);
+    EXPECT_NEAR(2.5, average_ranks[3], tol);
+    EXPECT_NEAR(2.5, average_ranks[4], tol);
+    EXPECT_NEAR(6.0, average_ranks[5], tol);
+    EXPECT_NEAR(7.5, average_ranks[6], tol);
+    EXPECT_NEAR(7.5, average_ranks[7], tol);
+}
+
 // Checks sorting a vector of pairs by the second values.
 TEST(UtilMisc, SortVectorOfPairsBySecondValues) {
     double tol = 1e-6;
