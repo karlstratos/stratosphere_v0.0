@@ -16,7 +16,7 @@ namespace optimize {
 				     const Eigen::VectorXd &target_vector,
 				     const string &loss_type,
 				     size_t max_num_updates,
-				     double tol,
+				     double improvement_threshold,
 				     bool verbose,
 				     Eigen::VectorXd *convex_coefficients);
 }  // namespace optimize
