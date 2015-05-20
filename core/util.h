@@ -83,6 +83,10 @@ namespace util_file {
     size_t get_num_lines(const string &file_path);
 
     // Writes a primitive value to a binary file.
+    // *WARNING* Do not pass a value stored in a temporary variable!
+    //     // binary_write_primiative(0, file);  // Bad: undefined behavior
+    //     size_t zero = 0;
+    //     binary_write_primiative(zero, file);  // Good
     template<typename T>
     void binary_write_primitive(const T &value, ostream& file){
 	file.write(reinterpret_cast<const char *>(&value), sizeof(T));

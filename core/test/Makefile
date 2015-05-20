@@ -6,6 +6,9 @@ GTEST = ../../third_party/gtest-1.7.0
 # Where to find the Eigen package.
 EIGEN = ../../third_party/eigen-eigen-10219c95fe65
 
+# Where to find the SVDLIBC package.
+SVDLIBC = ../../third_party/SVDLIBC
+
 # C++ compiler.
 CC = clang++
 
@@ -19,7 +22,7 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TESTS = util_test eigen_helper_test optimize_test
+TESTS = util_test eigen_helper_test optimize_test sparsesvd_test
 
 all: $(TESTS)
 
@@ -84,3 +87,15 @@ optimize_test.o: optimize_test.cc
 
 ../optimize.o: ../optimize.cc ../optimize.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+sparsesvd_test: sparsesvd_test.o ../sparsesvd.o $(SVDLIBC)/libsvd.a gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+sparsesvd_test.o: sparsesvd_test.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+../sparsesvd.o: ../sparsesvd.cc ../sparsesvd.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(SVDLIBC)/libsvd.a:
+	make -C $(SVDLIBC)
