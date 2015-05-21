@@ -13,9 +13,9 @@ class ConvexConstrainedOptimization : public testing::Test {
 protected:
     // (1 x 3): short and fat
     // (3 x 3): square
-    // (5 x 3): tall and thin
-    vector<size_t> list_num_rows_ = {1, 5, 10};
-    vector<size_t> list_num_columns_ = {5};
+    // (9 x 3): tall and thin
+    vector<size_t> list_num_rows_ = {1, 3, 9};
+    vector<size_t> list_num_columns_ = {3};
     double tol_ = 1e-4;
 };
 
@@ -23,7 +23,7 @@ protected:
 TEST_F(ConvexConstrainedOptimization, SquaredLoss) {
     string loss_type = "squared";
     size_t max_num_updates = numeric_limits<size_t>::max();
-    double improvement_threshold = 1e-13;
+    double improvement_threshold = 1e-10;
     bool verbose = false;
 
     for (size_t num_rows : list_num_rows_) {
