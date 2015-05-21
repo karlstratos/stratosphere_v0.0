@@ -7,84 +7,87 @@
 #include <math.h>
 #include <sstream>
 
+namespace svdlibc_helper {
+    SMat binary_read_sparse_matrix(const string &file_path) {
+	ifstream file(file_path, ios::in | ios::binary);
+	size_t num_rows;
+	size_t num_columns;
+	size_t num_nonzeros;
+	util_file::binary_read_primitive(file, &num_rows);
+	util_file::binary_read_primitive(file, &num_columns);
+	util_file::binary_read_primitive(file, &num_nonzeros);
+
+	// Load the sparse matrix variable.
+	SMat sparse_matrix = svdNewSMat(num_rows, num_columns, num_nonzeros);
+
+	size_t current_nonzero_index = 0;  // Keep track of nonzero values.
+	for (size_t col = 0; col < num_columns; ++col) {
+	    sparse_matrix->pointr[col] = current_nonzero_index;
+	    size_t num_nonzero_rows;
+	    util_file::binary_read_primitive(file, &num_nonzero_rows);
+	    for (size_t i = 0; i < num_nonzero_rows; ++i) {
+		size_t row;
+		double value;
+		util_file::binary_read_primitive(file, &row);
+		util_file::binary_read_primitive(file, &value);
+		sparse_matrix->rowind[current_nonzero_index] = row;
+		sparse_matrix->value[current_nonzero_index] = value;
+		++current_nonzero_index;
+	    }
+	}
+	sparse_matrix->pointr[num_columns] = num_nonzeros;
+	return sparse_matrix;
+    }
+
+    void compute_svd(SMat sparse_matrix, size_t desired_rank,
+		     Eigen::MatrixXd *left_singular_vectors,
+		     Eigen::MatrixXd *right_singular_vectors,
+		     Eigen::VectorXd *singular_values, size_t *actual_rank) {
+	if (desired_rank == 0) {
+	    left_singular_vectors->resize(0, 0);
+	    right_singular_vectors->resize(0, 0);
+	    singular_values->resize(0);
+	    (*actual_rank) = 0;
+	    return;
+	}
+	size_t rank_upper_bound = min(sparse_matrix->rows, sparse_matrix->cols);
+	if (desired_rank > rank_upper_bound) {  // Adjust the oversized rank.
+	    desired_rank = rank_upper_bound;
+	}
+
+	// Run the Lanczos algorithm with default parameters.
+	SVDRec svd_result = svdLAS2A(sparse_matrix, desired_rank);
+
+	left_singular_vectors->resize(sparse_matrix->rows, desired_rank);
+	for (size_t row = 0; row < sparse_matrix->rows; ++row) {
+	    for (size_t col = 0; col < desired_rank; ++col) {
+		(*left_singular_vectors)(row, col) =
+		    svd_result->Ut->value[col][row];  // Transpose.
+	    }
+	}
+
+	right_singular_vectors->resize(sparse_matrix->cols, desired_rank);
+	for (size_t row = 0; row < sparse_matrix->cols; ++row) {
+	    for (size_t col = 0; col < desired_rank; ++col) {
+		(*right_singular_vectors)(row, col) =
+		    svd_result->Vt->value[col][row];  // Transpose.
+	    }
+	}
+
+	singular_values->resize(desired_rank);
+	for (size_t i = 0; i < desired_rank; ++i) {
+	    (*singular_values)(i) = *(svd_result->S + i);
+	}
+
+	(*actual_rank) = svd_result->d;
+
+	svdFreeSVDRec(svd_result);
+    }
+}  // namespace svdlibc_helper
+
 SparseSVDSolver::~SparseSVDSolver() {
     FreeSparseMatrix();
     FreeSVDResult();
-}
-
-void SparseSVDSolver::LoadSparseMatrix(const string &file_path) {
-    // Free the sparse matrix variable in case it's filled.
-    FreeSparseMatrix();
-
-    ifstream file(file_path, ios::in | ios::binary);
-    size_t num_rows;
-    size_t num_columns;
-    size_t num_nonzeros;
-    util_file::binary_read_primitive(file, &num_rows);
-    util_file::binary_read_primitive(file, &num_columns);
-    util_file::binary_read_primitive(file, &num_nonzeros);
-
-    // Load the sparse matrix variable.
-    sparse_matrix_ = svdNewSMat(num_rows, num_columns, num_nonzeros);
-
-    size_t current_nonzero_index = 0;  // Keep track of nonzero values.
-    for (size_t col = 0; col < num_columns; ++col) {
-	sparse_matrix_->pointr[col] = current_nonzero_index;
-	size_t num_nonzero_rows;
-	util_file::binary_read_primitive(file, &num_nonzero_rows);
-	for (size_t i = 0; i < num_nonzero_rows; ++i) {
-	    size_t row;
-	    double value;
-	    util_file::binary_read_primitive(file, &row);
-	    util_file::binary_read_primitive(file, &value);
-	    sparse_matrix_->rowind[current_nonzero_index] = row;
-	    sparse_matrix_->value[current_nonzero_index] = value;
-	    ++current_nonzero_index;
-	}
-    }
-    sparse_matrix_->pointr[num_columns] = num_nonzeros;
-}
-
-void SparseSVDSolver::LoadSparseMatrix(
-    const unordered_map<size_t, unordered_map<size_t, double> > &column_map) {
-    // Compute the number of dimensions and nonzero values.
-    size_t num_rows = 0;
-    size_t num_columns = 0;
-    size_t num_nonzeros = 0;
-    for (const auto &col_pair: column_map) {
-	size_t col = col_pair.first;
-	if (col >= num_columns) { num_columns = col + 1; }
-	for (const auto &row_pair: col_pair.second) {
-	    size_t row = row_pair.first;
-	    if (row >= num_rows) { num_rows = row + 1; }
-	    ++num_nonzeros;
-	}
-    }
-    ASSERT(num_rows > 0 && num_columns > 0 && num_nonzeros > 1,
-	   "SVDLIBC will not handle this matrix properly: "
-	   << num_rows << " x " << num_columns << " with "
-	   << num_nonzeros << " nonzeros?");
-
-    // Keep track of nonzero values.
-    size_t current_nonzero_index = 0;
-
-    // Free the sparse matrix variable in case it's filled.
-    FreeSparseMatrix();
-
-    // Load the sparse matrix variable.
-    sparse_matrix_ = svdNewSMat(num_rows, num_columns, num_nonzeros);
-    for (size_t col = 0; col < num_columns; ++col) {
-	sparse_matrix_->pointr[col] = current_nonzero_index;
-	if (column_map.find(col) == column_map.end()) { continue; }
-	for (const auto &row_pair: column_map.at(col)) {
-	    size_t row = row_pair.first;
-	    double value = row_pair.second;
-	    sparse_matrix_->rowind[current_nonzero_index] = row;
-	    sparse_matrix_->value[current_nonzero_index] = value;
-	    ++current_nonzero_index;
-	}
-    }
-    sparse_matrix_->pointr[num_columns] = num_nonzeros;
 }
 
 void SparseSVDSolver::SolveSparseSVD(size_t rank) {

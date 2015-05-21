@@ -93,10 +93,10 @@ sparsesvd_test: sparsesvd_test.o ../sparsesvd.o $(SVDLIBC)/libsvd.a gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 sparsesvd_test.o: sparsesvd_test.cc
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 ../sparsesvd.o: ../sparsesvd.cc ../sparsesvd.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
