@@ -2,169 +2,216 @@
 //
 // Check the correctness of the sparse SVD code.
 
-#include <random>
-
 #include "gtest/gtest.h"
 #include "../sparsesvd.h"
 
-// Test class that provides a dense random matrix.
-class DenseRandomMatrix : public testing::Test {
-protected:
-    virtual void SetUp() {
-	for (size_t column_index = 0; column_index < num_columns_;
-	     ++column_index) {
-	    for (size_t row_index = 0; row_index < num_rows_; ++row_index) {
-		random_device device;
-		default_random_engine engine(device());
-		normal_distribution<double> normal(0.0, 1.0);
-		double random_value = normal(engine);
-		column_map_[column_index][row_index] = random_value;
+// Checks writing/reading an int column map as a file gives the correct SMat.
+TEST(ObtainingSMat, WriteReadIntMatrixAsFile) {
+    double tol = 1e-10;
+    unordered_map<size_t, unordered_map<size_t, int> > column_map;
+    column_map[2][0] = -3;
+    column_map[0][1] = 2;
+    string file_path = tmpnam(nullptr);
+    // 0 0 -3
+    // 2 0  0
+    sparsesvd::binary_write_sparse_matrix(column_map, file_path);
+    SMat sparse_matrix = sparsesvd::binary_read_sparse_matrix(file_path);
+    EXPECT_EQ(2, sparse_matrix->rows);
+    EXPECT_EQ(3, sparse_matrix->cols);
+    size_t current_nonzero_index = 0;
+    for (size_t col = 0; col < sparse_matrix->cols; ++col) {
+	while (current_nonzero_index < sparse_matrix->pointr[col + 1]) {
+	    EXPECT_NE(1, col);  // Column 1 is empty.
+	    size_t row = sparse_matrix->rowind[current_nonzero_index];
+	    double value = sparse_matrix->value[current_nonzero_index];
+	    if (col == 0) {
+		EXPECT_EQ(1, row);
+		EXPECT_NEAR(2.0, value, tol);
 	    }
+	    if (col == 2) {
+		EXPECT_EQ(0, row);
+		EXPECT_NEAR(-3.0, value, tol);
+	    }
+	    ++current_nonzero_index;
 	}
     }
-
-    virtual void TearDown() { }
-
-    size_t num_rows_ = 5;
-    size_t num_columns_ = 4;
-    size_t full_rank_ = min(num_rows_, num_columns_);
-    unordered_map<size_t, unordered_map<size_t, double> > column_map_;
-    SparseSVDSolver sparsesvd_solver_;
-};
-
-// Tests a full SVD a random (full-rank) matrix.
-TEST_F(DenseRandomMatrix, CheckFullRank) {
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
-    sparsesvd_solver_.SolveSparseSVD(full_rank_);  // Full SVD.
-    EXPECT_EQ(full_rank_, sparsesvd_solver_.rank());
+    svdFreeSMat(sparse_matrix);
 }
 
-// Test class that provides an identity matrix.
-class IdentityMatrix : public testing::Test {
-protected:
-    virtual void SetUp() {
-	for (size_t column_index = 0; column_index < num_columns_;
-	     ++column_index) {
-	    vector<pair<size_t, double> > row_index_value_pairs;
-	    for (size_t row_index = 0; row_index < num_rows_; ++row_index) {
-		if (row_index == column_index) {
-		    column_map_[column_index][row_index] = 1.0;
-		}
-	    }
+// Checks converting a double column map gives the correct SMat.
+TEST(ObtainingSMat, ConvertDoubleColumnMap) {
+    double tol = 1e-10;
+    unordered_map<size_t, unordered_map<size_t, double> > column_map;
+    column_map[1][2] = 3.14159;
+    // 0       0
+    // 0       0
+    // 0 3.14159
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);
+    EXPECT_EQ(3, sparse_matrix->rows);
+    EXPECT_EQ(2, sparse_matrix->cols);
+    size_t current_nonzero_index = 0;
+    for (size_t col = 0; col < sparse_matrix->cols; ++col) {
+	while (current_nonzero_index < sparse_matrix->pointr[col + 1]) {
+	    EXPECT_NE(0, col);  // Column 0 is empty.
+	    size_t row = sparse_matrix->rowind[current_nonzero_index];
+	    double value = sparse_matrix->value[current_nonzero_index];
+	    EXPECT_EQ(2, row);
+	    EXPECT_NEAR(3.14159, value, tol);
+	    ++current_nonzero_index;
 	}
     }
-
-    virtual void TearDown() { }
-
-    size_t num_rows_ = 4;
-    size_t num_columns_ = num_rows_;
-    size_t full_rank_ = num_rows_;
-    unordered_map<size_t, unordered_map<size_t, double> > column_map_;
-    SparseSVDSolver sparsesvd_solver_;
-};
-
-// Demonstrates that SVDLIBC breaks without eigengaps.
-TEST_F(IdentityMatrix, CheckSVDLIBCBreaksWithoutEigengap) {
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
-    sparsesvd_solver_.SolveSparseSVD(full_rank_);
-    EXPECT_NE(full_rank_, sparsesvd_solver_.rank());
+    svdFreeSMat(sparse_matrix);
 }
 
-// Demonstrates that SVDLIBC breaks even with a nonzero eigengap if small.
-TEST_F(IdentityMatrix, CheckSVDLIBCBreaksWithTrivialEigengap) {
-    // Introduce a nonzero eigengap in an identity matrix.
-    column_map_[0][0] = 1.0000001;
+// Checks computing SVD of a full-rank matrix.
+TEST(ComputingSVD, FullRankMatrix) {
+    double tol = 1e-10;
+    size_t num_rows = 4;
+    size_t num_columns = 5;
+    size_t desired_rank = num_rows + num_columns;  // Oversized rank.
+    Eigen::MatrixXd matrix = Eigen::MatrixXd::Random(num_rows, num_columns);
+    unordered_map<size_t, unordered_map<size_t, double> > column_map;
+    sparsesvd::convert_eigen_dense_to_column_map(matrix, &column_map);
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);  // "sparse"
 
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
-    sparsesvd_solver_.SolveSparseSVD(full_rank_);
-    EXPECT_NE(full_rank_, sparsesvd_solver_.rank());
+    Eigen::MatrixXd left_singular_vectors;
+    Eigen::MatrixXd right_singular_vectors;
+    Eigen::VectorXd singular_values;
+    size_t actual_rank;
+    sparsesvd::compute_svd(sparse_matrix, desired_rank, &left_singular_vectors,
+			   &right_singular_vectors, &singular_values,
+			   &actual_rank);
+
+    EXPECT_EQ(min(num_rows, num_columns), actual_rank);  // Full-rank.
+    Eigen::MatrixXd reconstructed_matrix = left_singular_vectors *
+	singular_values.asDiagonal() * right_singular_vectors.transpose();
+    EXPECT_NEAR(0.0, (matrix - reconstructed_matrix).norm(), tol);  // Frobenius
+    svdFreeSMat(sparse_matrix);
 }
 
-// Demonstrates that SVDLIBC works correctly with a not-so-small eigengap.
-TEST_F(IdentityMatrix, ChecksSVDLIBCWorksWithNontrivialEigengap) {
-    // Introduce eigengaps in an identity matrix.
-    size_t value = num_rows_;
-    for (size_t i = 0; i < num_rows_; ++i) {
-	column_map_[i][i] = value--;  // diag(4, 3, 2, 1)
-    }
+// Checks computing SVD of a low-rank matrix.
+TEST(ComputingSVD, LowRankMatrix) {
+    double tol = 1e-10;
+    size_t num_rows = 8;
+    size_t num_columns = 16;
+    size_t low_rank = 3;
+    size_t desired_rank = num_rows + num_columns;  // Oversized rank.
+    ASSERT(low_rank < num_rows && low_rank < num_columns, "Set low rank");
 
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
-    sparsesvd_solver_.SolveSparseSVD(full_rank_);
-    EXPECT_EQ(full_rank_, sparsesvd_solver_.rank());
+    // First construct some random low-rank matrix.
+    Eigen::MatrixXd left_matrix = Eigen::MatrixXd::Random(num_rows, low_rank);
+    Eigen::MatrixXd right_matrix = Eigen::MatrixXd::Random(num_columns,
+							   low_rank);
+    Eigen::MatrixXd matrix = left_matrix * right_matrix.transpose();
+    unordered_map<size_t, unordered_map<size_t, double> > column_map;
+    sparsesvd::convert_eigen_dense_to_column_map(matrix, &column_map);
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);  // "sparse"
+
+    Eigen::MatrixXd left_singular_vectors;
+    Eigen::MatrixXd right_singular_vectors;
+    Eigen::VectorXd singular_values;
+    size_t actual_rank;
+    sparsesvd::compute_svd(sparse_matrix, desired_rank, &left_singular_vectors,
+			   &right_singular_vectors, &singular_values,
+			   &actual_rank);
+
+    EXPECT_EQ(low_rank, actual_rank);  // Low rank.
+    EXPECT_EQ(low_rank, singular_values.size());
+    EXPECT_EQ(num_rows, left_singular_vectors.rows());
+    EXPECT_EQ(low_rank, left_singular_vectors.cols());
+    EXPECT_EQ(num_columns, right_singular_vectors.rows());
+    EXPECT_EQ(low_rank, right_singular_vectors.cols());
+    Eigen::MatrixXd reconstructed_matrix = left_singular_vectors *
+	singular_values.asDiagonal() * right_singular_vectors.transpose();
+    EXPECT_NEAR(0.0, (matrix - reconstructed_matrix).norm(), tol);  // Frobenius
+    svdFreeSMat(sparse_matrix);
 }
 
-// Test class that provides a sparse matrix with empty columns.
-class SparseMatrixWithEmptyColumns : public testing::Test {
-protected:
-    virtual void SetUp() {
-	//      Empty columns
-	//        |     |
-	//        |     |
-	//        v     v
-	//
-	//     0  0  1  0
-	//     0  0  0  0
-	//     2  0  3  0
-	//     0  0  4  0
-	column_map_[0][2] = 2.0;
-	column_map_[2][0] = 1.0;
-	column_map_[2][2] = 3.0;
-	column_map_[2][3] = 4.0;
-    }
+// This test demonstrates that the SVD computed by SVDLIBC is *incorrect* when
+// the gap between the largest two singular values is truly (close to) zero.
+// This is achieved by an identity matrix.
+TEST(UnstableWithSmallSingularGap, IncorrectWithIdentity) {
+    size_t dimension = 2;
+    size_t desired_rank = dimension;
+    unordered_map<size_t, unordered_map<size_t, size_t> > column_map;
+    for (size_t i = 0; i < dimension; ++i) { column_map[i][i] = 1; }
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);
 
-    virtual void TearDown() { }
+    Eigen::MatrixXd left_singular_vectors;
+    Eigen::MatrixXd right_singular_vectors;
+    Eigen::VectorXd singular_values;
+    size_t actual_rank;
+    sparsesvd::compute_svd(sparse_matrix, desired_rank, &left_singular_vectors,
+			   &right_singular_vectors, &singular_values,
+			   &actual_rank);
 
-    size_t num_rows_ = 4;
-    size_t num_columns_ = 4;
-    unordered_map<size_t, unordered_map<size_t, double> > column_map_;
-    SparseSVDSolver sparsesvd_solver_;
-    double tol_ = 1e-4;
-};
-
-// Confirms that SVDLIBC works correctly on this matrix.
-TEST_F(SparseMatrixWithEmptyColumns, CheckCorrect) {
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
-    sparsesvd_solver_.SolveSparseSVD(2);
-    EXPECT_EQ(2, sparsesvd_solver_.rank());
-    EXPECT_NEAR(5.2469, fabs(*(sparsesvd_solver_.singular_values() + 0)), tol_);
-    EXPECT_NEAR(1.5716, fabs(*(sparsesvd_solver_.singular_values() + 1)), tol_);
+    EXPECT_NE(dimension, actual_rank);  // Should have been the dimension!
+    svdFreeSMat(sparse_matrix);
 }
 
-// Confirms that writing and loading this sparse matrix is correct.
-TEST_F(SparseMatrixWithEmptyColumns, CheckWritingAndLoading) {
-    // Write the matrix to a temporary file.
-    string temp_file_path = tmpnam(nullptr);
-    svdlibc_helper::binary_write_sparse_matrix(column_map_, temp_file_path);
+// This test demonstrates that when the gap between the largest two singular
+// values is small but not zero, the SVD computed by SVDLIBC is correct.
+TEST(UnstableWithSmallSingularGap, CorrectWithSomeSingularGap) {
+    double tol = 1e-10;
 
-    // Load the matrix from that file.
-    sparsesvd_solver_.LoadSparseMatrix(temp_file_path);
+    // The following is an artificially constructed matrix of rank 2 that has
+    // singular values 2 and 1.99998.
+    unordered_map<size_t, unordered_map<size_t, double> > column_map;
+    column_map[0][0] = -0.0992;
+    column_map[0][1] = 1.7317;
+    column_map[1][0] = 1.9287;
+    column_map[1][1] = -0.1764;
+    column_map[2][0] = 0.5198;
+    column_map[2][1] = 0.9850;
+    size_t desired_rank = 2;
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);
 
-    // Solve SVD and check the result.
-    sparsesvd_solver_.SolveSparseSVD(2);
-    EXPECT_EQ(2, sparsesvd_solver_.rank());
-    EXPECT_NEAR(5.2469, fabs(*(sparsesvd_solver_.singular_values() + 0)), tol_);
-    EXPECT_NEAR(1.5716, fabs(*(sparsesvd_solver_.singular_values() + 1)), tol_);
-    remove(temp_file_path.c_str());
+    Eigen::MatrixXd left_singular_vectors;
+    Eigen::MatrixXd right_singular_vectors;
+    Eigen::VectorXd singular_values;
+    size_t actual_rank;
+    sparsesvd::compute_svd(sparse_matrix, desired_rank, &left_singular_vectors,
+			   &right_singular_vectors, &singular_values,
+			   &actual_rank);
+
+    EXPECT_EQ(2, actual_rank);  // Correctly 2!
+    Eigen::MatrixXd matrix;
+    sparsesvd::convert_column_map_to_eigen_dense(column_map, &matrix);
+    Eigen::MatrixXd reconstructed_matrix = left_singular_vectors *
+	singular_values.asDiagonal() * right_singular_vectors.transpose();
+    EXPECT_NEAR(0.0, (matrix - reconstructed_matrix).norm(), tol);  // Frobenius
+    svdFreeSMat(sparse_matrix);
 }
 
 // Checks summing rows/columns.
-TEST_F(SparseMatrixWithEmptyColumns, CheckSumRowsColumns) {
-    sparsesvd_solver_.LoadSparseMatrix(column_map_);
+TEST(SumRowsColumns, Correctness) {
+    double tol = 1e-10;
+    //     0  0  1  1
+    //     0  0  0  1
+    //     2  0  3  1
+    //     0  0  0  1
+    unordered_map<size_t, unordered_map<size_t, size_t> > column_map;
+    column_map[0][2] = 2;
+    column_map[2][0] = 1;
+    column_map[2][2] = 3;
+    column_map[3][0] = 1;
+    column_map[3][1] = 1;
+    column_map[3][2] = 1;
+    column_map[3][3] = 1;
+    SMat sparse_matrix = sparsesvd::convert_column_map(column_map);
     unordered_map<size_t, double> row_sum;
     unordered_map<size_t, double> column_sum;
-    sparsesvd_solver_.SumRowsColumns(&row_sum, &column_sum);
-    //     0  0  1  0
-    //     0  0  0  0
-    //     2  0  3  0
-    //     0  0  4  0
-    EXPECT_NEAR(1.0, row_sum[0], tol_);
-    EXPECT_NEAR(0.0, row_sum[1], tol_);
-    EXPECT_NEAR(5.0, row_sum[2], tol_);
-    EXPECT_NEAR(4.0, row_sum[3], tol_);
-    EXPECT_NEAR(2.0, column_sum[0], tol_);
-    EXPECT_NEAR(0.0, column_sum[1], tol_);
-    EXPECT_NEAR(8.0, column_sum[2], tol_);
-    EXPECT_NEAR(0.0, column_sum[3], tol_);
+    sparsesvd::sum_rows_columns(sparse_matrix, &row_sum, &column_sum);
+
+    EXPECT_NEAR(2.0, row_sum[0], tol);
+    EXPECT_NEAR(1.0, row_sum[1], tol);
+    EXPECT_NEAR(6.0, row_sum[2], tol);
+    EXPECT_NEAR(1.0, row_sum[3], tol);
+    EXPECT_NEAR(2.0, column_sum[0], tol);
+    EXPECT_NEAR(0.0, column_sum[1], tol);
+    EXPECT_NEAR(4.0, column_sum[2], tol);
+    EXPECT_NEAR(4.0, column_sum[3], tol);
+    svdFreeSMat(sparse_matrix);
 }
 
 int main(int argc, char** argv) {

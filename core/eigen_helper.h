@@ -12,32 +12,32 @@
 #include "util.h"
 
 namespace eigen_helper {
-    // Writes an Eigen Matrix object to a binary file.
-    template<typename EigenMatrix>
-    void binary_write_matrix(const EigenMatrix& matrix,
+    // Writes an Eigen dense matrix to a binary file.
+    template<typename EigenDenseMatrix>
+    void binary_write_matrix(const EigenDenseMatrix& matrix,
 			     const string &file_path) {
 	ofstream file(file_path, ios::out | ios::binary);
 	ASSERT(file.is_open(), "Cannot open file: " << file_path);
-	typename EigenMatrix::Index num_rows = matrix.rows();
-	typename EigenMatrix::Index num_columns = matrix.cols();
+	typename EigenDenseMatrix::Index num_rows = matrix.rows();
+	typename EigenDenseMatrix::Index num_columns = matrix.cols();
 	util_file::binary_write_primitive(num_rows, file);
 	util_file::binary_write_primitive(num_columns, file);
 	file.write(reinterpret_cast<const char *>(matrix.data()), num_rows *
-		   num_columns * sizeof(typename EigenMatrix::Scalar));
+		   num_columns * sizeof(typename EigenDenseMatrix::Scalar));
     }
 
-    // Reads an Eigen Matrix object from a binary file.
-    template<typename EigenMatrix>
-    void binary_read_matrix(const string &file_path, EigenMatrix *matrix) {
+    // Reads an Eigen dense matrix from a binary file.
+    template<typename EigenDenseMatrix>
+    void binary_read_matrix(const string &file_path, EigenDenseMatrix *matrix) {
 	ifstream file(file_path, ios::in | ios::binary);
 	ASSERT(file.is_open(), "Cannot open file: " << file_path);
-	typename EigenMatrix::Index num_rows;
-	typename EigenMatrix::Index num_columns;
+	typename EigenDenseMatrix::Index num_rows;
+	typename EigenDenseMatrix::Index num_columns;
 	util_file::binary_read_primitive(file, &num_rows);
 	util_file::binary_read_primitive(file, &num_columns);
 	matrix->resize(num_rows, num_columns);
 	file.read(reinterpret_cast<char*>(matrix->data()), num_rows *
-		  num_columns * sizeof(typename EigenMatrix::Scalar));
+		  num_columns * sizeof(typename EigenDenseMatrix::Scalar));
     }
 
     // Computes the Moore–Penrose pseudo-inverse.

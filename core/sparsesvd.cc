@@ -7,7 +7,7 @@
 #include <math.h>
 #include <sstream>
 
-namespace svdlibc_helper {
+namespace sparsesvd {
     SMat binary_read_sparse_matrix(const string &file_path) {
 	ifstream file(file_path, ios::in | ios::binary);
 	size_t num_rows;
@@ -27,7 +27,7 @@ namespace svdlibc_helper {
 	    util_file::binary_read_primitive(file, &num_nonzero_rows);
 	    for (size_t i = 0; i < num_nonzero_rows; ++i) {
 		size_t row;
-		double value;
+		double value;  // Value guaranteed to be double.
 		util_file::binary_read_primitive(file, &row);
 		util_file::binary_read_primitive(file, &value);
 		sparse_matrix->rowind[current_nonzero_index] = row;
@@ -58,81 +58,46 @@ namespace svdlibc_helper {
 	// Run the Lanczos algorithm with default parameters.
 	SVDRec svd_result = svdLAS2A(sparse_matrix, desired_rank);
 
-	left_singular_vectors->resize(sparse_matrix->rows, desired_rank);
+	(*actual_rank) = svd_result->d;  // This is the actual SVD rank.
+
+	singular_values->resize(*actual_rank);
+	for (size_t i = 0; i < *actual_rank; ++i) {
+	    (*singular_values)(i) = *(svd_result->S + i);
+	}
+
+	left_singular_vectors->resize(sparse_matrix->rows, *actual_rank);
 	for (size_t row = 0; row < sparse_matrix->rows; ++row) {
-	    for (size_t col = 0; col < desired_rank; ++col) {
+	    for (size_t col = 0; col < *actual_rank; ++col) {
 		(*left_singular_vectors)(row, col) =
 		    svd_result->Ut->value[col][row];  // Transpose.
 	    }
 	}
 
-	right_singular_vectors->resize(sparse_matrix->cols, desired_rank);
+	right_singular_vectors->resize(sparse_matrix->cols, *actual_rank);
 	for (size_t row = 0; row < sparse_matrix->cols; ++row) {
-	    for (size_t col = 0; col < desired_rank; ++col) {
+	    for (size_t col = 0; col < *actual_rank; ++col) {
 		(*right_singular_vectors)(row, col) =
 		    svd_result->Vt->value[col][row];  // Transpose.
 	    }
 	}
 
-	singular_values->resize(desired_rank);
-	for (size_t i = 0; i < desired_rank; ++i) {
-	    (*singular_values)(i) = *(svd_result->S + i);
-	}
-
-	(*actual_rank) = svd_result->d;
-
 	svdFreeSVDRec(svd_result);
     }
-}  // namespace svdlibc_helper
 
-SparseSVDSolver::~SparseSVDSolver() {
-    FreeSparseMatrix();
-    FreeSVDResult();
-}
-
-void SparseSVDSolver::SolveSparseSVD(size_t rank) {
-    ASSERT(rank > 0, "SVD rank is given as <= 0: " << rank);
-    ASSERT(HasMatrix(), "No matrix for SVD computation.");
-    ASSERT(rank <= min(sparse_matrix_->rows, sparse_matrix_->cols), "SVD rank "
-	   "is given as > min(num_rows, num_cols): " << rank << " > min("
-	   << sparse_matrix_->rows << ", " << sparse_matrix_->cols << ")");
-
-    // Free the current SVD result in case it's filled.
-    FreeSVDResult();
-
-    // Run the Lanczos algorithm with default parameters.
-    svd_result_ = svdLAS2A(sparse_matrix_, rank);
-}
-
-void SparseSVDSolver::SumRowsColumns(
-    unordered_map<size_t, double> *row_sum,
-    unordered_map<size_t, double> *column_sum) {
-    ASSERT(HasMatrix(), "No matrix for SVD computation.");
-    row_sum->clear();
-    column_sum->clear();
-
-    size_t current_nonzero_index = 0;
-    for (size_t col = 0; col < sparse_matrix_->cols; ++col) {
-	while (current_nonzero_index < sparse_matrix_->pointr[col + 1]) {
-	    size_t row = sparse_matrix_->rowind[current_nonzero_index];
-	    double value = sparse_matrix_->value[current_nonzero_index];
-	    (*row_sum)[row] += value;
-	    (*column_sum)[col] += value;
-	    ++current_nonzero_index;
+    void sum_rows_columns(SMat sparse_matrix,
+			  unordered_map<size_t, double> *row_sum,
+			  unordered_map<size_t, double> *column_sum) {
+	row_sum->clear();
+	column_sum->clear();
+	size_t current_nonzero_index = 0;
+	for (size_t col = 0; col < sparse_matrix->cols; ++col) {
+	    while (current_nonzero_index < sparse_matrix->pointr[col + 1]) {
+		size_t row = sparse_matrix->rowind[current_nonzero_index];
+		double value = sparse_matrix->value[current_nonzero_index];
+		(*row_sum)[row] += value;
+		(*column_sum)[col] += value;
+		++current_nonzero_index;
+	    }
 	}
     }
-}
-
-void SparseSVDSolver::FreeSparseMatrix() {
-    if (HasMatrix()) {
-	svdFreeSMat(sparse_matrix_);
-	sparse_matrix_ = nullptr;
-    }
-}
-
-void SparseSVDSolver::FreeSVDResult() {
-    if (HasSVDResult()) {
-	svdFreeSVDRec(svd_result_);
-	svd_result_ = nullptr;
-    }
-}
+}  // namespace sparsesvd
