@@ -28,7 +28,8 @@ all: $(TESTS)
 
 .PHONY: clean
 clean:
-	rm -f $(TESTS) gtest.a gtest_main.a *.o ../*.o
+	rm -f $(TESTS) gtest.a gtest_main.a libsvd.a *.o ../*.o
+	make -C $(SVDLIBC) clean
 
 ############## Usually you shouldn't change this section. ######################
 # All Google Test headers.
