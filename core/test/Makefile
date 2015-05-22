@@ -22,7 +22,7 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TESTS = util_test eigen_helper_test optimize_test sparsesvd_test
+TESTS = util_test eigen_helper_test optimize_test sparsesvd_test corpus_test
 
 all: $(TESTS)
 
@@ -100,3 +100,12 @@ sparsesvd_test.o: sparsesvd_test.cc
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
+
+corpus_test: corpus_test.o ../corpus.o gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+corpus_test.o: corpus_test.cc
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+../corpus.o: ../corpus.cc ../corpus.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
