@@ -229,6 +229,33 @@ TEST(UtilMisc, SortVectorOfPairsBySecondValues) {
     EXPECT_NEAR(0.09, pairs[2].second, tol);
 }
 
+// Checks subtracting by the median value in unordered_map.
+TEST(UtilMisc, SubtractByMedian) {
+    unordered_map<string, size_t> table;
+    table["a"] = 100;
+    table["b"] = 80;
+    table["c"] = 5;
+    table["d"] = 3;
+    table["e"] = 3;
+    table["f"] = 3;
+    table["g"] = 1;
+    table["h"] = 1;
+    table["i"] = 1;
+    table["j"] = 1;
+    // 100 80 5 3 3 3 1 1 1 1
+    //  a  b  c d e f g h i j
+    //  0  1  2 3 4 5 6 7 8 9
+    //            ^
+    //          median
+    util_misc::subtract_by_median(&table);
+
+    // Should have a:97, b:77, and c:2 left.
+    EXPECT_EQ(3, table.size());
+    EXPECT_EQ(97, table["a"]);
+    EXPECT_EQ(77, table["b"]);
+    EXPECT_EQ(2, table["c"]);
+}
+
 // Checks inverting an unordered_map.
 TEST(UtilMisc, InvertUnorderedMap) {
     unordered_map<string, size_t> table1;

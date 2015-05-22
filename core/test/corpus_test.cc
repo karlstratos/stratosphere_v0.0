@@ -9,7 +9,6 @@
 
 #include "../corpus.h"
 
-/*
 // Test class that provides a simple corpus file.
 class CorpusExample : public testing::Test {
 protected:
@@ -45,6 +44,7 @@ TEST_F(CorpusExample, CheckCountWords) {
     EXPECT_EQ(1, word_count["DOG"]);
 }
 
+/*
 // Checks lowercasing.
 TEST_F(CorpusExample, CheckLowercase) {
     Corpus corpus(corpus_file_path_, false);

@@ -7,6 +7,56 @@
 
 #include "sparsesvd.h"
 
+size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
+    size_t num_words = 0;
+    vector<string> file_list;
+    util_file::list_files(corpus_path_, &file_list);
+    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
+	string file_path = file_list[file_num];
+	size_t num_lines = util_file::get_num_lines(file_path);
+	if (verbose_) {
+	    cerr << "Counting words in file " << file_num + 1 << "/"
+		 << file_list.size() << " " << flush;
+	}
+	ifstream file(file_path, ios::in);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	double portion_so_far = kReportInterval_;
+	double line_num = 0.0;  // Float for division
+	while (file.good()) {
+	    vector<string> word_strings;
+	    ++line_num;
+	    util_string::read_line(&file, &word_strings);
+	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
+	    for (string word_string : word_strings) {
+		if (Skip(word_string)) { continue; }
+		if (lowercase_) {
+		    word_string = util_string::lowercase(word_string);
+		}
+		++(*word_count)[word_string];
+		++num_words;
+
+		// If the vocabulary is too large, subtract by the median count
+		// and eliminate at least half of the word types.
+		if (word_count->size() >= kMaxVocabularySize_) {
+		    util_misc::subtract_by_median(word_count);
+		}
+	    }
+	    if (line_num / num_lines >= portion_so_far) {
+		portion_so_far += kReportInterval_;
+		if (verbose_) { cerr << "." << flush; }
+	    }
+	}
+	if (verbose_) { cerr << " " << word_count->size() << " types" << endl; }
+    }
+    return num_words;
+}
+
+bool Corpus::Skip(const string &word_string) {
+    return (word_string == kRareString_ ||  // Is the special "rare" symbol.
+	    word_string == kBufferString_ ||  // Is the special "buffer" symbol.
+	    word_string.size() > kMaxWordLength_);  // Is too long.
+}
+
 void Window::Add(const string &word_string) {
     // Filter words before putting in the window.
     string word_string_filtered = (word_dictionary_.find(word_string) !=
@@ -86,254 +136,3 @@ Context Window::AddContextString(const string &context_string) {
     }
     return context_dictionary_[context_string_hashed];
 }
-
-/*
-size_t Corpus::CountWords(unordered_map<string, size_t> *count) {
-    size_t num_words = 0;
-    vector<string> file_list;
-    file_manipulator_.ListFiles(corpus_path_, &file_list);
-    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
-	string file_path = file_list[file_num];
-	size_t num_lines = file_manipulator_.NumLines(file_path);
-	if (verbose_) {
-	    cerr << "Counting words in file " << file_num + 1 << "/"
-		 << file_list.size() << " " << flush;
-	}
-	ifstream file(file_path, ios::in);
-	ASSERT(file.is_open(), "Cannot open file: " << file_path);
-	double portion_so_far = kReportInterval_;
-	double line_num = 0.0;  // Float for division
-	while (file.good()) {
-	    vector<string> word_strings;
-	    ++line_num;
-	    string_manipulator_.ReadLine(&file, &word_strings);
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
-	    for (string word_string : word_strings) {
-		if (Skip(word_string)) { continue; }
-		if (lowercase_) {
-		    word_string = string_manipulator_.Lowercase(word_string);
-		}
-		++(*count)[word_string];
-		++num_words;
-	    }
-	    if (verbose_ && (line_num / num_lines >= portion_so_far)) {
-		portion_so_far += kReportInterval_;
-		cerr << "." << flush;
-	    }
-	}
-	if (verbose_) { cerr << " " << count->size() << " types" << endl; }
-    }
-    return num_words;
-}
-
-size_t Corpus::BuildWordDictionary(const unordered_map<string, size_t> &count,
-				   size_t rare_cutoff,
-				   unordered_map<string, Word>
-				   *word_dictionary) {
-    size_t num_considered_words = 0;
-    bool have_rare = false;
-    word_dictionary->clear();
-    for (const auto &string_count_pair : count) {
-	string word_string = string_count_pair.first;
-	size_t word_count = string_count_pair.second;
-	if (word_count > rare_cutoff) {
-	    num_considered_words += word_count;
-	    (*word_dictionary)[word_string] = word_dictionary->size();
-	} else {
-	    have_rare = true;
-	}
-    }
-    if (have_rare) {  // The rare word symbol gets the highest index.
-	(*word_dictionary)[kRareString()] = word_dictionary->size();
-    }
-    return num_considered_words;
-}
-
-void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
-			 bool sentence_per_line,
-			 const string &context_definition, size_t window_size,
-			 size_t hash_size,
-			 unordered_map<string, Context> *context_dictionary,
-			 unordered_map<Context, unordered_map<Word, double> >
-			 *context_word_count) {
-    ASSERT(window_size >= 2, "Window size less than 2: " << window_size);
-    Window window(window_size, word_dictionary, kBufferString_, kRareString_,
-		  context_definition, hash_size, context_dictionary,
-		  context_word_count);
-
-    vector<string> file_list;
-    file_manipulator_.ListFiles(corpus_path_, &file_list);
-    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
-	string file_path = file_list[file_num];
-	size_t num_lines = file_manipulator_.NumLines(file_path);
-	if (verbose_) {
-	    cerr << "Sliding window in file " << file_num + 1 << "/"
-		 << file_list.size() << " " << flush;
-	}
-	ifstream file(file_path, ios::in);
-	ASSERT(file.is_open(), "Cannot open file: " << file_path);
-	double portion_so_far = kReportInterval_;
-	double line_num = 0.0;  // Float for division
-	while (file.good()) {
-	    vector<string> word_strings;
-	    string_manipulator_.ReadLine(&file, &word_strings);
-	    ++line_num;
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
-	    for (string word_string : word_strings) {
-		if (Skip(word_string)) { continue; }
-		if (lowercase_) {
-		    word_string = string_manipulator_.Lowercase(word_string);
-		}
-		window.Add(word_string);
-	    }
-	    if (sentence_per_line) { window.Finish(); } // Finish the line.
-	    if (verbose_ && (line_num / num_lines >= portion_so_far)) {
-		portion_so_far += kReportInterval_;
-		cerr << "." << flush;
-	    }
-	}
-	if (!sentence_per_line) { window.Finish(); } // Finish the file.
-	if (verbose_) { cerr << endl; }
-    }
-}
-
-void Corpus::CountTransitions(
-    const unordered_map<string, Word> &word_dictionary,
-    unordered_map<Word, unordered_map<Word, size_t> > *bigram_count,
-    unordered_map<Word, size_t> *start_count,
-    unordered_map<Word, size_t> *end_count) {
-    bigram_count->clear();
-    start_count->clear();
-    end_count->clear();
-
-    vector<string> file_list;
-    file_manipulator_.ListFiles(corpus_path_, &file_list);
-    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
-	string file_path = file_list[file_num];
-	size_t num_lines = file_manipulator_.NumLines(file_path);
-	if (verbose_) {
-	    cerr << "Counting transitions in file " << file_num + 1 << "/"
-		 << file_list.size() << " " << flush;
-	}
-	ifstream file(file_path, ios::in);
-	ASSERT(file.is_open(), "Cannot open file: " << file_path);
-	double portion_so_far = kReportInterval_;
-	double line_num = 0.0;  // Float for division
-	while (file.good()) {
-	    vector<string> word_strings;
-	    string_manipulator_.ReadLine(&file, &word_strings);
-	    ++line_num;
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
-	    Word w_prev;
-	    for (size_t i = 0; i < word_strings.size(); ++i) {
-		string word_string = (!lowercase_) ? word_strings[i] :
-		    string_manipulator_.Lowercase(word_strings[i]);
-		if (Skip(word_string)) { continue; }
-		if (word_dictionary.find(word_string) ==
-		    word_dictionary.end()) { word_string = kRareString_; }
-		Word w = word_dictionary.at(word_string);
-
-		if (i == 0) { ++(*start_count)[w]; }
-		if (i == word_strings.size() - 1) { ++(*end_count)[w]; }
-		if (i > 0) { ++(*bigram_count)[w_prev][w]; }
-		w_prev = w;
-	    }
-	    if (verbose_ && (line_num / num_lines >= portion_so_far)) {
-		portion_so_far += kReportInterval_;
-		cerr << "." << flush;
-	    }
-	}
-	if (verbose_) { cerr << endl; }
-    }
-}
-
-void Corpus::CreateSortedWordTypesFile(bool recompute,
-				       const string &sorted_word_types_path) {
-    if (!recompute && file_manipulator_.Exists(sorted_word_types_path)) {
-	return;  // Already have the file.
-    }
-    unordered_map<string, size_t> word_count;
-
-    //size_t num_words = CountWords(&word_count);
-    CountWords(&word_count);
-
-    // Sort word types in decreasing frequency.
-    vector<pair<string, size_t> > sorted_word_count(word_count.begin(),
-						    word_count.end());
-    sort(sorted_word_count.begin(), sorted_word_count.end(),
-	 sort_pairs_second<string, size_t, greater<size_t> >());
-
-    ofstream sorted_word_types_file(sorted_word_types_path, ios::out);
-    for (size_t i = 0; i < sorted_word_count.size(); ++i) {
-	sorted_word_types_file << sorted_word_count[i].first << " "
-			       << sorted_word_count[i].second << endl;
-    }
-}
-
-void Corpus::CreateWordDictionaryFile(bool recompute,
-				      const unordered_map<string, size_t>
-				      &word_count, size_t rare_cutoff,
-				      const string &word_dictionary_path) {
-    if (!recompute && file_manipulator_.Exists(word_dictionary_path)) {
-	return;  // Already have the file.
-    }
-
-    unordered_map<string, size_t> word_dictionary;
-    BuildWordDictionary(word_count, rare_cutoff, &word_dictionary);
-    file_manipulator_.Write(word_dictionary, word_dictionary_path);
-}
-
-void Corpus::CreateCoOccurrenceFiles(bool recompute,
-				     const unordered_map<string, Word>
-				     &word_dictionary, bool sentence_per_line,
-				     const string &context_definition,
-				     size_t window_size, size_t hash_size,
-				     const string &context_word_count_path,
-				     const string &context_dictionary_path) {
-    if (!recompute && file_manipulator_.Exists(context_word_count_path) &&
-	file_manipulator_.Exists(context_dictionary_path)) {
-	return;  // Already have the files.
-    }
-
-    unordered_map<string, Context> context_dictionary;
-    unordered_map<Context, unordered_map<Word, double> > context_word_count;
-    SlideWindow(word_dictionary, sentence_per_line, context_definition,
-		window_size, hash_size, &context_dictionary,
-		&context_word_count);
-
-    file_manipulator_.Write(context_dictionary, context_dictionary_path);
-
-    // Write co-occurrence counts as a sparse matrix for SVDLIBC.
-    size_t num_samples = 0;
-    for (const auto &context_pair : context_word_count) {
-	num_samples += context_pair.second.size();
-    }
-    SparseSVDSolver sparsesvd_solver;
-    sparsesvd_solver.WriteSparseMatrix(context_word_count,
-				       context_word_count_path,
-				       word_dictionary.size(),
-				       context_dictionary.size(), num_samples);
-}
-
-void Corpus::CreateTransitionFiles(bool recompute,
-				   const unordered_map<string, Word>
-				   &word_dictionary,
-				   const string &bigram_count_path,
-				   const string &start_count_path,
-				   const string &end_count_path) {
-    unordered_map<Word, unordered_map<Word, size_t> > bigram_count;
-    unordered_map<Word, size_t> start_count;
-    unordered_map<Word, size_t> end_count;
-    CountTransitions(word_dictionary, &bigram_count, &start_count, &end_count);
-
-    file_manipulator_.Write(bigram_count, bigram_count_path);
-    file_manipulator_.Write(start_count, start_count_path);
-    file_manipulator_.Write(end_count, end_count_path);
-}
-
-bool Corpus::Skip(const string &word_string) {
-    return (word_string == kRareString_ ||  // Is the special "rare" symbol.
-	    word_string == kBufferString_ ||  // Is the special "buffer" symbol.
-	    word_string.size() > kMaxWordLength_);  // Is too long.
-}
-*/

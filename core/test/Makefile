@@ -101,7 +101,7 @@ sparsesvd_test.o: sparsesvd_test.cc
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
-corpus_test: corpus_test.o ../corpus.o gtest_main.a
+corpus_test: corpus_test.o ../corpus.o ../util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc

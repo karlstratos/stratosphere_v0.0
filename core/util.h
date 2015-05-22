@@ -5,6 +5,7 @@
 #ifndef CORE_UTIL_H_
 #define CORE_UTIL_H_
 
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -221,6 +222,29 @@ namespace util_misc {
 		unordered_map<T2, T1> *table2) {
 	table2->clear();
 	for (const auto &pair : table1) { (*table2)[pair.second] = pair.first; }
+    }
+
+    // Subtracts the median value from all values, guaranteeing the elimination
+    // of at least half of the elements in the hash table. When counting items
+    // with only k slots in a stream of N instances, calling this every time all
+    // slots are filled guarantees that |#(i) - #'(i)| <= 2N/k where #(i) is the
+    // true count of item i and #'(i) is the approximate count obtained through
+    // this process.
+    template <typename T1, typename T2>
+    void subtract_by_median(unordered_map<T1, T2> *table) {
+	vector<pair<T1, T2> > sorted_key_values(table->begin(), table->end());
+	sort(sorted_key_values.begin(), sorted_key_values.end(),
+	     sort_pairs_second<T1, T2, greater<T2> >());
+	T2 median_value = sorted_key_values[(table->size() - 1) / 2].second;
+
+	for (auto iterator = table->begin(); iterator != table->end();) {
+	    if (iterator->second <= median_value) {
+		iterator = table->erase(iterator);
+	    } else {
+		iterator->second -= median_value;
+		++iterator;
+	    }
+	}
     }
 }  // namespace util_misc
 

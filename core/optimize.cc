@@ -30,7 +30,7 @@ namespace optimize {
 	    } else {
 		ASSERT(false, "Unknown loss type: " << loss_type);
 	    }
-	    double improvement = old_loss - current_loss;
+	    double improvement = old_loss - current_loss;  // TODO: duality gap
 	    if (verbose && (update_num == 1 || update_num % 1000 == 0)) {
 		cerr << "\rupdate " << update_num << "   " << "loss "
 		     << current_loss << "   " << "(decrease: " << improvement
