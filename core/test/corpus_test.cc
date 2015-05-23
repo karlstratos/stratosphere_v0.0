@@ -33,6 +33,7 @@ TEST_F(CorpusExample, CheckCountWords) {
     size_t num_words = corpus.CountWords(&word_count);
 
     EXPECT_EQ(15, num_words);
+    EXPECT_EQ(9, word_count.size());
     EXPECT_EQ(4, word_count["the"]);
     EXPECT_EQ(2, word_count["dog"]);
     EXPECT_EQ(2, word_count["cat"]);
@@ -44,7 +45,22 @@ TEST_F(CorpusExample, CheckCountWords) {
     EXPECT_EQ(1, word_count["DOG"]);
 }
 
-/*
+// Checks word counting with limited vocabulary size.
+TEST_F(CorpusExample, CheckCountWordsWithLimitedVocabularySize) {
+    Corpus corpus(corpus_file_path_, false);
+    corpus.set_max_vocabulary_size(9);
+    unordered_map<string, size_t> word_count;
+    size_t num_words = corpus.CountWords(&word_count);
+
+    // The median count was 1, so all counts are subtracted by 1.
+    EXPECT_EQ(6, num_words);
+    EXPECT_EQ(4, word_count.size());
+    EXPECT_EQ(3, word_count["the"]);
+    EXPECT_EQ(1, word_count["dog"]);
+    EXPECT_EQ(1, word_count["cat"]);
+    EXPECT_EQ(1, word_count["."]);
+}
+
 // Checks lowercasing.
 TEST_F(CorpusExample, CheckLowercase) {
     Corpus corpus(corpus_file_path_, false);
@@ -65,20 +81,16 @@ TEST_F(CorpusExample, CheckBuildWordDictionary) {
 	corpus.BuildWordDictionary(word_count, 0, &word_dictionary_cutoff0);
     EXPECT_EQ(15, num_considered_words_cutoff0);
     EXPECT_EQ(9, word_dictionary_cutoff0.size());
-
-    // We shouldn't have the rare word symbol in our dictionary.
     EXPECT_FALSE(word_dictionary_cutoff0.find(corpus.kRareString()) !=
-		 word_dictionary_cutoff0.end());
+		 word_dictionary_cutoff0.end());  // No rare symbol.
 
     unordered_map<string, size_t> word_dictionary_cutoff1;
     size_t num_considered_words_cutoff1 =
 	corpus.BuildWordDictionary(word_count, 1, &word_dictionary_cutoff1);
     EXPECT_EQ(10, num_considered_words_cutoff1);
     EXPECT_EQ(5, word_dictionary_cutoff1.size());
-
-    // The rare word symbol gets the highest index.
     EXPECT_EQ(word_dictionary_cutoff1.size() - 1,
-	      word_dictionary_cutoff1[corpus.kRareString()]);
+	      word_dictionary_cutoff1[corpus.kRareString()]);  // Highest index.
 }
 
 // Checks window sliding with sentence-per-line, bag contexts, and size 2.
@@ -99,13 +111,8 @@ TEST_F(CorpusExample, CheckSlideWindowSentencesBagSize2) {
 		       window_size, 0, &context_dictionary,
 		       &context_word_count);
 
-    size_t num_samples = 0;
-    for (const auto &context_pair : context_word_count) {
-	for (const auto &word_pair : context_pair.second) {
-	    num_samples += word_pair.second;
-	}
-    }
-    EXPECT_EQ(15, num_samples);
+    size_t num_samples = util_misc::sum_values(context_word_count);
+    EXPECT_EQ(15, num_samples);  // num_samples = (window_size - 1) * num_words
 
     Word w_the = word_dictionary["the"];
     Word w_dog = word_dictionary["dog"];
@@ -153,13 +160,8 @@ TEST_F(CorpusExample, CheckSlideWindowListSize3) {
 		       window_size, 0, &context_dictionary,
 		       &context_word_count);
 
-    size_t num_samples = 0;
-    for (const auto &context_pair : context_word_count) {
-	for (const auto &word_pair : context_pair.second) {
-	    num_samples += word_pair.second;
-	}
-    }
-    EXPECT_EQ(30, num_samples);
+    size_t num_samples = util_misc::sum_values(context_word_count);
+    EXPECT_EQ(30, num_samples);  // num_samples = (window_size - 1) * num_words
 
     Word w_the = word_dictionary["the"];
     Word w_rare = word_dictionary[corpus.kRareString()];
@@ -221,7 +223,6 @@ TEST_F(CorpusExample, CheckTransitionCounting) {
     EXPECT_EQ(2, end_count[w_rare]);
     EXPECT_EQ(2, end_count[w_period]);
 }
-*/
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -268,6 +268,22 @@ TEST(UtilMisc, InvertUnorderedMap) {
     EXPECT_EQ("b", table2[1]);
 }
 
+// Checks summing values in an unordered map.
+TEST(UtilMisc, SumValuesInFlatUnorderedMap) {
+    unordered_map<string, size_t> table;
+    table["a"] = 7;
+    table["b"] = 3;
+    EXPECT_EQ(10, util_misc::sum_values(table));
+}
+
+// Checks summing values in a 2-nested unordered map.
+TEST(UtilMisc, SumValuesInDoubleNestedUnorderedMap) {
+    unordered_map<double, unordered_map<string, int> > table;
+    table[0.75]["a"] = -7;
+    table[0.75]["b"] = -5;
+    table[0.31]["a"] = -3;
+    EXPECT_EQ(-15, util_misc::sum_values(table));
+}
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

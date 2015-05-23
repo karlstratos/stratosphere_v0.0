@@ -5,10 +5,7 @@
 #include <iomanip>
 #include <limits>
 
-#include "sparsesvd.h"
-
 size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
-    size_t num_words = 0;
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
     for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
@@ -33,11 +30,10 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 		    word_string = util_string::lowercase(word_string);
 		}
 		++(*word_count)[word_string];
-		++num_words;
 
 		// If the vocabulary is too large, subtract by the median count
 		// and eliminate at least half of the word types.
-		if (word_count->size() >= kMaxVocabularySize_) {
+		if (word_count->size() >= max_vocabulary_size_) {
 		    util_misc::subtract_by_median(word_count);
 		}
 	    }
@@ -48,7 +44,128 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 	}
 	if (verbose_) { cerr << " " << word_count->size() << " types" << endl; }
     }
+    size_t num_words = util_misc::sum_values(*word_count);
     return num_words;
+}
+
+size_t Corpus::BuildWordDictionary(const unordered_map<string, size_t> &count,
+				   size_t rare_cutoff,
+				   unordered_map<string, Word>
+				   *word_dictionary) {
+    size_t num_considered_words = 0;
+    bool have_rare = false;
+    word_dictionary->clear();
+    for (const auto &string_count_pair : count) {
+	string word_string = string_count_pair.first;
+	size_t word_count = string_count_pair.second;
+	if (word_count > rare_cutoff) {
+	    num_considered_words += word_count;
+	    (*word_dictionary)[word_string] = word_dictionary->size();
+	} else {
+	    have_rare = true;
+	}
+    }
+    if (have_rare) {  // The rare word symbol gets the highest index.
+	(*word_dictionary)[kRareString_] = word_dictionary->size();
+    }
+    return num_considered_words;
+}
+
+void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
+			 bool sentence_per_line,
+			 const string &context_definition, size_t window_size,
+			 size_t hash_size,
+			 unordered_map<string, Context> *context_dictionary,
+			 unordered_map<Context, unordered_map<Word, double> >
+			 *context_word_count) {
+    Window window(window_size, context_definition, word_dictionary,
+		  kRareString_, kBufferString_, hash_size, context_dictionary,
+		  context_word_count);
+
+    vector<string> file_list;
+    util_file::list_files(corpus_path_, &file_list);
+    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
+	string file_path = file_list[file_num];
+	size_t num_lines = util_file::get_num_lines(file_path);
+	if (verbose_) {
+	    cerr << "Sliding window in file " << file_num + 1 << "/"
+		 << file_list.size() << " " << flush;
+	}
+	ifstream file(file_path, ios::in);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	double portion_so_far = kReportInterval_;
+	double line_num = 0.0;  // Float for division
+	while (file.good()) {
+	    vector<string> word_strings;
+	    util_string::read_line(&file, &word_strings);
+	    ++line_num;
+	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
+	    for (string word_string : word_strings) {
+		if (Skip(word_string)) { continue; }
+		if (lowercase_) {
+		    word_string = util_string::lowercase(word_string);
+		}
+		window.Add(word_string);
+	    }
+	    if (sentence_per_line) { window.Finish(); } // Finish the line.
+	    if (line_num / num_lines >= portion_so_far) {
+		portion_so_far += kReportInterval_;
+		if (verbose_) { cerr << "." << flush; }
+	    }
+	}
+	if (!sentence_per_line) { window.Finish(); } // Finish the file.
+	if (verbose_) { cerr << endl; }
+    }
+}
+
+void Corpus::CountTransitions(
+    const unordered_map<string, Word> &word_dictionary,
+    unordered_map<Word, unordered_map<Word, size_t> > *bigram_count,
+    unordered_map<Word, size_t> *start_count,
+    unordered_map<Word, size_t> *end_count) {
+    bigram_count->clear();
+    start_count->clear();
+    end_count->clear();
+
+    vector<string> file_list;
+    util_file::list_files(corpus_path_, &file_list);
+    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
+	string file_path = file_list[file_num];
+	size_t num_lines = util_file::get_num_lines(file_path);
+	if (verbose_) {
+	    cerr << "Counting transitions in file " << file_num + 1 << "/"
+		 << file_list.size() << " " << flush;
+	}
+	ifstream file(file_path, ios::in);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	double portion_so_far = kReportInterval_;
+	double line_num = 0.0;  // Float for division
+	while (file.good()) {
+	    vector<string> word_strings;
+	    util_string::read_line(&file, &word_strings);
+	    ++line_num;
+	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
+	    Word w_prev;
+	    for (size_t i = 0; i < word_strings.size(); ++i) {
+		string word_string = (!lowercase_) ? word_strings[i] :
+		    util_string::lowercase(word_strings[i]);
+		if (Skip(word_string)) { continue; }
+		if (word_dictionary.find(word_string) ==
+		    word_dictionary.end()) { word_string = kRareString_; }
+		Word w = word_dictionary.at(word_string);
+
+		if (i == 0) { ++(*start_count)[w]; }
+		if (i == word_strings.size() - 1) { ++(*end_count)[w]; }
+		if (i > 0) { ++(*bigram_count)[w_prev][w]; }
+		w_prev = w;
+	    }
+	    if (line_num / num_lines >= portion_so_far) {
+		portion_so_far += kReportInterval_;
+		if (verbose_) { cerr << "." << flush; }
+	    }
+	}
+	if (verbose_) { cerr << endl; }
+    }
 }
 
 bool Corpus::Skip(const string &word_string) {
@@ -89,6 +206,7 @@ void Window::Finish() {
 }
 
 void Window::PrepareWindow() {
+    ASSERT(window_size_ >= 2, "Window size less than 2: " << window_size_);
     center_index_ = (window_size_ - 1) / 2;  // Right-biased center index.
 
     // Buffer the window up to before the center index.
@@ -113,11 +231,11 @@ void Window::ProcessFull() {
 	if (i == center_index_) { continue; }
 	if (context_definition_ == "bag") {  // Bag-of-words contexts
 	    Context bag_context = AddContextString(queue_[i]);
-	    context_word_count_[bag_context][word] += 1;
+	    (*context_word_count_)[bag_context][word] += 1;
 	} else if (context_definition_ == "list") {  // List-of-words contexts
 	    Context list_context = AddContextString(position_markers_[i] +
 						    queue_[i]);
-	    context_word_count_[list_context][word] += 1;
+	    (*context_word_count_)[list_context][word] += 1;
 	} else {
 	    ASSERT(false, "Unknown context definition: " <<
 		   context_definition_);
@@ -129,10 +247,10 @@ Context Window::AddContextString(const string &context_string) {
     string context_string_hashed = (hash_size_ == 0) ?  // Context hashing
 	context_string : to_string(context_hash_(context_string) % hash_size_);
 
-    if (context_dictionary_.find(context_string_hashed) ==
-	context_dictionary_.end()) {  // Add to dictionary if not known.
-	Context new_context_index = context_dictionary_.size();
-	context_dictionary_[context_string_hashed] = new_context_index;
+    if (context_dictionary_->find(context_string_hashed) ==
+	context_dictionary_->end()) {  // Add to dictionary if not known.
+	Context new_context_index = context_dictionary_->size();
+	(*context_dictionary_)[context_string_hashed] = new_context_index;
     }
-    return context_dictionary_[context_string_hashed];
+    return (*context_dictionary_)[context_string_hashed];
 }

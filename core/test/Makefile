@@ -105,7 +105,7 @@ corpus_test: corpus_test.o ../corpus.o ../util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 ../corpus.o: ../corpus.cc ../corpus.h
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@

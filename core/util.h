@@ -246,6 +246,24 @@ namespace util_misc {
 	    }
 	}
     }
+
+    // Returns the sum of values in an unordered map.
+    template <typename T1, typename T2>
+    T2 sum_values(const unordered_map<T1, T2> &table) {
+	T2 sum = 0.0;
+	for (const auto &pair : table) { sum += pair.second; }
+	return sum;
+    }
+
+    // Returns the sum of values in a 2-nested unordered map.
+    template <typename T1, typename T2, typename T3>
+    T3 sum_values(const unordered_map<T1, unordered_map<T2, T3> > &table) {
+	T3 sum = 0.0;
+	for (const auto &pair1 : table) {
+	    for (const auto &pair2 : pair1.second) { sum += pair2.second; }
+	}
+	return sum;
+    }
 }  // namespace util_misc
 
 #endif  // CORE_UTIL_H_
