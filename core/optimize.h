@@ -10,15 +10,12 @@
 #include "util.h"
 
 namespace optimize {
-    // Finds the convex coefficients for the columns of a matrix that
-    // minimize a loss wrt. to a target vector.
-    void compute_convex_coefficients(const Eigen::MatrixXd &columns,
-				     const Eigen::VectorXd &target_vector,
-				     const string &loss_type,
-				     size_t max_num_updates,
-				     double improvement_threshold,
-				     bool verbose,
-				     Eigen::VectorXd *convex_coefficients);
+    // Finds the convex coefficients for the columns of a matrix that minimize
+    // the squared loss wrt. to a target vector.
+    void compute_convex_coefficients_squared_loss(
+	const Eigen::MatrixXd &columns, const Eigen::VectorXd &target_vector,
+	size_t max_num_updates, double stopping_threshold, bool verbose,
+	Eigen::VectorXd *convex_coefficients);
 }  // namespace optimize
 
 #endif  // CORE_OPTIMIZE_H_

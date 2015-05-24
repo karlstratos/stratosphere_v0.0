@@ -13,17 +13,15 @@ class ConvexConstrainedOptimization : public testing::Test {
 protected:
     // (1 x 3): short and fat
     // (3 x 3): square
-    // (9 x 3): tall and thin
-    vector<size_t> list_num_rows_ = {1, 3, 9};
+    // (6 x 3): tall and thin
+    vector<size_t> list_num_rows_ = {1, 3, 6};
     vector<size_t> list_num_columns_ = {3};
-    double tol_ = 1e-4;
 };
 
 // Checks minimizing the squared-loss for convex-constrained optimization.
 TEST_F(ConvexConstrainedOptimization, SquaredLoss) {
-    string loss_type = "squared";
     size_t max_num_updates = numeric_limits<size_t>::max();
-    double improvement_threshold = 1e-10;
+    double stopping_threshold = 1e-10;
     bool verbose = false;
 
     for (size_t num_rows : list_num_rows_) {
@@ -39,15 +37,15 @@ TEST_F(ConvexConstrainedOptimization, SquaredLoss) {
 
 	    // Solve the problem.
 	    Eigen::VectorXd computed_coefficients;
-	    optimize::compute_convex_coefficients(columns, target_vector,
-						  loss_type, max_num_updates,
-						  improvement_threshold,
-						  verbose,
-						  &computed_coefficients);
-	    Eigen::VectorXd combination = columns * computed_coefficients;
-	    for (size_t i = 0; i < num_rows; ++i) {
-		EXPECT_NEAR(target_vector(i), combination(i), tol_);
-	    }
+	    optimize::compute_convex_coefficients_squared_loss(
+		columns, target_vector, max_num_updates, stopping_threshold,
+		verbose, &computed_coefficients);
+	    Eigen::VectorXd estimate = columns * computed_coefficients;
+
+	    // Check if the error (= loss of the estimate since the optimal loss
+	    // is 0) is at least as small as specified.
+	    double error = 0.5 * (target_vector - estimate).squaredNorm();
+	    EXPECT_TRUE(error <= stopping_threshold);
 	}
     }
 }
