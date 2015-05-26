@@ -6,7 +6,7 @@
 #include <limits>
 #include <stack>
 
-double GreedyLazyFocusedAgglomerativeClustering::ClusterOrderedVectors(
+double AgglomerativeClustering::ClusterOrderedVectors(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t num_leaf_clusters) {
     size_t n = ordered_vectors.size();
     size_t m = (num_leaf_clusters <= n) ? num_leaf_clusters : n;
@@ -36,7 +36,7 @@ double GreedyLazyFocusedAgglomerativeClustering::ClusterOrderedVectors(
     lb_.resize(m + 1);  // Lowerbounds.
     twin_.resize(m + 1);  // Indices in {0 ... m} for merge candidates.
     tight_.resize(m + 1);  // Is the current lowerbound tight?
-    num_extra_tightening_ = 0;  // Number of tightening operations.
+    size_t num_extra_tightening = 0;  // Number of tightening operations.
 
     // Initialize the first m clusters.
     for (size_t a1 = 0; a1 < m; ++a1) {  // Tightening m clusters: O(dm^2).
@@ -90,7 +90,7 @@ double GreedyLazyFocusedAgglomerativeClustering::ClusterOrderedVectors(
 		    ComputeDistance(ordered_vectors, candidate_index, a);
 		UpdateLowerbounds(candidate_index, a, dist);
 	    }
-	    ++num_extra_tightening_;
+	    ++num_extra_tightening;
 
 	    // Again, find an active cluster with the smallest lowerbound: O(m).
 	    smallest_lowerbound = DBL_MAX;
@@ -177,8 +177,7 @@ double GreedyLazyFocusedAgglomerativeClustering::ClusterOrderedVectors(
 	}
     }
 
-    // Organize merges so that the right child cluster is always more recent
-    // than the left child cluster.
+    // Order the left and right children.
     for (size_t i = 0; i < n - 1; ++i) {
 	if (get<0>(Z_[i]) > get<1>(Z_[i])) {
 	    double temp = get<0>(Z_[i]);
@@ -187,11 +186,16 @@ double GreedyLazyFocusedAgglomerativeClustering::ClusterOrderedVectors(
 	}
     }
     LabelLeaves(m);  // Clustering done: label bit strings.
-    double gamma = ((double) num_extra_tightening_) / (n - 1);
+    double gamma = ((double) num_extra_tightening) / (n - 1);
     return gamma;
 }
 
-double GreedyLazyFocusedAgglomerativeClustering::ComputeDistance(
+string AgglomerativeClustering::path_from_root(size_t vector_index) {
+    ASSERT(vector_index < path_from_root_.size(), "No index: " << vector_index);
+    return path_from_root_[vector_index];
+}
+
+double AgglomerativeClustering::ComputeDistance(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t active_index1,
     size_t active_index2) {
     size_t size1 = size_[active_[active_index1]];
@@ -201,8 +205,9 @@ double GreedyLazyFocusedAgglomerativeClustering::ComputeDistance(
     return scale * diff.squaredNorm();
 }
 
-void GreedyLazyFocusedAgglomerativeClustering::UpdateLowerbounds(
-    size_t active_index1, size_t active_index2, double distance) {
+void AgglomerativeClustering::UpdateLowerbounds(size_t active_index1,
+						size_t active_index2,
+						double distance) {
     if (distance < lb_[active_index1]) {
 	lb_[active_index1] = distance;
 	twin_[active_index1] = active_index2;
@@ -215,7 +220,7 @@ void GreedyLazyFocusedAgglomerativeClustering::UpdateLowerbounds(
     }
 }
 
-void GreedyLazyFocusedAgglomerativeClustering::ComputeMergedMean(
+void AgglomerativeClustering::ComputeMergedMean(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t active_index1,
     size_t active_index2, Eigen::VectorXd *new_mean) {
     double size1 = size_[active_[active_index1]];
@@ -226,11 +231,11 @@ void GreedyLazyFocusedAgglomerativeClustering::ComputeMergedMean(
     *new_mean = scale1 * mean_[active_index1] + scale2 * mean_[active_index2];
 }
 
-void GreedyLazyFocusedAgglomerativeClustering::LabelLeaves(
-    size_t num_leaf_clusters) {
+void AgglomerativeClustering::LabelLeaves(size_t num_leaf_clusters) {
     ASSERT(Z_.size() > 0, "No merge information to label leaves!");
     ASSERT(active_.size() > 0, "Active clusters missing!");
     leaves_.clear();
+    path_from_root_.clear();
     size_t n = Z_.size() + 1;
 
     // Use breadth-first search (BFS) to traverse the tree. Maintain bit strings
@@ -249,6 +254,7 @@ void GreedyLazyFocusedAgglomerativeClustering::LabelLeaves(
         if (cluster < n) {
 	    // We have a leaf cluster. Add to the current bit string.
 	    leaves_[bitstring].push_back(cluster);
+	    path_from_root_[cluster] = bitstring;
 	} else {
 	    // We have a non-leaf cluster. Branch to its two children.
             size_t left_child_cluster = get<0>(Z_[cluster - n]);
@@ -257,8 +263,8 @@ void GreedyLazyFocusedAgglomerativeClustering::LabelLeaves(
             string left_bitstring = bitstring;
             string right_bitstring = bitstring;
 
-            if (cluster >= 2 * n - num_leaf_clusters) {
-		// Prune branches to have a certain number of leaf clusters.
+            if (!prune_ || cluster >= 2 * n - num_leaf_clusters) {
+		// Prune branches to have m leaf clusters.
                 left_bitstring += "0";
                 right_bitstring += "1";
             }
