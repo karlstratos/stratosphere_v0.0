@@ -23,7 +23,7 @@ endif
 
 # Top-level commands.
 TESTS = util_test eigen_helper_test optimize_test sparsesvd_test corpus_test \
-	cluster_test
+	cluster_test evaluate_test
 
 all: $(TESTS)
 
@@ -119,3 +119,12 @@ cluster_test.o: cluster_test.cc
 
 ../cluster.o: ../cluster.cc ../cluster.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+evaluate_test: evaluate_test.o ../evaluate.o ../util.o gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+evaluate_test.o: evaluate_test.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+../evaluate.o: ../evaluate.cc ../evaluate.h
+	$(CC) $(CFLAGS) -c $< -o $@

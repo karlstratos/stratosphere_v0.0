@@ -39,6 +39,7 @@ namespace util_string {
     // Splits a line by space or tab.
     void split_by_space_tab(const string &line, vector<string> *tokens);
 
+    // TODO: Move this to util_file.
     // Reads the next line from a file into tokens separated by space or tab.
     void read_line(ifstream *file,  vector<string> *tokens);
 
