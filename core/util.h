@@ -39,10 +39,6 @@ namespace util_string {
     // Splits a line by space or tab.
     void split_by_space_tab(const string &line, vector<string> *tokens);
 
-    // TODO: Move this to util_file.
-    // Reads the next line from a file into tokens separated by space or tab.
-    void read_line(ifstream *file,  vector<string> *tokens);
-
     // Splits a line by a string delimiter.
     void split_by_string(const string &line, const string &string_delimiter,
 			 vector<string> *tokens);
@@ -70,6 +66,14 @@ namespace util_string {
 }  // namespace util_string
 
 namespace util_file {
+    // Reads the next line from a file into tokens separated by space or tab.
+    // while (file.good()) {
+    //     vector<string> tokens;
+    //     util_file::read_line(&file, &tokens);
+    //     /* (Do stuff with tokens.) */
+    // }
+    void read_line(ifstream *file,  vector<string> *tokens);
+
     // Returns true if the file exists, false otherwise.
     bool exists(const string &file_path);
 
@@ -173,10 +177,10 @@ namespace util_file {
     }
 
     // Writes a string to a binary file.
-    void binary_write_string(const string &value, ofstream& file);
+    void binary_write_string(const string &value, ostream& file);
 
     // Reads a string from a binary file.
-    void binary_read_string(ofstream& file, string *value);
+    void binary_read_string(istream& file, string *value);
 
     // Writes a (string, size_t) unordered_map to a binary file.
     void binary_write(const unordered_map<string, size_t> &table,

@@ -61,29 +61,29 @@ TEST(UtilString, FileNextLineTokenization) {
     vector<string> tokens;
 
     //  "a b\tc"
-    util_string::read_line(&text_file_in, &tokens);
+    util_file::read_line(&text_file_in, &tokens);
     EXPECT_EQ(3, tokens.size());
     EXPECT_EQ("a", tokens[0]);
     EXPECT_EQ("b", tokens[1]);
     EXPECT_EQ("c", tokens[2]);
 
     //  ""
-    util_string::read_line(&text_file_in, &tokens);
+    util_file::read_line(&text_file_in, &tokens);
     EXPECT_EQ(0, tokens.size());
 
     //  "\t\td e f"
-    util_string::read_line(&text_file_in, &tokens);
+    util_file::read_line(&text_file_in, &tokens);
     EXPECT_EQ(3, tokens.size());
     EXPECT_EQ("d", tokens[0]);
     EXPECT_EQ("e", tokens[1]);
     EXPECT_EQ("f", tokens[2]);
 
     //  ""
-    util_string::read_line(&text_file_in, &tokens);
+    util_file::read_line(&text_file_in, &tokens);
     EXPECT_EQ(0, tokens.size());
 
     //  ""
-    util_string::read_line(&text_file_in, &tokens);
+    util_file::read_line(&text_file_in, &tokens);
     EXPECT_EQ(0, tokens.size());
 
     remove(text_file_path.c_str());

@@ -22,7 +22,7 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 	while (file.good()) {
 	    vector<string> word_strings;
 	    ++line_num;
-	    util_string::read_line(&file, &word_strings);
+	    util_file::read_line(&file, &word_strings);
 	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    for (string word_string : word_strings) {
 		if (Skip(word_string)) { continue; }
@@ -97,7 +97,7 @@ void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 	double line_num = 0.0;  // Float for division
 	while (file.good()) {
 	    vector<string> word_strings;
-	    util_string::read_line(&file, &word_strings);
+	    util_file::read_line(&file, &word_strings);
 	    ++line_num;
 	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    for (string word_string : word_strings) {
@@ -142,7 +142,7 @@ void Corpus::CountTransitions(
 	double line_num = 0.0;  // Float for division
 	while (file.good()) {
 	    vector<string> word_strings;
-	    util_string::read_line(&file, &word_strings);
+	    util_file::read_line(&file, &word_strings);
 	    ++line_num;
 	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    Word w_prev;

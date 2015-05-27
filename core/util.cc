@@ -33,12 +33,6 @@ namespace util_string {
 	split_by_chars(line, " \t\n", tokens);
     }
 
-    void read_line(ifstream *file,  vector<string> *tokens) {
-	string line;
-	getline(*file, line);
-	split_by_space_tab(line, tokens);
-    }
-
     void split_by_string(const string &line, const string &string_delimiter,
 			 vector<string> *tokens) {
 	tokens->clear();
@@ -98,6 +92,12 @@ namespace util_string {
 }  // namespace util_string
 
 namespace util_file {
+    void read_line(ifstream *file,  vector<string> *tokens) {
+	string line;
+	getline(*file, line);
+	util_string::split_by_space_tab(line, tokens);
+    }
+
     bool exists(const string &file_path) {
 	struct stat buffer;
 	return (stat(file_path.c_str(), &buffer) == 0);
@@ -152,7 +152,7 @@ namespace util_file {
 	return num_lines;
     }
 
-    void binary_write_string(const string &value, ofstream& file) {
+    void binary_write_string(const string &value, ostream& file) {
 	size_t string_length = value.length();
 	binary_write_primitive(string_length, file);
 	file.write(value.c_str(), string_length);
