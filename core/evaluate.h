@@ -12,15 +12,18 @@
 using namespace std;
 
 namespace evaluate {
-    // TODO: separate many_to_one.
-    // Evaluates sequence predictions in per-position, per-sentence, and
-    // many-to-one accuracy.
+    // Evaluates sequence predictions.
     void evaluate_sequences(const vector<vector<string> > &true_sequences,
 			    const vector<vector<string> > &predicted_sequences,
 			    double *position_accuracy,
-			    double *sequence_accuracy,
-			    double *many_to_one_accuracy,
-			    unordered_map<string, string> *many_to_one_map);
+			    double *sequence_accuracy);
+
+    // Evaluates sequence predictions with mapping labels (many-to-one).
+    void evaluate_sequences_mapping_labels(
+	const vector<vector<string> > &true_sequences,
+	const vector<vector<string> > &predicted_sequences,
+	double *position_accuracy, double *sequence_accuracy,
+	unordered_map<string, string> *label_mapping);
 }  // namespace evaluate
 
 #endif  // CORE_EVALUATE_H_
