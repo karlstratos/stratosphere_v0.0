@@ -146,6 +146,21 @@ TEST_F(RandomHMM, Viterbi) {
 		max_sequence_log_probability_viterbi, tol_);
 }
 
+/*
+// Checks the correctness of the forward-backward algorithm.
+TEST_F(RandomHMM, ForwardBackward) {
+    double lprob_forward =
+	hmm_.ComputeObservationLikelihoodForward(observation_string_sequence_);
+    double lprob_backward =
+	hmm_.ComputeObservationLikelihoodForward(observation_string_sequence_);
+    double lprob_exhaustive =
+	hmm_.ComputeObservationLikelihoodExhaustive(observation_string_sequence_);
+
+    EXPECT_NEAR(lprob_exhaustive, lprob_forward, tol_);
+    EXPECT_NEAR(lprob_exhaustive, lprob_backward, tol_);
+}
+*/
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

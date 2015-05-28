@@ -259,6 +259,38 @@ void HMM::TrainSupervised(
     CheckProperDistribution();
 }
 
+void HMM::Predict(const string &data_path, const string &prediction_path) {
+    vector<vector<string> > observation_string_sequences;
+    vector<vector<string> > state_string_sequences;
+    bool fully_labeled;
+    ReadData(data_path, &observation_string_sequences, &state_string_sequences,
+	     &fully_labeled);
+
+    /*
+    vector<vector<string> > predicted_state_sequences;
+    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	vector<Observation> observation_sequence;
+	ConvertObservationSequence(observation_string_sequences[i],
+				   &observation_sequence);
+	vector<State> state_sequence;
+	Predict(observation_sequence, &state_sequence);
+	vector<string> state_string_sequence;
+	ConvertStateSequence(state_sequence, &state_string_sequence);
+	predicted_state_sequences.push_back(state_string_sequence);
+
+	vector<string> pred_sequence;
+	if (decoding_method_ == "viterbi") {
+	    Viterbi(x_sequences[i], &pred_sequence);
+	} else if (decoding_method_ == "mbr") {
+	    MinimumBayesRisk(x_sequences[i], &pred_sequence);
+	} else {
+	    ASSERT(false, "Unknown decoding method: " << decoding_method_);
+	}
+	pred_sequences.push_back(pred_sequence);
+    }
+    */
+}
+
 double HMM::Viterbi(const vector<string> &observation_string_sequence,
 		    vector<string> *state_string_sequence) {
     vector<Observation> observation_sequence;

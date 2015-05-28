@@ -46,6 +46,12 @@ public:
 	const vector<vector<string> > &observation_string_sequences,
 	const vector<vector<string> > &state_string_sequences);
 
+    // Predicts state sequences for the given data.
+    void Predict(const string &data_path) { Predict(data_path, ""); }
+
+    // Predicts state sequences for the given data and writes them in a file.
+    void Predict(const string &data_path, const string &prediction_path);
+
     // Decodes the most likely state sequence with the Viterbi algorithm.
     double Viterbi(const vector<string> &observation_string_sequence,
 		   vector<string> *state_string_sequence);
