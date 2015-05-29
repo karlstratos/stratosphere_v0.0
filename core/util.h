@@ -269,6 +269,45 @@ namespace util_misc {
 	}
 	return sum;
     }
+
+    // Returns true if two unordered maps have the same entries and are close
+    // in value, else false.
+    template <typename T1, typename T2>
+    T2 check_near(const unordered_map<T1, T2> &table1,
+		  const unordered_map<T1, T2> &table2) {
+	if (table1.size() != table2.size()) { return false; }
+	for (const auto &pair1 : table1) {
+	    T1 key = pair1.first;
+	    if (table2.find(key) == table2.end()) { return false; }
+	    if (fabs(table1.at(key) - table2.at(key)) > 1e-10) { return false; }
+	}
+	return true;
+    }
+
+    // Returns true if two 2-nested unordered maps have the same entries and are
+    // close in value, else false.
+    template <typename T1, typename T2, typename T3>
+    T3 check_near(const unordered_map<T1, unordered_map<T2, T3> > &table1,
+		  const unordered_map<T1, unordered_map<T2, T3> > &table2) {
+	if (table1.size() != table2.size()) { return false; }
+	for (const auto &pair1 : table1) {
+	    T1 key1 = pair1.first;
+	    if (table2.find(key1) == table2.end()) { return false; }
+	    if (table1.at(key1).size() != table2.at(key1).size()) {
+		return false;
+	    }
+	    for (const auto &pair2 : table1.at(key1)) {
+		T2 key2 = pair2.first;
+		if (table2.at(key1).find(key2) == table2.at(key1).end()) {
+		    return false;
+		}
+		if (fabs(table1.at(key1).at(key2) -
+			 table2.at(key1).at(key2)) > 1e-10) { return false; }
+	    }
+	}
+	return true;
+    }
+
 }  // namespace util_misc
 
 #endif  // CORE_UTIL_H_

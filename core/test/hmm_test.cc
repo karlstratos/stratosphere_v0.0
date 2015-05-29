@@ -133,17 +133,10 @@ protected:
 
 // Checks the correctness of Viterbi decoding.
 TEST_F(RandomHMM, Viterbi) {
-    vector<string> state_string_sequence1;
-    double max_sequence_log_probability_viterbi =
-	hmm_.Viterbi(observation_string_sequence_, &state_string_sequence1);
-
+    hmm_.set_decoding_method("viterbi");
     hmm_.set_debug(true);
-    vector<string> state_string_sequence2;
-    double max_sequence_log_probability_viterbi_exhaustive =
-	hmm_.Viterbi(observation_string_sequence_, &state_string_sequence2);
-
-    EXPECT_NEAR(max_sequence_log_probability_viterbi_exhaustive,
-		max_sequence_log_probability_viterbi, tol_);
+    vector<string> state_string_sequence;
+    hmm_.Predict(observation_string_sequence_, &state_string_sequence);
 }
 
 /*

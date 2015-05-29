@@ -1,6 +1,7 @@
 // Author: Karl Stratos (stratos@cs.columbia.edu)
 //
 // An implementation of hidden Markove models (HMMs).
+
 #ifndef CORE_HMM_H_
 #define CORE_HMM_H_
 
@@ -10,8 +11,8 @@
 
 using namespace std;
 
-typedef size_t Observation;  // Indices corresponding to observation types.
-typedef size_t State;  // Indices corresponding to state types.
+typedef size_t Observation;
+typedef size_t State;
 
 class HMM {
 public:
@@ -52,8 +53,10 @@ public:
     // Predicts state sequences for the given data and writes them in a file.
     void Predict(const string &data_path, const string &prediction_path);
 
-    // Decodes the most likely state sequence with the Viterbi algorithm.
-    double Viterbi(const vector<string> &observation_string_sequence,
+    // Predicts the state sequence. Returns the log likelihood of
+    //    (Viterbi): best observation-state sequence pair
+    //        (MBR): observation sequence
+    double Predict(const vector<string> &observation_string_sequence,
 		   vector<string> *state_string_sequence);
 
     // Returns the number of observation types.
@@ -73,6 +76,11 @@ public:
 
     // Returns the stopping probability.
     double StoppingProbability(string state_string);
+
+    // Sets the decoding method.
+    void set_decoding_method(string decoding_method) {
+	decoding_method_ = decoding_method;
+    }
 
     // Sets whether to turn on the debug mode.
     void set_debug(bool debug) { debug_ = debug; }
@@ -132,6 +140,14 @@ private:
 	const vector<Observation> &observation_sequence,
 	const vector<State> &state_sequence);
 
+    // Computes forward probabilities: "al[i][h] = log p(x(1)...x(i), h(i)=h)"
+    void Forward(const vector<Observation> &observation_sequence,
+		 vector<vector<double> > *al);
+
+    // Computes backward probabilities: "be[i][h] = log p(x(i+1)...x(N)|h(i)=h)"
+    void Backward(const vector<Observation> &observation_sequence,
+		  vector<vector<double> > *be);
+
     // Maps an observation string to a unique index.
     unordered_map<string, Observation> observation_dictionary_;
 
@@ -152,6 +168,9 @@ private:
 
     // Prior log probabilities.
     vector<double> prior_;
+
+    // Decoding method.
+    string decoding_method_ = "viterbi";
 
     // Turn on the debug mode?
     bool debug_ = false;

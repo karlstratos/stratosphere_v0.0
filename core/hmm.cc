@@ -291,17 +291,22 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
     */
 }
 
-double HMM::Viterbi(const vector<string> &observation_string_sequence,
+double HMM::Predict(const vector<string> &observation_string_sequence,
 		    vector<string> *state_string_sequence) {
     vector<Observation> observation_sequence;
     ConvertObservationSequence(observation_string_sequence,
 			       &observation_sequence);
+    double return_value;
     vector<State> state_sequence;
-    double sequence_log_probability = (debug_) ?
-	ViterbiExhaustive(observation_sequence, &state_sequence) :
-	Viterbi(observation_sequence, &state_sequence);
+    if (decoding_method_ == "viterbi") {
+	return_value = Viterbi(observation_sequence, &state_sequence);
+    } else if (decoding_method_ == "mbr") {
+	//return_value = MinimumBayesRisk(observation_sequence, &state_sequence);
+    } else {
+	ASSERT(false, "Unknown decoding method: " << decoding_method_);
+    }
     ConvertStateSequence(state_sequence, state_string_sequence);
-    return sequence_log_probability;
+    return return_value;
 }
 
 double HMM::EmissionProbability(string state_string,
@@ -459,8 +464,9 @@ double HMM::Viterbi(const vector<Observation> &observation_sequence,
 		    vector<State> *state_sequence) {
     size_t length = observation_sequence.size();
 
-    // chart[i][state] = highest log probability of any sequence ending at
-    //                   position i in state
+    // chart[i][h] = log( highest probability of the observation sequence and
+    //                    any state sequence from position 1 to i, the i-th
+    //                    state being h                                        )
     vector<vector<double> > chart(length);
     vector<vector<State> > backpointer(length);
     for (size_t i = 0; i < length; ++i) {
@@ -499,20 +505,27 @@ double HMM::Viterbi(const vector<Observation> &observation_sequence,
     }
 
     // Maximization over the final state.
-    double max_sequence_log_probability = -numeric_limits<double>::infinity();
+    double max_log_probability = -numeric_limits<double>::infinity();
     State best_final_state = 0;
     for (State state = 0; state < NumStates(); ++state) {
 	double sequence_log_probability =
 	    chart[length - 1][state] + transition_[state][StoppingState()];
-	if (sequence_log_probability >= max_sequence_log_probability) {
-	    max_sequence_log_probability = sequence_log_probability;
+	if (sequence_log_probability >= max_log_probability) {
+	    max_log_probability = sequence_log_probability;
 	    best_final_state = state;
 	}
+    }
+    if (debug_) {
+	double answer = ViterbiExhaustive(observation_sequence, state_sequence);
+	ASSERT(fabs(answer - max_log_probability) < 1e-10, "Answer: "
+	       << answer << ",  Viterbi: " << max_log_probability);
+	cout << answer << endl;
+	cout << max_log_probability << endl;
     }
 
     // Backtrack to recover the best state sequence.
     RecoverFromBackpointer(backpointer, best_final_state, state_sequence);
-    return max_sequence_log_probability;
+    return max_log_probability;
 }
 
 void HMM::RecoverFromBackpointer(const vector<vector<State> > &backpointer,
@@ -594,4 +607,82 @@ double HMM::ComputeLogProbability(
     sequence_log_probability +=
 	transition_[state_sequence[length - 1]][StoppingState()];
     return sequence_log_probability;
+}
+
+void HMM::Forward(const vector<Observation> &observation_sequence,
+		  vector<vector<double> > *al) {
+    size_t length = observation_sequence.size();
+
+    // al[i][h] = log( probability of the observation sequence from position
+    //                 1 to i, the i-th state being h                         )
+    al->resize(length);
+    for (size_t i = 0; i < length; ++i) {
+	(*al)[i].resize(NumStates(), -numeric_limits<double>::infinity());
+    }
+
+    // Base case.
+    Observation initial_observation = observation_sequence[0];
+    for (State state = 0; state < NumStates(); ++state) {
+	double emission_value = (initial_observation == UnknownObservation()) ?
+	    -log(NumObservations()) : emission_[state][initial_observation];
+	(*al)[0][state] = prior_[state] + emission_value;
+    }
+
+    // Main body.
+    for (size_t i = 1; i < length; ++i) {
+	Observation observation = observation_sequence[i];
+	for (State state = 0; state < NumStates(); ++state) {
+	    double emission_value = (observation == UnknownObservation()) ?
+		-log(NumObservations()) : emission_[state][observation];
+	    double log_summed_probabilities =
+		-numeric_limits<double>::infinity();
+	    for (State previous_state = 0; previous_state < NumStates();
+		 ++previous_state) {
+		double log_probability = (*al)[i - 1][previous_state] +
+		    transition_[previous_state][state] + emission_value;
+		log_summed_probabilities =
+		    util_math::sum_logs(log_summed_probabilities,
+					log_probability);
+	    }
+	    (*al)[i][state] = log_summed_probabilities;
+	}
+    }
+}
+
+void HMM::Backward(const vector<Observation> &observation_sequence,
+		   vector<vector<double> > *be) {
+    size_t length = observation_sequence.size();
+
+    // be[i][h] = log( probability of the observation sequence from position
+    //                 i+1 to the end, conditioned on the i-th state being h )
+    be->resize(length);
+    for (size_t i = 0; i < length; ++i) {
+	(*be)[i].resize(NumStates(), -numeric_limits<double>::infinity());
+    }
+
+    // Base case.
+    for (State state = 0; state < NumStates(); ++state) {
+	(*be)[length - 1][state] = transition_[state][StoppingState()];
+    }
+
+    // Main body.
+    for (int i = length - 2; i >= 0; --i) {
+	Observation next_observation = observation_sequence[i + 1];
+	for (State state = 0; state < NumStates(); ++state) {
+	    double log_summed_probabilities =
+		-numeric_limits<double>::infinity();
+	    for (State next_state = 0; next_state < NumStates(); ++next_state) {
+		double emission_value = (next_observation ==
+					 UnknownObservation()) ?
+		    -log(NumObservations()) :
+		    emission_[next_state][next_observation];
+		double log_probability = transition_[state][next_state] +
+		    emission_value + (*be)[i + 1][next_state];
+		log_summed_probabilities =
+		    util_math::sum_logs(log_summed_probabilities,
+					log_probability);
+	    }
+	    (*be)[i][state] = log_summed_probabilities;
+	}
+    }
 }

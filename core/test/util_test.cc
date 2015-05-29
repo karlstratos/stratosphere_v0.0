@@ -285,6 +285,34 @@ TEST(UtilMisc, SumValuesInDoubleNestedUnorderedMap) {
     EXPECT_EQ(-15, util_misc::sum_values(table));
 }
 
+// Checks if two unordered maps are near.
+TEST(UtilMisc, CheckNearFlatUnorderedMaps) {
+    unordered_map<string, double> table1;
+    unordered_map<string, double> table2;
+    table1["a"] = 7;
+    table1["b"] = 7.1;
+    table2["a"] = 7;
+    table2["b"] = 7.1;
+    EXPECT_TRUE(util_misc::check_near(table1, table2));
+
+    table1["c"] = 7.000000001;
+    table2["c"] = 7.000000002;
+    EXPECT_FALSE(util_misc::check_near(table1, table2));
+}
+
+// Checks if two 2-nested unordered maps are near.
+TEST(UtilMisc, CheckNearDoubleNestedUnorderedMaps) {
+    unordered_map<string, unordered_map<string, double> > table1;
+    unordered_map<string, unordered_map<string, double> > table2;
+    table1["a"]["b"] = 7;
+    table2["a"]["b"] = 7;
+    EXPECT_TRUE(util_misc::check_near(table1, table2));
+
+    table1["a"]["c"] = 7.000000001;
+    table2["a"]["c"] = 7.000000002;
+    EXPECT_FALSE(util_misc::check_near(table1, table2));
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
