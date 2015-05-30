@@ -4,6 +4,7 @@
 
 #include <iomanip>
 #include <limits>
+#include <numeric>
 #include <random>
 
 #include "util.h"
@@ -182,14 +183,19 @@ void HMM::Load(const string &model_path) {
     CheckProperDistribution();
 }
 
-void HMM::TrainSupervised(const string &data_path) {
+void HMM::Train(const string &data_path, bool supervised, size_t num_states) {
     vector<vector<string> > observation_string_sequences;
     vector<vector<string> > state_string_sequences;
     bool fully_labeled;
     ReadData(data_path, &observation_string_sequences, &state_string_sequences,
 	     &fully_labeled);
-    ASSERT(fully_labeled, "Data not fully labeled");
-    TrainSupervised(observation_string_sequences, state_string_sequences);
+
+    if (supervised) {
+	ASSERT(fully_labeled, "Data not fully labeled");
+	TrainSupervised(observation_string_sequences, state_string_sequences);
+    } else {
+	ASSERT(num_states > 0, "Number of states needs to be > 0");
+    }
 }
 
 void HMM::TrainSupervised(
@@ -199,78 +205,17 @@ void HMM::TrainSupervised(
 	   "Number of sequences not matching");
     Clear();
 
-    // Identify rare observation string types.
-    unordered_map<string, bool> rare_observation_string_types;
-    IdentifyRareObservationStringTypes(observation_string_sequences,
-				       &rare_observation_string_types);
-
-    unordered_map<State, unordered_map<Observation, size_t> > emission_count;
-    unordered_map<State, unordered_map<State, size_t> > transition_count;
-    unordered_map<State, size_t> prior_count;
-    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	size_t length = observation_string_sequences[i].size();
-        ASSERT(length > 0 && length == state_string_sequences[i].size(),
-	       "Invalid sequence pair");
-	State initial_state = AddStateIfUnknown(state_string_sequences[i][0]);
-	++prior_count[initial_state];
-	for (size_t j = 0; j < length; ++j) {
-	    string observation_string = observation_string_sequences[i][j];
-	    if (rare_observation_string_types.find(observation_string) !=
-		rare_observation_string_types.end()) {
-		observation_string = kRareObservationString_;
-	    }
-	    Observation observation =
-		AddObservationIfUnknown(observation_string);
-	    State state2 = AddStateIfUnknown(state_string_sequences[i][j]);
-	    ++emission_count[state2][observation];
-	    if (j > 0) {
-		State state1 =
-		    state_dictionary_[state_string_sequences[i][j - 1]];
-		++transition_count[state1][state2];
-	    }
-	}
-	State final_state =
-	    state_dictionary_[state_string_sequences[i][length - 1]];
-	++transition_count[final_state][StoppingState()];
-    }
-    emission_.resize(NumStates());
-    for (const auto &state_pair : emission_count) {
-	State state = state_pair.first;
-	size_t state_normalizer = 0;
-	for (const auto &observation_pair : state_pair.second) {
-	    state_normalizer += observation_pair.second;
-	}
-	emission_[state].resize(NumObservations(),
-				-numeric_limits<double>::infinity());
-	for (const auto &observation_pair : state_pair.second) {
-	    emission_[state][observation_pair.first] =
-		log(observation_pair.second) - log(state_normalizer);
+    vector<vector<Observation> > observation_sequences;
+    ConstructObservationDictionary(observation_string_sequences,
+				   &observation_sequences);
+    vector<vector<State> > state_sequences(state_string_sequences.size());
+    for (size_t i = 0; i < state_string_sequences.size(); ++i) {
+	for (size_t j = 0; j < state_string_sequences[i].size(); ++j) {
+	    State state = AddStateIfUnknown(state_string_sequences[i][j]);
+	    state_sequences[i].push_back(state);
 	}
     }
-    transition_.resize(NumStates());
-    for (const auto &state1_pair : transition_count) {
-	State state1 = state1_pair.first;
-	size_t state1_normalizer = 0;
-	for (const auto &state2_pair : state1_pair.second) {
-	    state1_normalizer += state2_pair.second;
-	}
-	transition_[state1].resize(NumStates() + 1,  // +stop
-				   -numeric_limits<double>::infinity());
-	for (const auto &state2_pair : state1_pair.second) {
-	    transition_[state1][state2_pair.first] =
-		log(state2_pair.second) - log(state1_normalizer);
-	}
-    }
-    size_t prior_normalizer = 0;
-    for (const auto &state_pair : prior_count) {
-	prior_normalizer += state_pair.second;
-    }
-    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
-    for (const auto &state_pair : prior_count) {
-	prior_[state_pair.first] =
-	    log(state_pair.second) - log(prior_normalizer);
-    }
-    CheckProperDistribution();
+    TrainSupervised(observation_sequences, state_sequences);
 }
 
 void HMM::Predict(const string &data_path, const string &prediction_path) {
@@ -379,6 +324,68 @@ double HMM::StoppingProbability(string state_string) {
     return 0.0;
 }
 
+void HMM::TrainSupervised(
+    const vector<vector<Observation> > &observation_sequences,
+    const vector<vector<State> > &state_sequences) {
+    // Gather co-occurrence counts.
+    vector<vector<size_t> > emission_count(NumObservations());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_count[state].resize(NumObservations(), 0);
+    }
+    vector<vector<size_t> > transition_count(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	transition_count[state].resize(NumStates() + 1, 0);  // +stop
+    }
+    vector<size_t> prior_count(NumStates(), 0);
+    for (size_t i = 0; i < observation_sequences.size(); ++i) {
+	size_t length = observation_sequences[i].size();
+        ASSERT(length > 0 && length == state_sequences[i].size(),
+	       "Invalid sequence pair");
+	State initial_state = state_sequences[i][0];
+	++prior_count[initial_state];
+	for (size_t j = 0; j < length; ++j) {
+	    Observation observation = observation_sequences[i][j];
+	    State state = state_sequences[i][j];
+	    ++emission_count[state][observation];
+	    if (j > 0) { ++transition_count[state_sequences[i][j - 1]][state]; }
+	}
+	++transition_count[state_sequences[i][length - 1]][StoppingState()];
+    }
+
+    // Set parameters.
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	size_t state_normalizer = accumulate(emission_count[state].begin(),
+					     emission_count[state].end(), 0);
+	emission_[state].resize(NumObservations(),
+				-numeric_limits<double>::infinity());
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] =
+		log(emission_count[state][observation]) - log(state_normalizer);
+	}
+    }
+    transition_.resize(NumStates());
+    for (State state1 = 0; state1 < NumStates(); ++state1) {
+	size_t state1_normalizer = accumulate(transition_count[state1].begin(),
+					      transition_count[state1].end(),
+					      0);
+	transition_[state1].resize(NumStates() + 1,  // +stop
+				   -numeric_limits<double>::infinity());
+	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
+	    transition_[state1][state2] =
+		log(transition_count[state1][state2]) - log(state1_normalizer);
+	}
+    }
+    size_t prior_normalizer =
+	accumulate(prior_count.begin(), prior_count.end(), 0);
+    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = log(prior_count[state]) - log(prior_normalizer);
+    }
+    CheckProperDistribution();
+}
+
 void HMM::CheckProperDistribution() {
     ASSERT(NumObservations() > 0 && NumStates() > 0, "Empty dictionary?");
     for (State state = 0; state < NumStates(); ++state) {
@@ -440,19 +447,26 @@ void HMM::ReadData(const string &data_path,
     }
 }
 
-void HMM::IdentifyRareObservationStringTypes(
+void HMM::ConstructObservationDictionary(
     const vector<vector<string> > observation_string_sequences,
-    unordered_map<string, bool> *rare_observation_string_types) {
-    rare_observation_string_types->clear();
-    unordered_map<string, size_t> observation_count;
+    vector<vector<Observation> > *observation_sequences) {
+    unordered_map<string, size_t> observation_string_count;
     for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
 	for (size_t j = 0; j < observation_string_sequences[i].size(); ++j) {
-	    ++observation_count[observation_string_sequences[i][j]];
+	    ++observation_string_count[observation_string_sequences[i][j]];
 	}
     }
-    for (const auto &pair : observation_count) {
-	if (pair.second <= rare_cutoff_) {
-	    (*rare_observation_string_types)[pair.first] = true;
+    observation_sequences->resize(observation_string_sequences.size());
+    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	(*observation_sequences)[i].clear();
+	for (size_t j = 0; j < observation_string_sequences[i].size(); ++j) {
+	    string observation_string = observation_string_sequences[i][j];
+	    if (observation_string_count[observation_string] <= rare_cutoff_) {
+		observation_string = kRareObservationString_;
+	    }
+	    Observation observation =
+		AddObservationIfUnknown(observation_string);
+	    (*observation_sequences)[i].push_back(observation);
 	}
     }
 }

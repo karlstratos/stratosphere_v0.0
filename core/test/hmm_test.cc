@@ -57,7 +57,7 @@ protected:
 TEST_F(LabeledDataExample, CheckSupervisedTrainingRare0) {
     HMM hmm;
     hmm.set_rare_cutoff(0);
-    hmm.TrainSupervised(data_file_path_);
+    hmm.Train(data_file_path_);
     for (const auto &state_pair: rare0_emission_) {
 	for (const auto &observation_pair: state_pair.second) {
 	    EXPECT_NEAR(observation_pair.second,
@@ -86,7 +86,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare0) {
 TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
     HMM hmm;
     hmm.set_rare_cutoff(1);
-    hmm.TrainSupervised(data_file_path_);
+    hmm.Train(data_file_path_);
 
     // V -> <?>: 1.0
     // S -> <?>: 1.0 / 3.0;
@@ -101,7 +101,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
 TEST_F(LabeledDataExample, CheckSavingAndLoadingTrainedModel) {
     HMM hmm1;
     hmm1.set_rare_cutoff(1);
-    hmm1.TrainSupervised(data_file_path_);
+    hmm1.Train(data_file_path_);
     hmm1.Save(model_file_path_);
 
     HMM hmm2(model_file_path_);  // Loading.

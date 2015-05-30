@@ -40,7 +40,10 @@ public:
     void Load(const string &model_path);
 
     // Trains HMM parameters from a text file of labeled sequences.
-    void TrainSupervised(const string &data_path);
+    void Train(const string &data_path) { Train(data_path, true, 0); }
+
+    // Trains HMM parameters from a text file of labeled/unlabeled sequences.
+    void Train(const string &data_path, bool supervised, size_t num_states);
 
     // Trains HMM parameters from observation and state string sequences.
     void TrainSupervised(
@@ -97,6 +100,11 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
+    // Trains HMM parameters from observation and state sequences.
+    void TrainSupervised(
+	const vector<vector<Observation> > &observation_sequences,
+	const vector<vector<State> > &state_sequences);
+
     // Returns the index corresponding to an unknown observation.
     Observation UnknownObservation() { return NumObservations(); }
 
@@ -114,10 +122,10 @@ private:
 		  vector<vector<string> > *state_string_sequences,
 		  bool *fully_labeled);
 
-    // Identifies rare observation string types.
-    void IdentifyRareObservationStringTypes(
+    // Constructs the observation dictionary while converting string sequences.
+    void ConstructObservationDictionary(
 	const vector<vector<string> > observation_string_sequences,
-	unordered_map<string, bool> *rare_observation_string_types);
+	vector<vector<Observation> > *observation_sequences);
 
     // Adds the observation string to the dictionary if not already known.
     Observation AddObservationIfUnknown(const string &observation_string);
