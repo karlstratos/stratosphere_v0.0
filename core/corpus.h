@@ -69,6 +69,9 @@ public:
 	max_vocabulary_size_ = max_vocabulary_size;
     }
 
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
+
     // Returns the corpus path.
     string corpus_path() { return corpus_path_; }
 

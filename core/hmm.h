@@ -53,11 +53,13 @@ public:
     // Predicts state sequences for the given data and writes them in a file.
     void Predict(const string &data_path, const string &prediction_path);
 
-    // Predicts the state sequence. Returns the log likelihood of
-    //    (Viterbi): best observation-state sequence pair
-    //        (MBR): observation sequence
-    double Predict(const vector<string> &observation_string_sequence,
-		   vector<string> *state_string_sequence);
+    // Predicts a state sequence.
+    void Predict(const vector<string> &observation_string_sequence,
+		 vector<string> *state_string_sequence);
+
+    // Computes the log probability of the observation string sequence.
+    double ComputeLogProbability(
+	const vector<string> &observation_string_sequence);
 
     // Returns the number of observation types.
     size_t NumObservations() { return observation_dictionary_.size(); }
@@ -77,6 +79,12 @@ public:
     // Returns the stopping probability.
     double StoppingProbability(string state_string);
 
+    // Returns the special string for representing rare words.
+    string RareObservationString() { return kRareObservationString_; }
+
+    // Sets the rare cutoff.
+    void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
+
     // Sets the decoding method.
     void set_decoding_method(string decoding_method) {
 	decoding_method_ = decoding_method;
@@ -84,6 +92,9 @@ public:
 
     // Sets whether to turn on the debug mode.
     void set_debug(bool debug) { debug_ = debug; }
+
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
     // Returns the index corresponding to an unknown observation.
@@ -102,6 +113,11 @@ private:
 		  vector<vector<string> > *observation_string_sequences,
 		  vector<vector<string> > *state_string_sequences,
 		  bool *fully_labeled);
+
+    // Identifies rare observation string types.
+    void IdentifyRareObservationStringTypes(
+	const vector<vector<string> > observation_string_sequences,
+	unordered_map<string, bool> *rare_observation_string_types);
 
     // Adds the observation string to the dictionary if not already known.
     Observation AddObservationIfUnknown(const string &observation_string);
@@ -135,18 +151,37 @@ private:
     void PopulateAllStateSequences(const vector<State> &states, size_t length,
 				   vector<vector<State> > *all_state_sequences);
 
-    // Computes the log probability of observation/state sequence pair.
+    // Computes the log probability of the observation/state sequence pair.
     double ComputeLogProbability(
 	const vector<Observation> &observation_sequence,
 	const vector<State> &state_sequence);
 
-    // Computes forward probabilities: "al[i][h] = log p(x(1)...x(i), h(i)=h)"
+    // Computes the log probability of the observation sequence.
+    double ComputeLogProbability(
+	const vector<Observation> &observation_sequence);
+
+    // Computes the log probability of the observation sequence exhaustively.
+    double ComputeLogProbabilityExhaustive(
+	const vector<Observation> &observation_sequence);
+
+    // Computes forward probabilities:
+    //    al[i][h] = log(probability of the observation sequence from position
+    //                   1 to i, the i-th state being h)
     void Forward(const vector<Observation> &observation_sequence,
 		 vector<vector<double> > *al);
 
-    // Computes backward probabilities: "be[i][h] = log p(x(i+1)...x(N)|h(i)=h)"
+    // Computes backward probabilities:
+    //    be[i][h] = log(probability of the observation sequence from position
+    //                   i+1 to the end, conditioned on the i-th state being h)
     void Backward(const vector<Observation> &observation_sequence,
 		  vector<vector<double> > *be);
+
+    // Performs minimum Bayes risk (MBR) decoding.
+    void MinimumBayesRisk(const vector<Observation> &observation_sequence,
+			  vector<State> *state_sequence);
+
+    // Special string for representing rare words.
+    const string kRareObservationString_ = "<?>";
 
     // Maps an observation string to a unique index.
     unordered_map<string, Observation> observation_dictionary_;
@@ -169,8 +204,15 @@ private:
     // Prior log probabilities.
     vector<double> prior_;
 
+    // Observation types that occur <= this number in the training data are
+    // considered as a single symbol (kRareObservationString_).
+    size_t rare_cutoff_ = 0;
+
     // Decoding method.
     string decoding_method_ = "viterbi";
+
+    // Print messages to stderr?
+    bool verbose_ = true;
 
     // Turn on the debug mode?
     bool debug_ = false;

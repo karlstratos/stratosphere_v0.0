@@ -7,6 +7,7 @@
 #include <random>
 
 #include "util.h"
+#include "evaluate.h"
 
 void HMM::Clear() {
     observation_dictionary_.clear();
@@ -91,6 +92,7 @@ void HMM::CreateRandomly(size_t num_observations, size_t num_states) {
 
 void HMM::Save(const string &model_path) {
     ofstream model_file(model_path, ios::out | ios::binary);
+    util_file::binary_write_primitive(rare_cutoff_, model_file);
     size_t num_observations = NumObservations();
     size_t num_states = NumStates();
     util_file::binary_write_primitive(num_observations, model_file);
@@ -131,6 +133,7 @@ void HMM::Load(const string &model_path) {
     ifstream model_file(model_path, ios::in | ios::binary);
     size_t num_observations;
     size_t num_states;
+    util_file::binary_read_primitive(model_file, &rare_cutoff_);
     util_file::binary_read_primitive(model_file, &num_observations);
     util_file::binary_read_primitive(model_file, &num_states);
     for (size_t i = 0; i < num_observations; ++i) {
@@ -195,6 +198,12 @@ void HMM::TrainSupervised(
     ASSERT(observation_string_sequences.size() == state_string_sequences.size(),
 	   "Number of sequences not matching");
     Clear();
+
+    // Identify rare observation string types.
+    unordered_map<string, bool> rare_observation_string_types;
+    IdentifyRareObservationStringTypes(observation_string_sequences,
+				       &rare_observation_string_types);
+
     unordered_map<State, unordered_map<Observation, size_t> > emission_count;
     unordered_map<State, unordered_map<State, size_t> > transition_count;
     unordered_map<State, size_t> prior_count;
@@ -205,8 +214,13 @@ void HMM::TrainSupervised(
 	State initial_state = AddStateIfUnknown(state_string_sequences[i][0]);
 	++prior_count[initial_state];
 	for (size_t j = 0; j < length; ++j) {
+	    string observation_string = observation_string_sequences[i][j];
+	    if (rare_observation_string_types.find(observation_string) !=
+		rare_observation_string_types.end()) {
+		observation_string = kRareObservationString_;
+	    }
 	    Observation observation =
-		AddObservationIfUnknown(observation_string_sequences[i][j]);
+		AddObservationIfUnknown(observation_string);
 	    State state2 = AddStateIfUnknown(state_string_sequences[i][j]);
 	    ++emission_count[state2][observation];
 	    if (j > 0) {
@@ -266,47 +280,62 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
     ReadData(data_path, &observation_string_sequences, &state_string_sequences,
 	     &fully_labeled);
 
-    /*
-    vector<vector<string> > predicted_state_sequences;
+    vector<vector<string> > predictions;
     for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	vector<Observation> observation_sequence;
-	ConvertObservationSequence(observation_string_sequences[i],
-				   &observation_sequence);
-	vector<State> state_sequence;
-	Predict(observation_sequence, &state_sequence);
-	vector<string> state_string_sequence;
-	ConvertStateSequence(state_sequence, &state_string_sequence);
-	predicted_state_sequences.push_back(state_string_sequence);
-
-	vector<string> pred_sequence;
-	if (decoding_method_ == "viterbi") {
-	    Viterbi(x_sequences[i], &pred_sequence);
-	} else if (decoding_method_ == "mbr") {
-	    MinimumBayesRisk(x_sequences[i], &pred_sequence);
-	} else {
-	    ASSERT(false, "Unknown decoding method: " << decoding_method_);
-	}
-	pred_sequences.push_back(pred_sequence);
+	vector<string> prediction;
+	Predict(observation_string_sequences[i], &prediction);
+	predictions.push_back(prediction);
     }
-    */
+
+    // For simplicity, always report the many-to-one accuracy.
+    double position_accuracy;
+    double sequence_accuracy;
+    unordered_map<string, string> label_mapping;
+    evaluate::evaluate_sequences_mapping_labels(
+	state_string_sequences, predictions, &position_accuracy,
+	&sequence_accuracy, &label_mapping);
+    if (verbose_) {
+	cerr << "(many-to-one) per-position: " << position_accuracy
+	     << "%   per-sequence: " << sequence_accuracy << "%" << endl;
+    }
+
+    if (!prediction_path.empty()) {
+	ofstream file(prediction_path, ios::out);
+	ASSERT(file.is_open(), "Cannot open file: " << prediction_path);
+	for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	    for (size_t j = 0; j < observation_string_sequences[i].size();
+		 ++j) {
+		file << observation_string_sequences[i][j] << " ";
+		file << state_string_sequences[i][j] << " ";
+		file << label_mapping[predictions[i][j]] << endl;
+	    }
+	    file << endl;
+	}
+    }
 }
 
-double HMM::Predict(const vector<string> &observation_string_sequence,
-		    vector<string> *state_string_sequence) {
+void HMM::Predict(const vector<string> &observation_string_sequence,
+		  vector<string> *state_string_sequence) {
     vector<Observation> observation_sequence;
     ConvertObservationSequence(observation_string_sequence,
 			       &observation_sequence);
-    double return_value;
     vector<State> state_sequence;
     if (decoding_method_ == "viterbi") {
-	return_value = Viterbi(observation_sequence, &state_sequence);
+	Viterbi(observation_sequence, &state_sequence);
     } else if (decoding_method_ == "mbr") {
-	//return_value = MinimumBayesRisk(observation_sequence, &state_sequence);
+	MinimumBayesRisk(observation_sequence, &state_sequence);
     } else {
 	ASSERT(false, "Unknown decoding method: " << decoding_method_);
     }
     ConvertStateSequence(state_sequence, state_string_sequence);
-    return return_value;
+}
+
+double HMM::ComputeLogProbability(
+    const vector<string> &observation_string_sequence) {
+    vector<Observation> observation_sequence;
+    ConvertObservationSequence(observation_string_sequence,
+			       &observation_sequence);
+    return ComputeLogProbability(observation_sequence);
 }
 
 double HMM::EmissionProbability(string state_string,
@@ -411,6 +440,23 @@ void HMM::ReadData(const string &data_path,
     }
 }
 
+void HMM::IdentifyRareObservationStringTypes(
+    const vector<vector<string> > observation_string_sequences,
+    unordered_map<string, bool> *rare_observation_string_types) {
+    rare_observation_string_types->clear();
+    unordered_map<string, size_t> observation_count;
+    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	for (size_t j = 0; j < observation_string_sequences[i].size(); ++j) {
+	    ++observation_count[observation_string_sequences[i][j]];
+	}
+    }
+    for (const auto &pair : observation_count) {
+	if (pair.second <= rare_cutoff_) {
+	    (*rare_observation_string_types)[pair.first] = true;
+	}
+    }
+}
+
 Observation HMM::AddObservationIfUnknown(const string &observation_string) {
     ASSERT(!observation_string.empty(), "Adding an empty observation string!");
     if (observation_dictionary_.find(observation_string) ==
@@ -439,10 +485,15 @@ void HMM::ConvertObservationSequence(
     observation_sequence->clear();
     for (size_t i = 0; i < observation_string_sequence.size(); ++i) {
 	string observation_string = observation_string_sequence[i];
-	Observation observation  =
-	    (observation_dictionary_.find(observation_string) !=
-	     observation_dictionary_.end()) ?
-	    observation_dictionary_[observation_string] : UnknownObservation();
+	Observation observation;
+	if (observation_dictionary_.find(observation_string) !=
+	    observation_dictionary_.end()) {  // In dictionary.
+	    observation = observation_dictionary_[observation_string];
+	} else if (rare_cutoff_ > 0) {  // Not in dictionary, but have rare.
+	    observation = observation_dictionary_[kRareObservationString_];
+	} else {  // Not in dictionary, no rare -> unknown.
+	    observation = UnknownObservation();
+	}
 	observation_sequence->push_back(observation);
     }
 }
@@ -517,10 +568,8 @@ double HMM::Viterbi(const vector<Observation> &observation_sequence,
     }
     if (debug_) {
 	double answer = ViterbiExhaustive(observation_sequence, state_sequence);
-	ASSERT(fabs(answer - max_log_probability) < 1e-10, "Answer: "
+	ASSERT(fabs(answer - max_log_probability) < 1e-8, "Answer: "
 	       << answer << ",  Viterbi: " << max_log_probability);
-	cout << answer << endl;
-	cout << max_log_probability << endl;
     }
 
     // Backtrack to recover the best state sequence.
@@ -609,6 +658,55 @@ double HMM::ComputeLogProbability(
     return sequence_log_probability;
 }
 
+double HMM::ComputeLogProbability(
+    const vector<Observation> &observation_sequence) {
+    size_t length = observation_sequence.size();
+    vector<vector<double> > al;
+    Forward(observation_sequence, &al);
+    double forward_value = -numeric_limits<double>::infinity();
+    for (State state = 0; state < NumStates(); ++state) {
+	forward_value = util_math::sum_logs(
+	    forward_value, al[length - 1][state] +
+	    transition_[state][StoppingState()]);
+    }
+
+    if (debug_) {
+	double answer = ComputeLogProbabilityExhaustive(observation_sequence);
+	vector<vector<double> > be;
+	Backward(observation_sequence, &be);
+	for (size_t i = 0; i < length; ++i) {
+	    double marginal_sum = -numeric_limits<double>::infinity();
+	    for (State state = 0; state < NumStates(); ++state) {
+		marginal_sum = util_math::sum_logs(
+		    marginal_sum, al[i][state] + be[i][state]);
+	    }
+	    ASSERT(fabs(answer - marginal_sum) < 1e-5, "Answer: "
+		   << answer << ",  marginal sum: " << marginal_sum);
+	}
+    }
+    return forward_value;
+}
+
+double HMM::ComputeLogProbabilityExhaustive(
+    const vector<Observation> &observation_sequence) {
+    size_t length = observation_sequence.size();
+
+    // Generate all possible state sequences.
+    vector<vector<State> > all_state_sequences;
+    vector<State> seed_states;
+    PopulateAllStateSequences(seed_states, length, &all_state_sequences);
+
+    // Sum over all state sequences.
+    double sum_sequence_log_probability = -numeric_limits<double>::infinity();
+    for (size_t i = 0; i < all_state_sequences.size(); ++i) {
+	double sequence_log_probability =
+	    ComputeLogProbability(observation_sequence, all_state_sequences[i]);
+	sum_sequence_log_probability = util_math::sum_logs(
+	    sum_sequence_log_probability, sequence_log_probability);
+    }
+    return sum_sequence_log_probability;
+}
+
 void HMM::Forward(const vector<Observation> &observation_sequence,
 		  vector<vector<double> > *al) {
     size_t length = observation_sequence.size();
@@ -684,5 +782,26 @@ void HMM::Backward(const vector<Observation> &observation_sequence,
 	    }
 	    (*be)[i][state] = log_summed_probabilities;
 	}
+    }
+}
+
+void HMM::MinimumBayesRisk(const vector<Observation> &observation_sequence,
+			   vector<State> *state_sequence) {
+    state_sequence->clear();
+    vector<vector<double> > al;
+    Forward(observation_sequence, &al);
+    vector<vector<double> > be;
+    Backward(observation_sequence, &be);
+    for (size_t i = 0; i < observation_sequence.size(); ++i) {
+	double max_log_probability = -numeric_limits<double>::infinity();
+	State best_state = 0;
+	for (State state = 0; state < NumStates(); ++state) {
+	    double log_probability = al[i][state] + be[i][state];
+	    if (log_probability >= max_log_probability) {
+		max_log_probability = log_probability;
+		best_state = state;
+	    }
+	}
+	state_sequence->push_back(best_state);
     }
 }

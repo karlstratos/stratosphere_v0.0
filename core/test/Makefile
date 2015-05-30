@@ -129,7 +129,7 @@ evaluate_test.o: evaluate_test.cc
 ../evaluate.o: ../evaluate.cc ../evaluate.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-hmm_test: hmm_test.o ../hmm.o ../util.o gtest_main.a
+hmm_test: hmm_test.o ../hmm.o ../util.o ../evaluate.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 hmm_test.o: hmm_test.cc
