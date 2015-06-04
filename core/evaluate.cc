@@ -68,4 +68,72 @@ namespace evaluate {
 	evaluate_sequences(true_sequences, predicted_sequences_mapped,
 			   position_accuracy, sequence_accuracy);
     }
+
+    void evaluate_similarity(
+	const unordered_map<string, Eigen::VectorXd> &word_vectors,
+	const vector<tuple<string, string, double> > &word_pair_scores,
+	size_t *num_handled, double *correlation) {
+	vector<double> gold_scores;
+	vector<double> cosine_scores;
+	*num_handled = 0;
+	for (const auto &word_pair_score : word_pair_scores) {
+	    string word1 = get<0>(word_pair_score);
+	    string word2 = get<1>(word_pair_score);
+	    double gold_score = get<2>(word_pair_score);
+	    string word1_lowercase = util_string::lowercase(word1);
+	    string word2_lowercase = util_string::lowercase(word2);
+	    Eigen::VectorXd word1_vector;
+	    Eigen::VectorXd word2_vector;
+
+	    // Try to find the original string. If not found, try lowercasing.
+	    if (word_vectors.find(word1) != word_vectors.end()) {
+		word1_vector = word_vectors.at(word1);
+	    } else if (word_vectors.find(word1_lowercase) !=
+		       word_vectors.end()) {
+		word1_vector = word_vectors.at(word1_lowercase);
+	    }
+	    if (word_vectors.find(word2) != word_vectors.end()) {
+		word2_vector = word_vectors.at(word2);
+	    } else if (word_vectors.find(word2_lowercase) !=
+		       word_vectors.end()) {
+		word2_vector = word_vectors.at(word2_lowercase);
+	    }
+
+	    // If we have vectors for both word types, compute similarity.
+	    if (word1_vector.size() > 0 && word2_vector.size() > 0) {
+		word1_vector.normalize();
+		word2_vector.normalize();
+		double cosine_score = word1_vector.dot(word2_vector);
+		gold_scores.push_back(gold_score);
+		cosine_scores.push_back(cosine_score);
+		++(*num_handled);
+	    }
+	}
+	*correlation = util_math::compute_spearman(gold_scores, cosine_scores);
+    }
+
+    void evalute_similarity(const unordered_map<string, Eigen::VectorXd>
+			    &word_vectors, const string &similarity_path,
+			    size_t *num_instances, size_t *num_handled,
+			    double *correlation) {
+	ifstream similarity_file(similarity_path, ios::in);
+	ASSERT(similarity_file.is_open(), "Cannot open: " << similarity_path);
+	vector<tuple<string, string, double> > word_pair_scores;
+	while (similarity_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&similarity_file, &tokens);
+	    if (tokens.size() > 0) {
+		ASSERT(tokens.size() == 3, "Need [word1] [word2] [similarity]");
+		string word1 = tokens[0];
+		string word2 = tokens[1];
+		double gold_score = stod(tokens[2]);
+		word_pair_scores.push_back(make_tuple(word1, word2,
+						      gold_score));
+	    }
+	}
+	*num_instances = word_pair_scores.size();
+	evaluate_similarity(word_vectors, word_pair_scores, num_handled,
+			    correlation);
+    }
+
 }  // namespace evaluate

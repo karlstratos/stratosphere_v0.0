@@ -121,13 +121,13 @@ cluster_test.o: cluster_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 evaluate_test: evaluate_test.o ../evaluate.o ../util.o gtest_main.a
-	$(CC) $(CFLAGS) $^ -o $@ -pthread
+	$(CC) -I $(EIGEN) $(CFLAGS) $^ -o $@ -pthread
 
 evaluate_test.o: evaluate_test.cc
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 ../evaluate.o: ../evaluate.cc ../evaluate.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 hmm_test: hmm_test.o ../hmm.o ../util.o ../evaluate.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
