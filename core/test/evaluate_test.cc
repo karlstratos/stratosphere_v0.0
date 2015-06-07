@@ -97,8 +97,8 @@ TEST(WordSimilarity, ManualExample) {
     word_pair_scores.push_back(make_tuple("x7", "y1", 1002));
     size_t num_handled;
     double correlation;
-    evaluate::evaluate_similarity(word_vectors, word_pair_scores, &num_handled,
-				  &correlation);
+    evaluate::evaluate_similarity(word_vectors, word_pair_scores, false,
+				  &num_handled, &correlation);
     EXPECT_EQ(6, num_handled);
     EXPECT_NEAR(0.5429, correlation, 1e-4);
 }

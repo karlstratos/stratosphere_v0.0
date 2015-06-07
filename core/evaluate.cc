@@ -72,7 +72,7 @@ namespace evaluate {
     void evaluate_similarity(
 	const unordered_map<string, Eigen::VectorXd> &word_vectors,
 	const vector<tuple<string, string, double> > &word_pair_scores,
-	size_t *num_handled, double *correlation) {
+	bool normalized, size_t *num_handled, double *correlation) {
 	vector<double> gold_scores;
 	vector<double> cosine_scores;
 	*num_handled = 0;
@@ -101,8 +101,10 @@ namespace evaluate {
 
 	    // If we have vectors for both word types, compute similarity.
 	    if (word1_vector.size() > 0 && word2_vector.size() > 0) {
-		word1_vector.normalize();
-		word2_vector.normalize();
+		if (!normalized) {
+		    word1_vector.normalize();
+		    word2_vector.normalize();
+		}
 		double cosine_score = word1_vector.dot(word2_vector);
 		gold_scores.push_back(gold_score);
 		cosine_scores.push_back(cosine_score);
@@ -114,8 +116,8 @@ namespace evaluate {
 
     void evalute_similarity(const unordered_map<string, Eigen::VectorXd>
 			    &word_vectors, const string &similarity_path,
-			    size_t *num_instances, size_t *num_handled,
-			    double *correlation) {
+			    bool normalized, size_t *num_instances,
+			    size_t *num_handled, double *correlation) {
 	ifstream similarity_file(similarity_path, ios::in);
 	ASSERT(similarity_file.is_open(), "Cannot open: " << similarity_path);
 	vector<tuple<string, string, double> > word_pair_scores;
@@ -132,8 +134,47 @@ namespace evaluate {
 	    }
 	}
 	*num_instances = word_pair_scores.size();
-	evaluate_similarity(word_vectors, word_pair_scores, num_handled,
-			    correlation);
+	evaluate_similarity(word_vectors, word_pair_scores, normalized,
+			    num_handled, correlation);
+    }
+
+    string infer_analogous_word(string w1, string w2, string v1,
+				const unordered_map<string, Eigen::VectorXd>
+				&word_vectors, bool normalized) {
+	ASSERT(word_vectors.find(w1) != word_vectors.end(), "No " << w1);
+	ASSERT(word_vectors.find(w2) != word_vectors.end(), "No " << w2);
+	ASSERT(word_vectors.find(v1) != word_vectors.end(), "No " << v1);
+
+	Eigen::VectorXd w1_embedding = word_vectors.at(w1);
+	Eigen::VectorXd w2_embedding = word_vectors.at(w2);
+	Eigen::VectorXd v1_embedding = word_vectors.at(v1);
+	if (!normalized) {
+	    w1_embedding.normalize();
+	    w2_embedding.normalize();
+	    v1_embedding.normalize();
+	}
+	string predicted_v2 = "";
+	double max_score = -numeric_limits<double>::max();
+	for (const auto &word_vector_pair : word_vectors) {
+	    string word = word_vector_pair.first;
+	    if (word == w1 || word == w2 || word == v1) { continue; }
+	    Eigen::VectorXd word_embedding = word_vector_pair.second;
+	    double shifted_cos_w1 =
+		(word_embedding.dot(w1_embedding) + 1.0) / 2.0;
+	    double shifted_cos_w2 =
+		(word_embedding.dot(w2_embedding) + 1.0) / 2.0;
+	    double shifted_cos_v1 =
+		(word_embedding.dot(v1_embedding) + 1.0) / 2.0;
+	    double score =
+		shifted_cos_w2 * shifted_cos_v1 / (shifted_cos_w1 + 0.001);
+	    if (score > max_score) {
+		max_score = score;
+		predicted_v2 = word;
+	    }
+	}
+	ASSERT(!predicted_v2.empty(), "No answer for \"" << w1 << ":" << w2
+	       << " as in " << v1 << ":" << "?\"");
+	return predicted_v2;
     }
 
 }  // namespace evaluate
