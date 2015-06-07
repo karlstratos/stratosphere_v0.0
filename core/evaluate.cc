@@ -4,11 +4,11 @@
 
 #include "util.h"
 
-namespace evaluate {
-    void evaluate_sequences(const vector<vector<string> > &true_sequences,
-			    const vector<vector<string> > &predicted_sequences,
-			    double *position_accuracy,
-			    double *sequence_accuracy) {
+namespace eval_sequential {
+    void compute_accuracy(const vector<vector<string> > &true_sequences,
+			  const vector<vector<string> > &predicted_sequences,
+			  double *position_accuracy,
+			  double *sequence_accuracy) {
 	size_t num_items = 0;
 	size_t num_items_correct = 0;
 	size_t num_sequences_correct = 0;
@@ -31,7 +31,7 @@ namespace evaluate {
 	    true_sequences.size() * 100;
     }
 
-    void evaluate_sequences_mapping_labels(
+    void compute_accuracy_mapping_labels(
 	const vector<vector<string> > &true_sequences,
 	const vector<vector<string> > &predicted_sequences,
 	double *position_accuracy, double *sequence_accuracy,
@@ -65,27 +65,54 @@ namespace evaluate {
 		    (*label_mapping)[predicted_sequences[i][j]];
 	    }
 	}
-	evaluate_sequences(true_sequences, predicted_sequences_mapped,
-			   position_accuracy, sequence_accuracy);
+	compute_accuracy(true_sequences, predicted_sequences_mapped,
+			 position_accuracy, sequence_accuracy);
+    }
+}  // namespace eval_sequential
+
+namespace eval_lexical {
+    void compute_correlation(const string &scored_word_pairs_path,
+			     const unordered_map<string, Eigen::VectorXd>
+			     &word_vectors, bool normalized,
+			     size_t *num_instances, size_t *num_handled,
+			     double *correlation) {
+	ifstream scored_word_pairs_file(scored_word_pairs_path, ios::in);
+	ASSERT(scored_word_pairs_file.is_open(), "Cannot open: "
+	       << scored_word_pairs_path);
+	vector<tuple<string, string, double> > scored_word_pairs;
+	while (scored_word_pairs_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&scored_word_pairs_file, &tokens);
+	    if (tokens.size() == 0) { continue; }
+	    ASSERT(tokens.size() == 3, "Need [word1] [word2] [score]");
+	    string word1 = tokens[0];
+	    string word2 = tokens[1];
+	    double gold_score = stod(tokens[2]);
+	    scored_word_pairs.push_back(make_tuple(word1, word2,
+						   gold_score));
+	}
+	*num_instances = scored_word_pairs.size();
+	compute_correlation(scored_word_pairs, word_vectors, normalized,
+			    num_handled, correlation);
     }
 
-    void evaluate_similarity(
+    void compute_correlation(
+	const vector<tuple<string, string, double> > &scored_word_pairs,
 	const unordered_map<string, Eigen::VectorXd> &word_vectors,
-	const vector<tuple<string, string, double> > &word_pair_scores,
 	bool normalized, size_t *num_handled, double *correlation) {
 	vector<double> gold_scores;
 	vector<double> cosine_scores;
 	*num_handled = 0;
-	for (const auto &word_pair_score : word_pair_scores) {
-	    string word1 = get<0>(word_pair_score);
-	    string word2 = get<1>(word_pair_score);
-	    double gold_score = get<2>(word_pair_score);
+	for (const auto &word1_word2_score : scored_word_pairs) {
+	    string word1 = get<0>(word1_word2_score);
+	    string word2 = get<1>(word1_word2_score);
+	    double gold_score = get<2>(word1_word2_score);
 	    string word1_lowercase = util_string::lowercase(word1);
 	    string word2_lowercase = util_string::lowercase(word2);
 	    Eigen::VectorXd word1_vector;
 	    Eigen::VectorXd word2_vector;
 
-	    // Try to find the original string. If not found, try lowercasing.
+	    // Try to find the original string. If fail, try lowercasing.
 	    if (word_vectors.find(word1) != word_vectors.end()) {
 		word1_vector = word_vectors.at(word1);
 	    } else if (word_vectors.find(word1_lowercase) !=
@@ -114,28 +141,110 @@ namespace evaluate {
 	*correlation = util_math::compute_spearman(gold_scores, cosine_scores);
     }
 
-    void evalute_similarity(const unordered_map<string, Eigen::VectorXd>
-			    &word_vectors, const string &similarity_path,
-			    bool normalized, size_t *num_instances,
-			    size_t *num_handled, double *correlation) {
-	ifstream similarity_file(similarity_path, ios::in);
-	ASSERT(similarity_file.is_open(), "Cannot open: " << similarity_path);
-	vector<tuple<string, string, double> > word_pair_scores;
-	while (similarity_file.good()) {
+    void compute_analogy_accuracy(
+	const string &analogy_questions_path,
+	const unordered_map<string, Eigen::VectorXd> &word_vectors,
+	bool normalized, size_t *num_instances, size_t *num_handled,
+	double *accuracy, unordered_map<string, double> *per_type_accuracy) {
+	vector<tuple<string, string, string, string, string> >
+	analogy_questions;
+	ifstream analogy_questions_file(analogy_questions_path, ios::in);
+	ASSERT(analogy_questions_file.is_open(), "Cannot open file: "
+	       << analogy_questions_path);
+	while (analogy_questions_file.good()) {
 	    vector<string> tokens;
-	    util_file::read_line(&similarity_file, &tokens);
-	    if (tokens.size() > 0) {
-		ASSERT(tokens.size() == 3, "Need [word1] [word2] [similarity]");
-		string word1 = tokens[0];
-		string word2 = tokens[1];
-		double gold_score = stod(tokens[2]);
-		word_pair_scores.push_back(make_tuple(word1, word2,
-						      gold_score));
+	    util_file::read_line(&analogy_questions_file, &tokens);
+	    if (tokens.size() == 0) { continue; }
+	    ASSERT(tokens.size() == 4 || tokens.size() == 5,
+		   "Need question format: either \"[type] [word1] [word2] "
+		   "[word3] [word4]\" or \"[word1] [word2] [word3] [word4]");
+
+	    string question_type = (tokens.size() == 4) ? "ALL" : tokens[0];
+	    string w1 = (tokens.size() == 4) ? tokens[0] : tokens[1];
+	    string w2 = (tokens.size() == 4) ? tokens[1] : tokens[2];
+	    string v1 = (tokens.size() == 4) ? tokens[2] : tokens[3];
+	    string v2 = (tokens.size() == 4) ? tokens[3] : tokens[4];
+	    analogy_questions.emplace_back(question_type, w1, w2, v1, v2);
+	}
+	*num_instances = analogy_questions.size();
+	compute_analogy_accuracy(analogy_questions, word_vectors, normalized,
+				 num_handled, accuracy, per_type_accuracy);
+    }
+
+    void compute_analogy_accuracy(
+	const vector<tuple<string, string, string, string, string> >
+	&analogy_questions,
+	const unordered_map<string, Eigen::VectorXd> &word_vectors,
+	bool normalized, size_t *num_handled, double *accuracy,
+	unordered_map<string, double> *per_type_accuracy) {
+
+	// Use only relevant word vectors (for efficiency).
+	unordered_map<string, Eigen::VectorXd> word_vectors_subset;
+	for (const auto &analogy_question : analogy_questions) {
+	    string w1 = get<1>(analogy_question);
+	    string w2 = get<2>(analogy_question);
+	    string v1 = get<3>(analogy_question);
+	    string v2 = get<4>(analogy_question);
+	    string w1_lowercase = util_string::lowercase(w1);
+	    string w2_lowercase = util_string::lowercase(w2);
+	    string v1_lowercase = util_string::lowercase(v1);
+	    string v2_lowercase = util_string::lowercase(v2);
+
+	    // Try to find the original string. If fail, try lowercasing.
+	    if (word_vectors.find(w1) != word_vectors.end()) {
+		word_vectors_subset[w1] = word_vectors.at(w1);
+	    } else if (word_vectors.find(w1_lowercase) != word_vectors.end()) {
+		word_vectors_subset[w1] = word_vectors.at(w1_lowercase);
+	    }
+	    if (word_vectors.find(w2) != word_vectors.end()) {
+		word_vectors_subset[w2] = word_vectors.at(w2);
+	    } else if (word_vectors.find(w2_lowercase) != word_vectors.end()) {
+		word_vectors_subset[w2] = word_vectors.at(w2_lowercase);
+	    }
+	    if (word_vectors.find(v1) != word_vectors.end()) {
+		word_vectors_subset[v1] = word_vectors.at(v1);
+	    } else if (word_vectors.find(v1_lowercase) != word_vectors.end()) {
+		word_vectors_subset[v1] = word_vectors.at(v1_lowercase);
+	    }
+	    if (word_vectors.find(v2) != word_vectors.end()) {
+		word_vectors_subset[v2] = word_vectors.at(v2);
+	    } else if (word_vectors.find(v2_lowercase) != word_vectors.end()) {
+		word_vectors_subset[v2] = word_vectors.at(v2_lowercase);
 	    }
 	}
-	*num_instances = word_pair_scores.size();
-	evaluate_similarity(word_vectors, word_pair_scores, normalized,
-			    num_handled, correlation);
+	size_t num_correct = 0;
+	*num_handled = 0;
+	unordered_map<string, double> per_type_num_handled;
+	unordered_map<string, double> per_type_num_correct;
+	for (const auto &analogy_question : analogy_questions) {
+	    string question_type = get<0>(analogy_question);
+	    string w1 = get<1>(analogy_question);
+	    string w2 = get<2>(analogy_question);
+	    string v1 = get<3>(analogy_question);
+	    string v2 = get<4>(analogy_question);
+	    if (word_vectors_subset.find(w1) != word_vectors_subset.end() &&
+		word_vectors_subset.find(w2) != word_vectors_subset.end() &&
+		word_vectors_subset.find(v1) != word_vectors_subset.end() &&
+		word_vectors_subset.find(v2) != word_vectors_subset.end()) {
+		++(*num_handled);
+		++per_type_num_handled[question_type];
+		string predicted_v2 = infer_analogous_word(w1, w2, v1,
+							   word_vectors_subset,
+							   normalized);
+		if (predicted_v2 == v2) {
+		    ++num_correct;
+		    ++per_type_num_correct[question_type];
+		}
+	    }
+	}
+	*accuracy = ((double) num_correct) / ((double) *num_handled) * 100.0;
+	per_type_accuracy->clear();
+	for (const auto &type_pair : per_type_num_handled) {
+	    string question_type = type_pair.first;
+	    (*per_type_accuracy)[question_type] =
+		((double) per_type_num_correct[question_type]) /
+		((double) per_type_num_handled[question_type]) * 100.0;
+	}
     }
 
     string infer_analogous_word(string w1, string w2, string v1,
@@ -153,12 +262,18 @@ namespace evaluate {
 	    w2_embedding.normalize();
 	    v1_embedding.normalize();
 	}
+
+	// Use the method of Levy and Goldberg (2014) to compute:
+	//                                 scos(w2,v) * scos(v1,v)
+	//    v2 = argmax_{v != w1,w2,v1}  ----------------------
+	//                                   scos(w1,v) + 0.01
 	string predicted_v2 = "";
 	double max_score = -numeric_limits<double>::max();
 	for (const auto &word_vector_pair : word_vectors) {
 	    string word = word_vector_pair.first;
 	    if (word == w1 || word == w2 || word == v1) { continue; }
 	    Eigen::VectorXd word_embedding = word_vector_pair.second;
+	    if (!normalized) { word_embedding.normalize(); }
 	    double shifted_cos_w1 =
 		(word_embedding.dot(w1_embedding) + 1.0) / 2.0;
 	    double shifted_cos_w2 =
@@ -176,5 +291,4 @@ namespace evaluate {
 	       << " as in " << v1 << ":" << "?\"");
 	return predicted_v2;
     }
-
-}  // namespace evaluate
+}  // namespace eval_lexical
