@@ -236,7 +236,7 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
     double position_accuracy;
     double sequence_accuracy;
     unordered_map<string, string> label_mapping;
-    evaluate::evaluate_sequences_mapping_labels(
+    eval_sequential::compute_accuracy_mapping_labels(
 	state_string_sequences, predictions, &position_accuracy,
 	&sequence_accuracy, &label_mapping);
     if (verbose_) {

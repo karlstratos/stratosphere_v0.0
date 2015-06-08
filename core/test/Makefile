@@ -9,6 +9,9 @@ EIGEN = ../../third_party/eigen-eigen-10219c95fe65
 # Where to find the SVDLIBC package.
 SVDLIBC = ../../third_party/SVDLIBC
 
+# Where to find the core files.
+CORE = ..
+
 # C++ compiler.
 CC = clang++
 
@@ -29,7 +32,7 @@ all: $(TESTS)
 
 .PHONY: clean
 clean:
-	rm -f $(TESTS) gtest.a gtest_main.a libsvd.a *.o ../*.o
+	rm -f $(TESTS) gtest.a gtest_main.a *.o $(CORE)/*.o
 	make -C $(SVDLIBC) clean
 
 ############## Usually you shouldn't change this section. ######################
@@ -63,77 +66,79 @@ gtest_main.a: gtest-all.o gtest_main.o
 # Builds tests.  A test should link with either gtest.a or gtest_main.a,
 # depending on whether it defines its own main() function.
 
-util_test: util_test.o ../util.o gtest_main.a
+util_test: util_test.o $(CORE)/util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 util_test.o: util_test.cc
 	$(CC) $(CFLAGS) -c $< -o $@
 
-../util.o: ../util.cc ../util.h
+$(CORE)/util.o: $(CORE)/util.cc $(CORE)/util.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-eigen_helper_test: eigen_helper_test.o ../eigen_helper.o gtest_main.a
+eigen_helper_test: eigen_helper_test.o $(CORE)/eigen_helper.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 eigen_helper_test.o: eigen_helper_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../eigen_helper.o: ../eigen_helper.cc ../eigen_helper.h
+$(CORE)/eigen_helper.o: $(CORE)/eigen_helper.cc $(CORE)/eigen_helper.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-optimize_test: optimize_test.o ../optimize.o gtest_main.a
+optimize_test: optimize_test.o $(CORE)/optimize.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 optimize_test.o: optimize_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../optimize.o: ../optimize.cc ../optimize.h
+$(CORE)/optimize.o: $(CORE)/optimize.cc $(CORE)/optimize.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-sparsesvd_test: sparsesvd_test.o ../sparsesvd.o $(SVDLIBC)/libsvd.a gtest_main.a
+sparsesvd_test: sparsesvd_test.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
+	gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 sparsesvd_test.o: sparsesvd_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../sparsesvd.o: ../sparsesvd.cc ../sparsesvd.h
+$(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
-corpus_test: corpus_test.o ../corpus.o ../util.o gtest_main.a
+corpus_test: corpus_test.o $(CORE)/corpus.o $(CORE)/util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc
 	$(CC) $(CFLAGS) -c $< -o $@
 
-../corpus.o: ../corpus.cc ../corpus.h
+$(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-cluster_test: cluster_test.o ../cluster.o gtest_main.a
+cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 cluster_test.o: cluster_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../cluster.o: ../cluster.cc ../cluster.h
+$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-evaluate_test: evaluate_test.o ../evaluate.o ../util.o gtest_main.a
+evaluate_test: evaluate_test.o $(CORE)/evaluate.o $(CORE)/util.o gtest_main.a
 	$(CC) -I $(EIGEN) $(CFLAGS) $^ -o $@ -pthread
 
 evaluate_test.o: evaluate_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../evaluate.o: ../evaluate.cc ../evaluate.h
+$(CORE)/evaluate.o: $(CORE)/evaluate.cc $(CORE)/evaluate.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-hmm_test: hmm_test.o ../hmm.o ../util.o ../evaluate.o gtest_main.a
+hmm_test: hmm_test.o $(CORE)/hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
+	gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 hmm_test.o: hmm_test.cc
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-../hmm.o: ../hmm.cc ../hmm.h
-	$(CC) $(CFLAGS) -c $< -o $@
+$(CORE)/hmm.o: $(CORE)/hmm.cc $(CORE)/hmm.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
