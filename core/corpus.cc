@@ -7,6 +7,62 @@
 
 #include "sparsesvd.h"
 
+namespace decompose_corpus {
+    size_t SVD(const string &word_context_matrix_path, size_t desired_rank,
+	       const string &transformation_method, size_t pseudocount,
+	       double word_context_smoothing_exponent,
+	       double word_smoothing_exponent,
+	       double context_smoothing_exponent,
+	       const string &scaling_method,
+	       Eigen::MatrixXd *left_singular_vectors,
+	       Eigen::MatrixXd *right_singular_vectors,
+	       Eigen::VectorXd *singular_values) {
+
+    // Use SVD to decompose a word-context count matrix whose entries are
+    // the co-occurrence counts #(w,c) between word w and context c. Let
+    //            #(w) := sum_c #(w,c)   // number of word samples
+    //            #(c) := sum_w #(w,c)   // number of context samples
+    //
+    // 1. (Transformation) Define an entry-wise transformation function,
+    //    transform(x,a) := x             [if transformation_method=none]
+    //                   := x^a           [if transformation_method=power]
+    //                   := log x         [if transformation_method=log]
+    //
+    //    and transform each aggregate count,
+    //            #(w,c) <- transform(#(w,c), word_context_smoothing_exponent)
+    //              #(w) <- transform(#(w) + pseudocount,
+    //                                word_smoothing_exponent)
+    //              #(c) <- transform(#(c) + pseudocount,
+    //                                context_smoothing_exponent)
+    //
+    // 2. (Scaling) Define appropriate normalizers,
+    // N(w,c) := sum_{(w,c)} transform(#(w,c), word_context_smoothing_exponent)
+    //   N(w) := sum_w transform(#(w) + pseudocount, word_smoothing_exponent)
+    //   N(c) := sum_c transform(#(c) + pseudocount, context_smoothing_exponent)
+    //
+    //    and set each matrix term M(w,c) as the following scaled values:
+    //  M(w,c) :=  #(w,c)                               [if scaling_method=none]
+    //         :=  log #(w,c) - log #(w) - log #(c)     [if scaling_method=ppmi]
+    //              + log N(w) + log N(c) - log N(w,c)
+    //         :=  #(w,c) / #(w)                        [if scaling_method=reg]
+    //         :=  #(w,c) / #(w)^{1/2} / #(c)^{1/2}     [if scaling_method=cca]
+    //              * N(w)^{1/2} * N(c)^{1/2} / N(w,c)
+    //
+    // 3. (SVD) Perform a low-rank SVD on M.
+    //
+    // Returns the actual rank of the matrix.
+
+	SMat word_context_matrix =
+	    binary_read_sparse_matrix(word_context_matrix_path);
+
+	size_t actual_rank;
+	sparsesvd::compute_svd(word_context_matrix, desired_rank,
+			       left_singular_vectors, right_singular_vectors,
+			       singular_values, &actual_rank);
+	return actual_rank;
+    }
+}  // namespace decompose_corpus
+
 void Corpus::WriteWords(size_t rare_cutoff,
 			const string &sorted_word_types_path,
 			const string &word_dictionary_path) {
