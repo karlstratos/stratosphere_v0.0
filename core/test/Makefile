@@ -110,10 +110,10 @@ corpus_test: corpus_test.o $(CORE)/corpus.o $(CORE)/util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread

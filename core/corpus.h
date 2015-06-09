@@ -25,6 +25,26 @@ public:
 
     ~Corpus() { }
 
+    // Writes word types sorted in decreasing frequency as a text file. Also
+    // writes a word dictionary as a binary file.
+    void WriteWords(size_t rare_cutoff, const string &sorted_word_types_path,
+		    const string &word_dictionary_path);
+
+    // Writes a context dictionary as a binary file. Also writes the
+    // co-occurrence counts between words and contexts as an SVDLIBC binary
+    // file.
+    void WriteContexts(const unordered_map<string, Word> &word_dictionary,
+		       bool sentence_per_line, const string &context_definition,
+		       size_t window_size, size_t hash_size,
+		       const string &context_dictionary_path,
+		       const string &context_word_count_path);
+
+    // Writes word transition counts as binary files.
+    void WriteTransitions(const unordered_map<string, Word> &word_dictionary,
+			  const string &bigram_count_path,
+			  const string &start_count_path,
+			  const string &end_count_path);
+
     // Counts words appearing in the corpus, returns the total count.
     size_t CountWords(unordered_map<string, size_t> *word_count);
 
