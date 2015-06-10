@@ -56,6 +56,37 @@ namespace eigen_helper {
     void generate_random_projection(size_t original_dimension,
 				    size_t reduced_dimension,
 				    Eigen::MatrixXd *projection_matrix);
+
+    // Returns true if two Eigen dense matrices are close in value.
+    template<typename EigenDenseMatrix>
+    bool check_near(const EigenDenseMatrix& matrix1,
+		    const EigenDenseMatrix& matrix2, double error_threshold) {
+	if (matrix1.rows() != matrix2.rows() ||
+	    matrix2.cols() != matrix2.cols()) { return false; }
+	for (size_t row = 0; row < matrix1.rows(); ++row) {
+	    for (size_t col = 0; col < matrix1.cols(); ++col) {
+		if (fabs(matrix1(row, col) - matrix2(row, col))
+		    > error_threshold) { return false; }
+	    }
+	}
+	return true;
+    }
+
+    // Returns true if two Eigen dense matrices are close in absolute value.
+    template<typename EigenDenseMatrix>
+    bool check_near_abs(const EigenDenseMatrix& matrix1,
+			const EigenDenseMatrix& matrix2,
+			double error_threshold) {
+	if (matrix1.rows() != matrix2.rows() ||
+	    matrix2.cols() != matrix2.cols()) { return false; }
+	for (size_t row = 0; row < matrix1.rows(); ++row) {
+	    for (size_t col = 0; col < matrix1.cols(); ++col) {
+		if (fabs(fabs(matrix1(row, col)) - fabs(matrix2(row, col)))
+		    > error_threshold) { return false; }
+	    }
+	}
+	return true;
+    }
 }  // namespace eigen_helper
 
 #endif  // CORE_EIGEN_HELPER_H_

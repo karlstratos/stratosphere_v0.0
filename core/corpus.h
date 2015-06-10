@@ -18,19 +18,19 @@
 typedef size_t Word;
 typedef size_t Context;
 
-namespace decompose_corpus {
+namespace corpus {
     // Performs a spectral decomposition of a transformed and scaled
     // word-context co-occurrence matrix. Some useful examples:
     //                             Transform          Add       Power     Scale
     //     -------------------------------------------------------------------
-    //     SVD                  {log, power}            0    {0.5, 1}      none
-    //     PPMI                         none            0           1      ppmi
+    //     SVD/LSA        {none, log, power}            0    {0.5, 1}      none
+    //     PPMI-SVD                     none            0           1      ppmi
     //     (Ridge) Regression           none          200           1       reg
     //     Regression + sqrt           power            0         0.5       reg
     //     (Regularized) CCA            none          200           1       cca
     //     CCA + sqrt                  power            0         0.5       cca
     void decompose(SMat matrix, size_t desired_rank,
-		   const string &transformation_method, size_t add_smooth,
+		   const string &transformation_method, double add_smooth,
 		   double power_smooth, const string &scaling_method,
 		   Eigen::MatrixXd *left_singular_vectors,
 		   Eigen::MatrixXd *right_singular_vectors,
@@ -39,7 +39,7 @@ namespace decompose_corpus {
     // Transforms the given (count) value.
     double transform(double count_value, double add_smooth,
 		     double power_smooth, string transformation_method);
-}  // namespace decompose_corpus
+}  // namespace corpus
 
 // A Corpus object is designged to extract useful statistics about text easily.
 class Corpus {

@@ -107,7 +107,7 @@ $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
 corpus_test: corpus_test.o $(CORE)/corpus.o $(CORE)/util.o $(CORE)/sparsesvd.o \
-	$(SVDLIBC)/libsvd.a gtest_main.a
+	$(SVDLIBC)/libsvd.a $(CORE)/eigen_helper.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc

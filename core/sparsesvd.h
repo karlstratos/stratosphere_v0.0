@@ -163,6 +163,14 @@ namespace sparsesvd {
 	    }
 	}
     }
+
+    // Converts an Eigen dense matrix to an SVDLIBC sparse matrix M.
+    template<typename EigenDenseMatrix>
+    SMat convert_eigen_dense(const EigenDenseMatrix &matrix) {
+	unordered_map<size_t, unordered_map<size_t, double> > column_map;
+	convert_eigen_dense_to_column_map(matrix, &column_map);
+	return convert_column_map(column_map);
+    }
 }  // namespace sparsesvd
 
 #endif  // CORE_SPARSESVD_H_

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "../corpus.h"
+#include "../eigen_helper.h"
 
 // Test class that provides a simple corpus file.
 class CorpusExample : public testing::Test {
@@ -223,6 +224,112 @@ TEST_F(CorpusExample, CheckTransitionCounting) {
     EXPECT_EQ(2, end_count[w_rare]);
     EXPECT_EQ(2, end_count[w_period]);
 }
+
+// Test class that provides a random matrix for corpus decomposition.
+class CorpusDecomposition : public testing::Test {
+protected:
+    virtual void SetUp() {
+	// For simplicity, we will consider dense (not sparse) random matrix
+	// with positive entries and full-rank (not low-rank) SVD.
+	eigen_matrix_ = Eigen::MatrixXd::Random(num_rows_,
+						num_columns_).cwiseAbs();
+	smat_matrix_ = sparsesvd::convert_eigen_dense(eigen_matrix_);
+	desired_rank_ = min(num_rows_, num_columns_);
+    }
+
+    virtual void TearDown() { svdFreeSMat(smat_matrix_); }
+
+    Eigen::MatrixXd eigen_matrix_;
+    SMat smat_matrix_ = nullptr;
+    size_t num_rows_ = 5;
+    size_t num_columns_ = 10;
+    size_t desired_rank_;
+    Eigen::MatrixXd U_;  // Our left singular vectors.
+    Eigen::MatrixXd V_;  // Our right singular vectors.
+    Eigen::VectorXd S_;  // Our singular values.
+    double tol_ = 1e-10;
+};
+
+// Checks plain SVD.
+TEST_F(CorpusDecomposition, PlainSVD) {
+    string transformation_method = "none";
+    double add_smooth = 100.0;  // Shouldn't have any effect.
+    double power_smooth = 1.0;
+    string scaling_method = "none";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(eigen_matrix_, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
+
+// Checks sqrt-transformed SVD.
+TEST_F(CorpusDecomposition, SqrtSVD) {
+    string transformation_method = "power";
+    double add_smooth = 0.0;
+    double power_smooth = 0.5;  // sqrt
+    string scaling_method = "none";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::MatrixXd sqrt_matrix = eigen_matrix_.cwiseSqrt();
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(sqrt_matrix, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
+
+// Checks log-transformed SVD.
+TEST_F(CorpusDecomposition, LogSVD) {
+    string transformation_method = "log";
+    double add_smooth = 0.0;
+    double power_smooth = 0.0;
+    string scaling_method = "none";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::MatrixXd log_matrix = eigen_matrix_;
+    for (size_t row = 0; row < log_matrix.rows(); ++row) {
+	for (size_t column = 0; column < log_matrix.cols(); ++column) {
+	    log_matrix(row, column) = log(1 + log_matrix(row, column));
+	}
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(log_matrix, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
+
+// Checks PPMI decomposition.
+TEST_F(CorpusDecomposition, PPMI) {
+    string transformation_method = "none";
+    double add_smooth = 0.0;
+    double power_smooth = 0.0;
+    string scaling_method = "none";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::MatrixXd log_matrix = eigen_matrix_;
+    for (size_t row = 0; row < log_matrix.rows(); ++row) {
+	for (size_t column = 0; column < log_matrix.cols(); ++column) {
+	    log_matrix(row, column) = log(1 + log_matrix(row, column));
+	}
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(log_matrix, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    cout << svd.matrixU() << endl << endl << U_ << endl << endl;
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    cout << svd.matrixV() << endl << endl << V_ << endl << endl;
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    cout << svd.singularValues() << endl << endl << S_ << endl << endl;
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
+*/
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -5,9 +5,9 @@
 #include <iomanip>
 #include <limits>
 
-namespace decompose_corpus {
+namespace corpus {
     void decompose(SMat matrix, size_t desired_rank,
-		   const string &transformation_method, size_t add_smooth,
+		   const string &transformation_method, double add_smooth,
 		   double power_smooth, const string &scaling_method,
 		   Eigen::MatrixXd *left_singular_vectors,
 		   Eigen::MatrixXd *right_singular_vectors,
@@ -105,7 +105,7 @@ namespace decompose_corpus {
 	}
 	return transformed_value;
     }
-}  // namespace decompose_corpus
+}  // namespace corpus
 
 void Corpus::WriteWords(size_t rare_cutoff,
 			const string &sorted_word_types_path,

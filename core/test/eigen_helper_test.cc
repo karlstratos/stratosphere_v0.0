@@ -137,6 +137,32 @@ TEST_F(EigenHelper, FindMatrixRange) {
     }
 }
 
+// Checks the matrix comparison function.
+TEST(Miscellaneous, CheckNearDenseMatrices) {
+    double error_threshold = 1e-10;
+    Eigen::MatrixXd random_matrix1 = Eigen::MatrixXd::Random(10, 10);
+    Eigen::MatrixXd random_matrix2 = Eigen::MatrixXd::Random(10, 10);
+    ASSERT_FALSE(eigen_helper::check_near(random_matrix1, random_matrix2,
+					  error_threshold));
+    random_matrix2 = random_matrix1;
+    ASSERT_TRUE(eigen_helper::check_near(random_matrix1, random_matrix2,
+					 error_threshold));
+    random_matrix2(0,0) += 2 * error_threshold;
+    ASSERT_FALSE(eigen_helper::check_near(random_matrix1, random_matrix2,
+					  error_threshold));
+}
+
+// Checks the matrix comparison function (absolute value).
+TEST(Miscellaneous, CheckNearDenseMatricesAbs) {
+    double error_threshold = 1e-10;
+    Eigen::MatrixXd random_matrix1 = Eigen::MatrixXd::Random(10, 10);
+    Eigen::MatrixXd random_matrix2 = - random_matrix1;
+    ASSERT_FALSE(eigen_helper::check_near(random_matrix1, random_matrix2,
+					  error_threshold));
+    ASSERT_TRUE(eigen_helper::check_near_abs(random_matrix1, random_matrix2,
+					     error_threshold));
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
