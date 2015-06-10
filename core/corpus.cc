@@ -5,61 +5,105 @@
 #include <iomanip>
 #include <limits>
 
-#include "sparsesvd.h"
-
 namespace decompose_corpus {
-    size_t SVD(const string &word_context_matrix_path, size_t desired_rank,
-	       const string &transformation_method, size_t pseudocount,
-	       double word_context_smoothing_exponent,
-	       double word_smoothing_exponent,
-	       double context_smoothing_exponent,
-	       const string &scaling_method,
-	       Eigen::MatrixXd *left_singular_vectors,
-	       Eigen::MatrixXd *right_singular_vectors,
-	       Eigen::VectorXd *singular_values) {
+    void decompose(SMat matrix, size_t desired_rank,
+		   const string &transformation_method, size_t add_smooth,
+		   double power_smooth, const string &scaling_method,
+		   Eigen::MatrixXd *left_singular_vectors,
+		   Eigen::MatrixXd *right_singular_vectors,
+		   Eigen::VectorXd *singular_values) {
+	// Get the number of word/context samples by summing columns/rows.
+	unordered_map<Word, double> num_word_samples;  // #(w)
+	unordered_map<Context, double> num_context_samples;  // #(c)
+	sparsesvd::sum_rows_columns(matrix, &num_word_samples,
+				    &num_context_samples);
+	size_t num_word_types = num_word_samples.size();
+	size_t num_context_types = num_context_samples.size();
 
-    // Use SVD to decompose a word-context count matrix whose entries are
-    // the co-occurrence counts #(w,c) between word w and context c. Let
-    //            #(w) := sum_c #(w,c)   // number of word samples
-    //            #(c) := sum_w #(w,c)   // number of context samples
-    //
-    // 1. (Transformation) Define an entry-wise transformation function,
-    //    transform(x,a) := x             [if transformation_method=none]
-    //                   := x^a           [if transformation_method=power]
-    //                   := log x         [if transformation_method=log]
-    //
-    //    and transform each aggregate count,
-    //            #(w,c) <- transform(#(w,c), word_context_smoothing_exponent)
-    //              #(w) <- transform(#(w) + pseudocount,
-    //                                word_smoothing_exponent)
-    //              #(c) <- transform(#(c) + pseudocount,
-    //                                context_smoothing_exponent)
-    //
-    // 2. (Scaling) Define appropriate normalizers,
-    // N(w,c) := sum_{(w,c)} transform(#(w,c), word_context_smoothing_exponent)
-    //   N(w) := sum_w transform(#(w) + pseudocount, word_smoothing_exponent)
-    //   N(c) := sum_c transform(#(c) + pseudocount, context_smoothing_exponent)
-    //
-    //    and set each matrix term M(w,c) as the following scaled values:
-    //  M(w,c) :=  #(w,c)                               [if scaling_method=none]
-    //         :=  log #(w,c) - log #(w) - log #(c)     [if scaling_method=ppmi]
-    //              + log N(w) + log N(c) - log N(w,c)
-    //         :=  #(w,c) / #(w)                        [if scaling_method=reg]
-    //         :=  #(w,c) / #(w)^{1/2} / #(c)^{1/2}     [if scaling_method=cca]
-    //              * N(w)^{1/2} * N(c)^{1/2} / N(w,c)
-    //
-    // 3. (SVD) Perform a low-rank SVD on M.
-    //
-    // Returns the actual rank of the matrix.
+	// 1. Transform each aggregate count and compute the new sum.
+	double word_context_normalizer = 0.0;  // sum_(w,c) {transformed #(w,c)}
+	for (Context c = 0; c < num_context_types; ++c) {
+	    size_t current_nonzero_index = matrix->pointr[c];
+	    size_t next_start_nonzero_index = matrix->pointr[c + 1];
+	    while (current_nonzero_index < next_start_nonzero_index) {
+		// [*] Do not apply additive smoothing to co-occurrence counts.
+		matrix->value[current_nonzero_index] =
+		    transform(matrix->value[current_nonzero_index], 0,  // [*]
+			      power_smooth, transformation_method);
+		word_context_normalizer += matrix->value[current_nonzero_index];
+		++current_nonzero_index;
+	    }
+	}
+	double word_normalizer = 0.0;  // sum_w {transformed #(w)}
+	for (Word w = 0; w < num_word_types; ++w) {
+	    num_word_samples[w] = transform(num_word_samples[w], add_smooth,
+					    power_smooth,
+					    transformation_method);
+	    word_normalizer += num_word_samples[w];
+	}
+	double context_normalizer = 0.0;  // sum_c {transformed #(c)}
+	for (Context c = 0; c < num_context_types; ++c) {
+	    num_context_samples[c] = transform(num_context_samples[c],
+					       add_smooth, power_smooth,
+					       transformation_method);
+	    context_normalizer += num_context_samples[c];
+	}
 
-	SMat word_context_matrix =
-	    binary_read_sparse_matrix(word_context_matrix_path);
+	// 2. Scale each transformed #(w,c) by #(w), #(c), or not.
+	for (Context c = 0; c < num_context_types; ++c) {
+	    size_t current_nonzero_index = matrix->pointr[c];
+	    size_t next_start_nonzero_index = matrix->pointr[c + 1];
+	    while (current_nonzero_index < next_start_nonzero_index) {
+		Word w = matrix->rowind[current_nonzero_index];
+		if (scaling_method == "none") {  // No scaling.
+		} else if (scaling_method == "ppmi") {
+		    // Positive pointwise mutual information scaling:
+		    //    max(log p(w,c) - log p(w) - log p(c), 0)
+		    double pmi = log(matrix->value[current_nonzero_index]);
+		    pmi -= log(num_word_samples[w]);
+		    pmi -= log(num_context_samples[c]);
+		    pmi += log(word_normalizer);
+		    pmi += log(context_normalizer);
+		    pmi -= log(word_context_normalizer);
+		    matrix->value[current_nonzero_index] = max(pmi, 0.0);
+		} else if (scaling_method == "reg") {
+		    // Regression scaling.
+		    matrix->value[current_nonzero_index] /= num_word_samples[w];
+		} else if (scaling_method == "cca") {
+		    // Canonical correlation analysis scaling:
+		    //    p(w,c) / sqrt{p(w)} / sqrt{p(c)}
+		    double cca_value = matrix->value[current_nonzero_index];
+		    cca_value /= sqrt(num_word_samples[w]);
+		    cca_value /= sqrt(num_context_samples[c]);
+		    cca_value *= sqrt(word_normalizer);
+		    cca_value *= sqrt(context_normalizer);
+		    cca_value /= word_context_normalizer;
+		}
+		++current_nonzero_index;
+	    }
+	}
 
+	// 3. Perform a low-rank SVD.
 	size_t actual_rank;
-	sparsesvd::compute_svd(word_context_matrix, desired_rank,
+	sparsesvd::compute_svd(matrix, desired_rank,
 			       left_singular_vectors, right_singular_vectors,
 			       singular_values, &actual_rank);
-	return actual_rank;
+    }
+
+    double transform(double count_value, double add_smooth,
+		     double power_smooth, string transformation_method) {
+	double transformed_value = count_value + add_smooth;
+	if (transformation_method == "none") {  // Do nothing.
+	} else if (transformation_method == "log") {
+	    // Log transform (add 1 to account for zero-valued entries).
+	    transformed_value = log(1 + transformed_value);
+	} else if (transformation_method == "power") {
+	    // Power transform.
+	    transformed_value = pow(transformed_value, power_smooth);
+	} else {
+	    ASSERT(false, "Unknown transformation: " << transformation_method);
+	}
+	return transformed_value;
     }
 }  // namespace decompose_corpus
 

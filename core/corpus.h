@@ -5,53 +5,40 @@
 #ifndef CORE_CORPUS_H_
 #define CORE_CORPUS_H_
 
+#include <Eigen/Dense>
 #include <deque>
 #include <fstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "sparsesvd.h"
 #include "util.h"
 
 typedef size_t Word;
 typedef size_t Context;
 
 namespace decompose_corpus {
-    // Use SVD to decompose a word-context co-occurrence count matrix.
-    // Returns the actual rank of the matrix. Some useful combinations:
-    //
-    // 1. Plain CCA with additive regularization (do row normalization if the
-    //    actual projection matrix is needed):
-    //              transformation_method = "none"
-    //                        pseudocount = 200  // Or other "count" number.
-    //    word_context_smoothing_exponent = 1.0
-    //            word_smoothing_exponent = 1.0
-    //         context_smoothing_exponent = 1.0
-    //                     scaling_method = "cca"
-    //
-    // 2. CCA with variance-stabilizing square-root transformation:
-    //              transformation_method = "power"
-    //                        pseudocount = 0
-    //    word_context_smoothing_exponent = 0.5
-    //            word_smoothing_exponent = 0.5
-    //         context_smoothing_exponent = 0.5
-    //                     scaling_method = "cca"
-    //
-    // 3. Regression with variance-stabilizing square-root transformation:
-    //              transformation_method = "power"
-    //                        pseudocount = 0
-    //    word_context_smoothing_exponent = 0.5
-    //            word_smoothing_exponent = 0.5
-    //                     scaling_method = "cca"
-    size_t SVD(const string &word_context_matrix_path, size_t desired_rank,
-	       const string &transformation_method, size_t pseudocount,
-	       double word_context_smoothing_exponent,
-	       double word_smoothing_exponent,
-	       double context_smoothing_exponent,
-	       const string &scaling_method,
-	       Eigen::MatrixXd *left_singular_vectors,
-	       Eigen::MatrixXd *right_singular_vectors,
-	       Eigen::VectorXd *singular_values);
+    // Performs a spectral decomposition of a transformed and scaled
+    // word-context co-occurrence matrix. Some useful examples:
+    //                             Transform          Add       Power     Scale
+    //     -------------------------------------------------------------------
+    //     SVD                  {log, power}            0    {0.5, 1}      none
+    //     PPMI                         none            0           1      ppmi
+    //     (Ridge) Regression           none          200           1       reg
+    //     Regression + sqrt           power            0         0.5       reg
+    //     (Regularized) CCA            none          200           1       cca
+    //     CCA + sqrt                  power            0         0.5       cca
+    void decompose(SMat matrix, size_t desired_rank,
+		   const string &transformation_method, size_t add_smooth,
+		   double power_smooth, const string &scaling_method,
+		   Eigen::MatrixXd *left_singular_vectors,
+		   Eigen::MatrixXd *right_singular_vectors,
+		   Eigen::VectorXd *singular_values);
+
+    // Transforms the given (count) value.
+    double transform(double count_value, double add_smooth,
+		     double power_smooth, string transformation_method);
 }  // namespace decompose_corpus
 
 // A Corpus object is designged to extract useful statistics about text easily.

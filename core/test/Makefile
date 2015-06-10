@@ -106,13 +106,14 @@ $(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
-corpus_test: corpus_test.o $(CORE)/corpus.o $(CORE)/util.o gtest_main.a
+corpus_test: corpus_test.o $(CORE)/corpus.o $(CORE)/util.o $(CORE)/sparsesvd.o \
+	$(SVDLIBC)/libsvd.a gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 corpus_test.o: corpus_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-$(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h
+$(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a

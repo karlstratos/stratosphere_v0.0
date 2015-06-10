@@ -83,10 +83,10 @@ namespace sparsesvd {
 		     Eigen::VectorXd *singular_values, size_t *actual_rank);
 
     // Sums the rows/columns of a sparse matrix M: row_sum[i] = sum_j M_{i, j},
-    // column_sum[j] = sum_i M_{i, j}.
-    void sum_rows_columns(SMat sparse_matrix,
-			  unordered_map<size_t, double> *row_sum,
-			  unordered_map<size_t, double> *column_sum);
+    // column_sum[j] = sum_i M_{i, j}. Returns the total sum.
+    double sum_rows_columns(SMat sparse_matrix,
+			    unordered_map<size_t, double> *row_sum,
+			    unordered_map<size_t, double> *column_sum);
 
     // Converts a column map to an SVDLIBC sparse matrix M:
     //    M_{i, j} = column_map[j][i]

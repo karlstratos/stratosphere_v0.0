@@ -84,11 +84,12 @@ namespace sparsesvd {
 	svdFreeSVDRec(svd_result);
     }
 
-    void sum_rows_columns(SMat sparse_matrix,
-			  unordered_map<size_t, double> *row_sum,
-			  unordered_map<size_t, double> *column_sum) {
+    double sum_rows_columns(SMat sparse_matrix,
+			    unordered_map<size_t, double> *row_sum,
+			    unordered_map<size_t, double> *column_sum) {
 	row_sum->clear();
 	column_sum->clear();
+	double total_sum = 0.0;
 	size_t current_nonzero_index = 0;
 	for (size_t col = 0; col < sparse_matrix->cols; ++col) {
 	    while (current_nonzero_index < sparse_matrix->pointr[col + 1]) {
@@ -96,8 +97,10 @@ namespace sparsesvd {
 		double value = sparse_matrix->value[current_nonzero_index];
 		(*row_sum)[row] += value;
 		(*column_sum)[col] += value;
+		total_sum += value;
 		++current_nonzero_index;
 	    }
 	}
+	return total_sum;
     }
 }  // namespace sparsesvd

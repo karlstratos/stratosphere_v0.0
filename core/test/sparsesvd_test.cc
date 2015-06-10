@@ -201,7 +201,8 @@ TEST(SumRowsColumns, Correctness) {
     SMat sparse_matrix = sparsesvd::convert_column_map(column_map);
     unordered_map<size_t, double> row_sum;
     unordered_map<size_t, double> column_sum;
-    sparsesvd::sum_rows_columns(sparse_matrix, &row_sum, &column_sum);
+    double total_sum =
+	sparsesvd::sum_rows_columns(sparse_matrix, &row_sum, &column_sum);
 
     EXPECT_NEAR(2.0, row_sum[0], tol);
     EXPECT_NEAR(1.0, row_sum[1], tol);
@@ -211,6 +212,7 @@ TEST(SumRowsColumns, Correctness) {
     EXPECT_NEAR(0.0, column_sum[1], tol);
     EXPECT_NEAR(4.0, column_sum[2], tol);
     EXPECT_NEAR(4.0, column_sum[3], tol);
+    EXPECT_NEAR(10.0, total_sum, tol);
     svdFreeSMat(sparse_matrix);
 }
 
