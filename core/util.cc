@@ -72,6 +72,14 @@ namespace util_string {
 	return lowercased_string;
     }
 
+    string convert_to_alphanumeric_string(double value, size_t decimal_place) {
+	string value_string = to_string_with_precision(value, decimal_place);
+	for (size_t i = 0; i < value_string.size(); ++i) {
+	    if (value_string[i] == '.') { value_string[i] = 'p'; }
+	}
+	return value_string;
+    }
+
     string convert_to_string(const vector<string> &sequence) {
 	string sequence_string;
 	for (size_t i = 0; i < sequence.size(); ++i) {

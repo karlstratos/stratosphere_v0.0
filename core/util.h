@@ -58,6 +58,9 @@ namespace util_string {
 	return out.str();
     }
 
+    // Returns an alphanumeric string of a double, e.g., 1.3503 -> "1p35".
+    string convert_to_alphanumeric_string(double value, size_t decimal_place);
+
     // Converts a string vector to string.
     string convert_to_string(const vector<string> &sequence);
 

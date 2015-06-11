@@ -1,6 +1,5 @@
 // Author: Karl Stratos (stratos@cs.columbia.edu)
 
-/*
 #include "wordrep.h"
 
 #include <dirent.h>
@@ -8,10 +7,10 @@
 #include <limits>
 #include <map>
 
-#include "cluster.h"
-#include "evaluate.h"
-#include "sparsesvd.h"
+#include "../core/cluster.h"
+#include "../core/evaluate.h"
 
+/*
 void WordRep::SetOutputDirectory(const string &output_directory) {
     ASSERT(!output_directory.empty(), "Empty output directory.");
     output_directory_ = output_directory;
@@ -50,7 +49,7 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
     SlideWindow(corpus_file);
 }
 
-void WordRep::InduceLexicalRepresentations() {
+void WordRep::InduceWordRepresentations() {
     // Load a filtered word dictionary from a cached file.
     LoadWordDictionary();
 
@@ -65,71 +64,6 @@ void WordRep::InduceLexicalRepresentations() {
 
     // Perform greedy agglomerative clustering over word vectors.
     PerformAgglomerativeClustering(dim_);
-}
-
-void WordRep::LoadWordDictionary() {
-    FileManipulator file_manipulator;
-    ASSERT(file_manipulator.Exists(WordStr2NumPath()), "File not found, "
-	   "read from the corpus: " << WordStr2NumPath());
-
-    word_str2num_.clear();
-    word_num2str_.clear();
-    string line;
-    vector<string> tokens;
-    StringManipulator string_manipulator;
-    ifstream word_str2num_file(WordStr2NumPath(), ios::in);
-    while (word_str2num_file.good()) {
-	getline(word_str2num_file, line);
-	if (line == "") { continue; }
-	string_manipulator.Split(line, " ", &tokens);
-	word_num2str_[stol(tokens[1])] = tokens[0];
-	word_str2num_[tokens[0]] = stol(tokens[1]);
-    }
-}
-
-void WordRep::LoadContextDictionary() {
-    FileManipulator file_manipulator;
-    ASSERT(file_manipulator.Exists(ContextStr2NumPath()), "File not found, "
-	   "read from the corpus: " << ContextStr2NumPath());
-
-    context_str2num_.clear();
-    context_num2str_.clear();
-    string line;
-    vector<string> tokens;
-    StringManipulator string_manipulator;
-    ifstream context_str2num_file(ContextStr2NumPath(), ios::in);
-    while (context_str2num_file.good()) {
-	getline(context_str2num_file, line);
-	if (line == "") { continue; }
-	string_manipulator.Split(line, " ", &tokens);
-	context_num2str_[stol(tokens[1])] = tokens[0];
-	context_str2num_[tokens[0]] = stol(tokens[1]);
-    }
-}
-
-Word WordRep::word_str2num(const string &word_string) {
-    ASSERT(word_str2num_.find(word_string) != word_str2num_.end(),
-	   "Requesting integer ID of an unknown word string: " << word_string);
-    return word_str2num_[word_string];
-}
-
-string WordRep::word_num2str(Word word) {
-    ASSERT(word_num2str_.find(word) != word_num2str_.end(),
-	   "Requesting string of an unknown word integer: " << word);
-    return word_num2str_[word];
-}
-
-Context WordRep::context_str2num(const string &context_string) {
-    ASSERT(context_str2num_.find(context_string) != context_str2num_.end(),
-	   "Requesting integer ID of an unknown context string: "
-	   << context_string);
-    return context_str2num_[context_string];
-}
-
-string WordRep::context_num2str(Context context) {
-    ASSERT(context_num2str_.find(context) != context_num2str_.end(),
-	   "Requesting string of an unknown context integer: " << context);
-    return context_num2str_[context];
 }
 
 void WordRep::CountWords(const string &corpus_file) {
@@ -286,7 +220,7 @@ void WordRep::SlideWindow(const string &corpus_file) {
     // If we already have count files, do not repeat the work.
     FileManipulator file_manipulator;
     if (file_manipulator.Exists(ContextStr2NumPath()) &&
-	file_manipulator.Exists(CountWordContextPath()) &&
+	file_manipulator.Exists(WordContextCountPath()) &&
 	file_manipulator.Exists(CountWordPath()) &&
 	file_manipulator.Exists(CountContextPath())) {
 	log_ << "   Counts already exist" << endl;
@@ -304,8 +238,8 @@ void WordRep::SlideWindow(const string &corpus_file) {
 	}
     }
 
-    // count_word_context[j][i] = count of word i and context j coocurring
-    unordered_map<Context, unordered_map<Word, double> > count_word_context;
+    // word_context_count[j][i] = count of word i and context j coocurring
+    unordered_map<Context, unordered_map<Word, double> > word_context_count;
 
     // Put start buffering in the window.
     deque<string> window;
@@ -345,13 +279,13 @@ void WordRep::SlideWindow(const string &corpus_file) {
 		window.push_back(new_string);
 		if (window.size() >= window_size_) {  // Full window.
 		    ProcessWindow(window, word_index, position_markers,
-				  context_hash, &count_word_context);
+				  context_hash, &word_context_count);
 		    window.pop_front();
 		}
 	    }
 	    if (sentence_per_line_) {
 		FinishWindow(word_index, position_markers, context_hash,
-			     &window, &count_word_context);
+			     &window, &word_context_count);
 	    }
 	    if (verbose_ && (line_num / num_lines >= portion_marker)) {
 		portion_marker += kReportInterval_;
@@ -360,7 +294,7 @@ void WordRep::SlideWindow(const string &corpus_file) {
 	}
 	if (!sentence_per_line_) {
 	    FinishWindow(word_index, position_markers, context_hash, &window,
-			 &count_word_context);
+			 &word_context_count);
 	}
 	if (verbose_) { cerr << endl; }
     }
@@ -380,13 +314,13 @@ void WordRep::SlideWindow(const string &corpus_file) {
     // Write counts to the output directory.
     SparseSVDSolver sparsesvd_solver;  // Write as a sparse matrix for SVDLIBC.
     size_t num_nonzeros = 0;
-    for (const auto &context_pair : count_word_context) {
+    for (const auto &context_pair : word_context_count) {
 	num_nonzeros += context_pair.second.size();
     }
     unordered_map<Word, double> count_word;  // i-th: count of word i
     unordered_map<Context, double> count_context;  // j-th: count of context j
-    sparsesvd_solver.WriteSparseMatrix(count_word_context,
-				       CountWordContextPath(),
+    sparsesvd_solver.WriteSparseMatrix(word_context_count,
+				       WordContextCountPath(),
 				       word_str2num_.size(),
 				       context_str2num_.size(), num_nonzeros,
 				       &count_word, &count_context);
@@ -410,7 +344,7 @@ void WordRep::FinishWindow(size_t word_index,
 			   const hash<string> &context_hash,
 			   deque<string> *window,
 			   unordered_map<Context, unordered_map<Word, double> >
-			   *count_word_context) {
+			   *word_context_count) {
     size_t original_window_size = window->size();
     while (window->size() < window_size_) {
 	// First fill up the window in case the sentence was short.
@@ -419,7 +353,7 @@ void WordRep::FinishWindow(size_t word_index,
     for (size_t buffering = word_index; buffering < original_window_size;
 	 ++buffering) {
 	ProcessWindow(*window, word_index, position_markers, context_hash,
-		      count_word_context);
+		      word_context_count);
 	(*window).pop_front();
 	(*window).push_back(kBufferString_);
     }
@@ -434,7 +368,7 @@ void WordRep::ProcessWindow(const deque<string> &window,
 			    const vector<string> &position_markers,
 			    const hash<string> &context_hash,
 			    unordered_map<Context, unordered_map<Word, double> >
-			    *count_word_context) {
+			    *word_context_count) {
     Word word = word_str2num_[window.at(word_index)];
 
     for (size_t context_index = 0; context_index < window.size();
@@ -444,23 +378,23 @@ void WordRep::ProcessWindow(const deque<string> &window,
 	if (context_definition_ == "bag") {  // Bag-of-words (BOW)
 	    Context bag_context = AddContextIfUnknown(context_string,
 						      context_hash);
-	    (*count_word_context)[bag_context][word] += 1;
+	    (*word_context_count)[bag_context][word] += 1;
 	} else if (context_definition_ == "bigram") {  // BOW + bigrams
 	    Context bag_context = AddContextIfUnknown(context_string,
 						      context_hash);
-	    (*count_word_context)[bag_context][word] += 1;
+	    (*word_context_count)[bag_context][word] += 1;
 	    if (context_index < window.size() - 1 &&
 		context_index != word_index - 1) {
 		Context bigram_context =
 		    AddContextIfUnknown(context_string + kNGramGlueString_ +
 					window.at(context_index + 1),
 					context_hash);
-		(*count_word_context)[bigram_context][word] += 1;
+		(*word_context_count)[bigram_context][word] += 1;
 	    }
 	} else if (context_definition_ == "skipgram") {  // BOW + skipgrams
 	    Context bag_context = AddContextIfUnknown(context_string,
 						      context_hash);
-	    (*count_word_context)[bag_context][word] += 1;
+	    (*word_context_count)[bag_context][word] += 1;
 	    for (size_t context_index2 = context_index + 1;
 		 context_index2 < window.size(); ++context_index2) {
 		if (context_index2 == word_index) { continue; }
@@ -471,21 +405,21 @@ void WordRep::ProcessWindow(const deque<string> &window,
 		    context_string2 + kNGramGlueString_ + context_string;
 		Context skipgram_context =
 		    AddContextIfUnknown(ordered_skipgram_string, context_hash);
-		(*count_word_context)[skipgram_context][word] += 1;
+		(*word_context_count)[skipgram_context][word] += 1;
 	    }
 	} else if (context_definition_ == "list") {  // List-of-words (LOW)
 	    Context list_context =
 		AddContextIfUnknown(position_markers.at(context_index) +
 				    context_string, context_hash);
-	    (*count_word_context)[list_context][word] += 1;
+	    (*word_context_count)[list_context][word] += 1;
 	} else if (context_definition_ == "baglist") {  // BOW+LOW
 	    Context bag_context = AddContextIfUnknown(context_string,
 						      context_hash);
 	    Context list_context =
 		AddContextIfUnknown(position_markers.at(context_index) +
 				    context_string, context_hash);
-	    (*count_word_context)[bag_context][word] += 1;
-	    (*count_word_context)[list_context][word] += 1;
+	    (*word_context_count)[bag_context][word] += 1;
+	    (*word_context_count)[list_context][word] += 1;
 	} else {
 	    ASSERT(false, "Unknown context definition: " <<
 		   context_definition_);
@@ -595,8 +529,8 @@ void WordRep::LoadSortedWordCounts() {
 
 void WordRep::CalculateSVD() {
     FileManipulator file_manipulator;
-    ASSERT(file_manipulator.Exists(CountWordContextPath()), "File not found, "
-	   "read from the corpus: " << CountWordContextPath());
+    ASSERT(file_manipulator.Exists(WordContextCountPath()), "File not found, "
+	   "read from the corpus: " << WordContextCountPath());
     ASSERT(file_manipulator.Exists(CountWordPath()), "File not found, "
 	   "read from the corpus: " << CountWordPath());
     ASSERT(file_manipulator.Exists(CountContextPath()), "File not found, "
@@ -606,8 +540,8 @@ void WordRep::CalculateSVD() {
     vector<string> tokens;
 
     // Get information about the count matrix.
-    ifstream count_word_context_file(CountWordContextPath(), ios::in);
-    getline(count_word_context_file, line);
+    ifstream word_context_count_file(WordContextCountPath(), ios::in);
+    getline(word_context_count_file, line);
     string_manipulator.Split(line, " ", &tokens);
     size_t dim1 = stol(tokens[0]);
     size_t dim2 = stol(tokens[1]);
@@ -653,7 +587,7 @@ void WordRep::CalculateSVD() {
 
     // Load a sparse matrix of joint values directly into an SVD solver.
     if (verbose_) { cerr << "Loading counts" << endl; }
-    SparseSVDSolver svd_solver(CountWordContextPath());
+    SparseSVDSolver svd_solver(WordContextCountPath());
     SMat matrix = svd_solver.sparse_matrix();
 
     // Load individual scaling values.
@@ -913,13 +847,10 @@ void WordRep::PerformAgglomerativeClustering(size_t num_clusters) {
 
 string WordRep::Signature(size_t version) {
     ASSERT(version <= 2, "Unrecognized signature version: " << version);
-    StringManipulator string_manipulator;
 
-    string signature = "rare" + to_string(rare_cutoff_);
+    string signature = "rare" + to_string(rare_cutoff_);  // Version 0
     if (version >= 1) {
-	if (sentence_per_line_) {
-	    signature += "_spl";
-	}
+	if (sentence_per_line_) { signature += "_sentences"; }
 	signature += "_window" + to_string(window_size_);
 	signature += "_" + context_definition_;
 	signature += "_hash" + to_string(num_context_hashed_);
@@ -927,19 +858,13 @@ string WordRep::Signature(size_t version) {
     if (version >= 2) {
 	signature += "_dim" + to_string(dim_);
 	signature += "_" + transformation_method_;
+	signature += "_add" +
+	    util_string::convert_to_alphanumeric_string(add_smooth_, 2);
+	signature += "_power" +
+	    util_string::convert_to_alphanumeric_string(power_smooth_, 2);
 	signature += "_" + scaling_method_;
-	if (scaling_method_ == "cca" || scaling_method_ == "reg") {
-	    signature += "_pseudo" + to_string(pseudocount_);
-	}
-	if (scaling_method_ == "cca" || scaling_method_ == "ppmi") {
-	    signature += "_ce" + string_manipulator.DoubleString(
-		context_smoothing_exponent_, 2, true);
-	}
-	signature += "_se"  + string_manipulator.DoubleString(
-	    singular_value_exponent_, 2, true);
     }
 
     return signature;
 }
-
 */

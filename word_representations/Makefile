@@ -4,10 +4,10 @@
 SVDLIBC = ../third_party/SVDLIBC
 
 # Where to find the Eigen package.
-EIGEN = ../third_party/eigen-eigen-36fd1ba04c12
+EIGEN = ../third_party/eigen-eigen-10219c95fe65
 
 # Where to find the core files.
-CORE = ..
+CORE = ../core
 
 # Compiler.
 CC = clang++
@@ -25,18 +25,24 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TARGETS = singular
+TARGETS = wordrep
 
 all: $(TARGETS)
 
-singular: main.o arguments.o #$(SVDLIBC)/libsvd.a
+wordrep: main.o $(SVDLIBC)/libsvd.a
 	$(CC) $(CFLAGS) $^ -o $@
 
-main.o: main.cc arguments.o
-	$(CC) $(CFLAGS) -c $< -o $@
+main.o: main.cc wordrep.o
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-arguments.o: arguments.cc arguments.h
-	$(CC) $(CFLAGS) -c $< -o $@
+wordrep.o: wordrep.cc wordrep.h $(CORE)/corpus.o
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
