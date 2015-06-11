@@ -241,16 +241,16 @@ protected:
 
     Eigen::MatrixXd eigen_matrix_;
     SMat smat_matrix_ = nullptr;
-    size_t num_rows_ = 5;
-    size_t num_columns_ = 10;
+    size_t num_rows_ = 10;
+    size_t num_columns_ = 20;
     size_t desired_rank_;
     Eigen::MatrixXd U_;  // Our left singular vectors.
     Eigen::MatrixXd V_;  // Our right singular vectors.
     Eigen::VectorXd S_;  // Our singular values.
-    double tol_ = 1e-10;
+    double tol_ = 1e-8;
 };
 
-// Checks plain SVD.
+// Checks the plain SVD.
 TEST_F(CorpusDecomposition, PlainSVD) {
     string transformation_method = "none";
     double add_smooth = 100.0;  // Shouldn't have any effect.
@@ -266,7 +266,7 @@ TEST_F(CorpusDecomposition, PlainSVD) {
     EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
 }
 
-// Checks sqrt-transformed SVD.
+// Checks the sqrt-transformed SVD.
 TEST_F(CorpusDecomposition, SqrtSVD) {
     string transformation_method = "power";
     double add_smooth = 0.0;
@@ -283,11 +283,11 @@ TEST_F(CorpusDecomposition, SqrtSVD) {
     EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
 }
 
-// Checks log-transformed SVD.
+// Checks the log-transformed SVD.
 TEST_F(CorpusDecomposition, LogSVD) {
     string transformation_method = "log";
     double add_smooth = 0.0;
-    double power_smooth = 0.0;
+    double power_smooth = 1.0;  // Doens't matter.
     string scaling_method = "none";
     corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
 		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
@@ -305,31 +305,128 @@ TEST_F(CorpusDecomposition, LogSVD) {
     EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
 }
 
-// Checks PPMI decomposition.
+// Checks the PPMI decomposition (with smoothing).
 TEST_F(CorpusDecomposition, PPMI) {
-    string transformation_method = "none";
-    double add_smooth = 0.0;
-    double power_smooth = 0.0;
-    string scaling_method = "none";
+    string transformation_method = "power";
+    double add_smooth = 0.1;
+    double power_smooth = 0.5;
+    string scaling_method = "ppmi";
     corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
 		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
 
-    Eigen::MatrixXd log_matrix = eigen_matrix_;
-    for (size_t row = 0; row < log_matrix.rows(); ++row) {
-	for (size_t column = 0; column < log_matrix.cols(); ++column) {
-	    log_matrix(row, column) = log(1 + log_matrix(row, column));
+
+    Eigen::MatrixXd ppmi_matrix = eigen_matrix_;
+    Eigen::VectorXd row_sum = ppmi_matrix.rowwise().sum();
+    Eigen::VectorXd column_sum = ppmi_matrix.colwise().sum();
+    for (size_t row = 0; row < ppmi_matrix.rows(); ++row) {
+	for (size_t column = 0; column < ppmi_matrix.cols(); ++column) {
+	    ppmi_matrix(row, column) = pow(ppmi_matrix(row, column),
+					   power_smooth);
 	}
     }
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(log_matrix, Eigen::ComputeThinU |
+    double matrix_normalizer = ppmi_matrix.rowwise().sum().sum();
+    for (size_t row = 0; row < ppmi_matrix.rows(); ++row) {
+	row_sum(row) = pow(row_sum(row) + add_smooth, power_smooth);
+    }
+    double row_normalizer = row_sum.sum();
+    for (size_t column = 0; column < ppmi_matrix.cols(); ++column) {
+	column_sum(column) = pow(column_sum(column) + add_smooth, power_smooth);
+    }
+    double column_normalizer = column_sum.sum();
+
+    for (size_t row = 0; row < ppmi_matrix.rows(); ++row) {
+	for (size_t column = 0; column < ppmi_matrix.cols(); ++column) {
+	    ppmi_matrix(row, column) = log(ppmi_matrix(row, column));
+	    ppmi_matrix(row, column) -= log(row_sum(row));
+	    ppmi_matrix(row, column) -= log(column_sum(column));
+	    ppmi_matrix(row, column) += log(row_normalizer);
+	    ppmi_matrix(row, column) += log(column_normalizer);
+	    ppmi_matrix(row, column) -= log(matrix_normalizer);
+	    ppmi_matrix(row, column) = max(ppmi_matrix(row, column), 0.0);
+	}
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(ppmi_matrix, Eigen::ComputeThinU |
 					  Eigen::ComputeThinV);
-    cout << svd.matrixU() << endl << endl << U_ << endl << endl;
     EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
-    cout << svd.matrixV() << endl << endl << V_ << endl << endl;
     EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
-    cout << svd.singularValues() << endl << endl << S_ << endl << endl;
     EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
 }
-*/
+
+// Checks the linear regressor decomposition (with smoothing).
+TEST_F(CorpusDecomposition, LinearRegressor) {
+    string transformation_method = "power";
+    double add_smooth = 0.1;
+    double power_smooth = 0.5;
+    string scaling_method = "reg";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::MatrixXd reg_matrix = eigen_matrix_;
+    Eigen::VectorXd row_sum = reg_matrix.rowwise().sum();
+    for (size_t row = 0; row < reg_matrix.rows(); ++row) {
+	for (size_t column = 0; column < reg_matrix.cols(); ++column) {
+	    reg_matrix(row, column) = pow(reg_matrix(row, column),
+					  power_smooth);
+	}
+    }
+    for (size_t row = 0; row < reg_matrix.rows(); ++row) {
+	row_sum(row) = pow(row_sum(row) + add_smooth, power_smooth);
+    }
+    for (size_t row = 0; row < reg_matrix.rows(); ++row) {
+	for (size_t column = 0; column < reg_matrix.cols(); ++column) {
+	    reg_matrix(row, column) /= row_sum(row);
+	}
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(reg_matrix, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
+
+// Checks the CCA decomposition (with smoothing).
+TEST_F(CorpusDecomposition, CCA) {
+    string transformation_method = "power";
+    double add_smooth = 0.1;
+    double power_smooth = 0.5;
+    string scaling_method = "cca";
+    corpus::decompose(smat_matrix_, desired_rank_, transformation_method,
+		      add_smooth, power_smooth, scaling_method, &U_, &V_, &S_);
+
+    Eigen::MatrixXd cca_matrix = eigen_matrix_;
+    Eigen::VectorXd row_sum = cca_matrix.rowwise().sum();
+    Eigen::VectorXd column_sum = cca_matrix.colwise().sum();
+    for (size_t row = 0; row < cca_matrix.rows(); ++row) {
+	for (size_t column = 0; column < cca_matrix.cols(); ++column) {
+	    cca_matrix(row, column) = pow(cca_matrix(row, column),
+					  power_smooth);
+	}
+    }
+    double matrix_normalizer = cca_matrix.rowwise().sum().sum();
+    for (size_t row = 0; row < cca_matrix.rows(); ++row) {
+	row_sum(row) = pow(row_sum(row) + add_smooth, power_smooth);
+    }
+    double row_normalizer = row_sum.sum();
+    for (size_t column = 0; column < cca_matrix.cols(); ++column) {
+	column_sum(column) = pow(column_sum(column) + add_smooth, power_smooth);
+    }
+    double column_normalizer = column_sum.sum();
+
+    for (size_t row = 0; row < cca_matrix.rows(); ++row) {
+	for (size_t column = 0; column < cca_matrix.cols(); ++column) {
+	    cca_matrix(row, column) /= sqrt(row_sum(row));
+	    cca_matrix(row, column) /= sqrt(column_sum(column));
+	    cca_matrix(row, column) *= sqrt(row_normalizer);
+	    cca_matrix(row, column) *= sqrt(column_normalizer);
+	    cca_matrix(row, column) /= matrix_normalizer;
+	}
+    }
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(cca_matrix, Eigen::ComputeThinU |
+					  Eigen::ComputeThinV);
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixU(), U_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near_abs(svd.matrixV(), V_, tol_));
+    EXPECT_TRUE(eigen_helper::check_near(svd.singularValues(), S_, tol_));
+}
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

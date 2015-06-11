@@ -40,6 +40,7 @@ namespace corpus {
 					    power_smooth,
 					    transformation_method);
 	    word_normalizer += num_word_samples[w];
+
 	}
 	double context_normalizer = 0.0;  // sum_c {transformed #(c)}
 	for (Context c = 0; c < num_context_types; ++c) {
@@ -78,6 +79,7 @@ namespace corpus {
 		    cca_value *= sqrt(word_normalizer);
 		    cca_value *= sqrt(context_normalizer);
 		    cca_value /= word_context_normalizer;
+		    matrix->value[current_nonzero_index] = cca_value;
 		}
 		++current_nonzero_index;
 	    }
