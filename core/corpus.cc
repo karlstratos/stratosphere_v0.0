@@ -107,6 +107,53 @@ namespace corpus {
 	}
 	return transformed_value;
     }
+
+    void load_sorted_word_types(size_t rare_cutoff,
+				const string &sorted_word_types_path,
+				vector<pair<string, size_t> >
+				*sorted_word_types) {
+	sorted_word_types->clear();
+	ifstream sorted_word_types_file(sorted_word_types_path, ios::in);
+	ASSERT(sorted_word_types_file.is_open(), "Cannot open file: "
+	       << sorted_word_types_path);
+	size_t rare_count = 0;
+	while (sorted_word_types_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&sorted_word_types_file, &tokens);
+	    if (tokens.size() == 0 ) { continue; }
+	    string word_type = tokens[0];
+	    size_t word_count = stol(tokens[1]);
+	    if (word_count > rare_cutoff) {
+		(*sorted_word_types).emplace_back(word_type, word_count);
+	    } else {
+		rare_count += word_count;
+	    }
+	}
+	if (rare_count > 0) {
+	    (*sorted_word_types).emplace_back(kRareString, rare_count);
+	}
+	sort(sorted_word_types->begin(), sorted_word_types->end(),
+	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
+    }
+
+    void load_word_vectors(const string &word_vectors_path,
+			   unordered_map<string, Eigen::VectorXd>
+			   *word_vectors) {
+	word_vectors->clear();
+	ifstream word_vectors_file(word_vectors_path, ios::in);
+	while (word_vectors_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&word_vectors_file, &tokens);
+	    if (tokens.size() == 0) { continue; }
+
+	    // line = [count] [word_string] [value_{1}] ... [value_{dim_}]
+	    Eigen::VectorXd vector(tokens.size() - 2);
+	    for (size_t i = 0; i < tokens.size() - 2; ++i) {
+		vector(i) = stod(tokens[i + 2]);
+	    }
+	    (*word_vectors)[tokens[1]] = vector;
+	}
+    }
 }  // namespace corpus
 
 void Corpus::WriteWords(size_t rare_cutoff,
@@ -250,7 +297,7 @@ size_t Corpus::BuildWordDictionary(const unordered_map<string, size_t> &count,
 	}
     }
     if (have_rare) {  // The rare word symbol gets the highest index.
-	(*word_dictionary)[kRareString_] = word_dictionary->size();
+	(*word_dictionary)[corpus::kRareString] = word_dictionary->size();
     }
     return num_considered_words;
 }
@@ -263,8 +310,8 @@ void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 			 unordered_map<Context, unordered_map<Word, double> >
 			 *context_word_count) {
     Window window(window_size, context_definition, word_dictionary,
-		  kRareString_, kBufferString_, hash_size, context_dictionary,
-		  context_word_count);
+		  corpus::kRareString, corpus::kBufferString, hash_size,
+		  context_dictionary, context_word_count);
 
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
@@ -335,7 +382,9 @@ void Corpus::CountTransitions(
 		    util_string::lowercase(word_strings[i]);
 		if (Skip(word_string)) { continue; }
 		if (word_dictionary.find(word_string) ==
-		    word_dictionary.end()) { word_string = kRareString_; }
+		    word_dictionary.end()) {
+		    word_string = corpus::kRareString;
+		}
 		Word w = word_dictionary.at(word_string);
 
 		if (i == 0) { ++(*start_count)[w]; }
@@ -353,9 +402,9 @@ void Corpus::CountTransitions(
 }
 
 bool Corpus::Skip(const string &word_string) {
-    return (word_string == kRareString_ ||  // Is the special "rare" symbol.
-	    word_string == kBufferString_ ||  // Is the special "buffer" symbol.
-	    word_string.size() > kMaxWordLength_);  // Is too long.
+    return (word_string == corpus::kRareString ||  // Special "rare" symbol.
+	    word_string == corpus::kBufferString ||  // Special "buffer" symbol.
+	    word_string.size() > kMaxWordLength_);  // Too long.
 }
 
 void Window::Add(const string &word_string) {

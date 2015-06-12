@@ -19,6 +19,12 @@ typedef size_t Word;
 typedef size_t Context;
 
 namespace corpus {
+    // Special string for representing rare words.
+    const string kRareString = "<?>";
+
+    // Special string for representing the out-of-sentence buffer.
+    const string kBufferString = "<!>";
+
     // Performs a spectral decomposition of a transformed and scaled
     // word-context co-occurrence matrix. Some useful examples:
     //                             Transform          Add       Power     Scale
@@ -39,6 +45,17 @@ namespace corpus {
     // Transforms the given (count) value.
     double transform(double count_value, double add_smooth,
 		     double power_smooth, string transformation_method);
+
+    // Loads the word-count pairs > cutoff (in decreasing frequency).
+    void load_sorted_word_types(size_t rare_cutoff,
+				const string &sorted_word_types_path,
+				vector<pair<string, size_t> >
+				*sorted_word_types);
+
+    // Loads word vectors: [count] [string] [dim 1] ... [dim m].
+    void load_word_vectors(const string &word_vectors_path,
+			   unordered_map<string, Eigen::VectorXd>
+			   *word_vectors);
 }  // namespace corpus
 
 // A Corpus object is designged to extract useful statistics about text easily.
@@ -120,12 +137,6 @@ public:
     // Returns the corpus path.
     string corpus_path() { return corpus_path_; }
 
-    // Returns the special string for representing rare words.
-    string kRareString() { return kRareString_; }
-
-    // Returns the special string for buffering.
-    string kBufferString() { return kBufferString_; }
-
 private:
     // Returns true if the string is to be skipped.
     bool Skip(const string &word_string);
@@ -138,12 +149,6 @@ private:
 
     // Interval to report progress (0.1 => every 10%).
     const double kReportInterval_ = 0.1;
-
-    // Special string for representing rare words.
-    const string kRareString_ = "<?>";
-
-    // Special string for representing the out-of-sentence buffer.
-    const string kBufferString_ = "<!>";
 
     // Path to a corpus (a single text file, or a directory of text files).
     string corpus_path_;

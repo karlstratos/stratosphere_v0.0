@@ -36,6 +36,7 @@ TEST(ObtainingSMat, WriteReadIntMatrixAsFile) {
 	}
     }
     svdFreeSMat(sparse_matrix);
+    remove(file_path.c_str());
 }
 
 // Checks converting a double column map gives the correct SMat.

@@ -29,7 +29,8 @@ TARGETS = wordrep
 
 all: $(TARGETS)
 
-wordrep: main.o $(SVDLIBC)/libsvd.a
+wordrep: main.o wordrep.o $(CORE)/corpus.o $(CORE)/util.o $(CORE)/sparsesvd.o \
+	$(SVDLIBC)/libsvd.a
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc wordrep.o
@@ -43,6 +44,9 @@ $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
 
 $(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/util.o: $(CORE)/util.cc $(CORE)/util.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)

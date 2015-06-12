@@ -7,11 +7,12 @@
 
 #include <Eigen/Dense>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "../core/corpus.h"
+using namespace std;
 
 class WordRep {
 public:
@@ -34,8 +35,11 @@ public:
     // Extracts statistics from a corpus.
     void ExtractStatistics(const string &corpus_file);
 
-    // Induces word representations from cached word counts.
-    void InduceWordRepresentations();
+    // Induces word vectors from cached word counts.
+    void InduceWordVectors();
+
+    // Evaluate word vectors on lexical tasks.
+    void EvaluateWordVectors();
 
     // Sets the rare word cutoff value.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
@@ -66,10 +70,8 @@ public:
 	scaling_method_ = scaling_method;
     }
 
-    // Sets the number of context types to hash.
-    void set_num_context_hashed(size_t num_context_hashed) {
-	num_context_hashed_ = num_context_hashed;
-    }
+    // Sets the number of hash bins for context types.
+    void set_hash_size(size_t hash_size) { hash_size_ = hash_size; }
 
     // Sets the additive smoothing value.
     void set_add_smooth(double add_smooth) { add_smooth_ = add_smooth; }
@@ -81,9 +83,6 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
-    // Induces vector representations of word types based on cached count files.
-    void InduceWordVectors();
-
     // Load a sorted list of word-count pairs from a cached file.
     void LoadSortedWordCounts();
 
@@ -97,7 +96,9 @@ private:
     string CorpusInfoPath() { return output_directory_ + "/corpus_info.txt"; }
 
     // Returns the path to the log file.
-    string LogPath() { return output_directory_ + "/log.txt"; }
+    string LogPath() {
+	return output_directory_ + "/log_" + Signature(2) + ".txt";
+    }
 
     // Returns the path to the sorted word types file.
     string SortedWordTypesPath() {
@@ -116,18 +117,19 @@ private:
     }
 
     // Returns the path to the word-context count file.
-    string WordContextCountPath() {
-	return output_directory_ + "/word_context_count_" + Signature(1);
+    string ContextWordCountPath() {
+	return output_directory_ + "/context_word_count_" + Signature(1) +
+	    ".bin";
     }
 
     // Returns the path to the singular values.
     string SingularValuesPath() {
-	return output_directory_ + "/singular_values_" + Signature(2);
+	return output_directory_ + "/singular_values_" + Signature(2) + ".txt";
     }
 
     // Returns the path to the word vectors.
     string WordVectorsPath() {
-	return output_directory_ + "/word_vectors_" + Signature(2);
+	return output_directory_ + "/word_vectors_" + Signature(2) + ".txt";
     }
 
     // Returns the path to the agglomeratively clusterered word vectors.
@@ -138,7 +140,7 @@ private:
     // Returns a string signature of parameters.
     //    version=0: {rare_cutoff_}
     //    version=1: 0 + {sentence_per_line_, window_size_, context_defintion_,
-    //                    num_context_hashed_}
+    //                    hash_size_}
     //    version=2: 1 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, scaling_method_}
     string Signature(size_t version);
@@ -149,14 +151,11 @@ private:
     // Maximum sentence length to consider.
     const size_t kMaxSentenceLength_ = 1000;
 
-    // Computed word vectors.
-    unordered_map<string, Eigen::VectorXd> word_vectors_;
-
     // Path to the output directory.
     string output_directory_;
 
-    // Path to the log file.
-    ofstream log_;
+    // Log string.
+    string log_;
 
     // If a word type appears <= this number, treat it as a rare symbol.
     size_t rare_cutoff_ = 1;
@@ -170,8 +169,8 @@ private:
     // Context definition.
     string context_definition_ = "bag";
 
-    // Number of context types to hash (0 means no hashing).
-    size_t num_context_hashed_ = 0;
+    // Number of hash bins for context types (0 means no hashing).
+    size_t hash_size_ = 0;
 
     // Target dimension of word vectors.
     size_t dim_;

@@ -13,7 +13,7 @@ int main (int argc, char* argv[]) {
     bool sentence_per_line = false;
     size_t window_size = 11;
     string context_definition = "bag";
-    size_t num_context_hashed = 0;  // 0 means no hashing.
+    size_t hash_size = 0;  // 0 means no hashing.
     size_t dim = 500;
     string transformation_method = "power";
     double add_smooth = 10.0;
@@ -40,7 +40,7 @@ int main (int argc, char* argv[]) {
 	} else if (arg == "--context") {
 	    context_definition = argv[++i];
 	} else if (arg == "--hash") {
-	    num_context_hashed = stol(argv[++i]);
+	    hash_size = stol(argv[++i]);
 	} else if (arg == "--dim") {
 	    dim = stol(argv[++i]);
 	} else if (arg == "--transform") {
@@ -77,8 +77,8 @@ int main (int argc, char* argv[]) {
 	     << "window size: \"word\"=center, \"context\"=non-center" << endl;
 	cout << "--context [" << context_definition << "]: \t"
 	     << "context definition: bag, list"  << endl;
-	cout << "--hash [" << num_context_hashed << "]:          \t"
-	     << "hash size for context (0 means no hashing)" << endl;
+	cout << "--hash [" << hash_size << "]:          \t"
+	     << "number of hash bins for context (0 means no hashing)" << endl;
 	cout << "--dim [" << dim << "]:        \t"
 	     << "dimension of word vectors" << endl;
 	cout << "--transform [" << transformation_method << "]: \t"
@@ -96,19 +96,18 @@ int main (int argc, char* argv[]) {
 	exit(0);
     }
 
-    /*
     // Initialize a WordRep object.
     WordRep wordrep(output_directory);
     wordrep.set_rare_cutoff(rare_cutoff);
     wordrep.set_sentence_per_line(sentence_per_line);
     wordrep.set_window_size(window_size);
     wordrep.set_context_definition(context_definition);
+    wordrep.set_hash_size(hash_size);
     wordrep.set_dim(dim);
     wordrep.set_transformation_method(transformation_method);
-    wordrep.set_scaling_method(scaling_method);
-    wordrep.set_num_context_hashed(num_context_hashed);
     wordrep.set_add_smooth(add_smooth);
     wordrep.set_power_smooth(power_smooth);
+    wordrep.set_scaling_method(scaling_method);
     wordrep.set_verbose(verbose);
 
     // If given a corpus, extract statistics from it.
@@ -117,7 +116,9 @@ int main (int argc, char* argv[]) {
 	wordrep.ExtractStatistics(corpus_path);
     }
 
-    // Induce word representations from cached statistics.
-    wordrep.InduceWordRepresentations();
-    */
+    // Induce word vectors from cached statistics.
+    wordrep.InduceWordVectors();
+
+    // Evaluate word vectors on lexical tasks.
+    wordrep.EvaluateWordVectors();
 }

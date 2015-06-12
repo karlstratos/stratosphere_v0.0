@@ -82,7 +82,7 @@ TEST_F(CorpusExample, CheckBuildWordDictionary) {
 	corpus.BuildWordDictionary(word_count, 0, &word_dictionary_cutoff0);
     EXPECT_EQ(15, num_considered_words_cutoff0);
     EXPECT_EQ(9, word_dictionary_cutoff0.size());
-    EXPECT_FALSE(word_dictionary_cutoff0.find(corpus.kRareString()) !=
+    EXPECT_FALSE(word_dictionary_cutoff0.find(corpus::kRareString) !=
 		 word_dictionary_cutoff0.end());  // No rare symbol.
 
     unordered_map<string, size_t> word_dictionary_cutoff1;
@@ -91,7 +91,7 @@ TEST_F(CorpusExample, CheckBuildWordDictionary) {
     EXPECT_EQ(10, num_considered_words_cutoff1);
     EXPECT_EQ(5, word_dictionary_cutoff1.size());
     EXPECT_EQ(word_dictionary_cutoff1.size() - 1,
-	      word_dictionary_cutoff1[corpus.kRareString()]);  // Highest index.
+	      word_dictionary_cutoff1[corpus::kRareString]);  // Highest index.
 }
 
 // Checks window sliding with sentence-per-line, bag contexts, and size 2.
@@ -119,13 +119,13 @@ TEST_F(CorpusExample, CheckSlideWindowSentencesBagSize2) {
     Word w_dog = word_dictionary["dog"];
     Word w_cat = word_dictionary["cat"];
     Word w_period = word_dictionary["."];
-    Word w_rare = word_dictionary[corpus.kRareString()];
+    Word w_rare = word_dictionary[corpus::kRareString];
     Context c_dog = context_dictionary["dog"];
     Context c_the = context_dictionary["the"];
     Context c_cat = context_dictionary["cat"];
     Context c_period = context_dictionary["."];
-    Context c_rare = context_dictionary[corpus.kRareString()];
-    Context c_buffer = context_dictionary[corpus.kBufferString()];
+    Context c_rare = context_dictionary[corpus::kRareString];
+    Context c_buffer = context_dictionary[corpus::kBufferString];
 
     // <?>
     // the dog <?> the cat .
@@ -165,15 +165,15 @@ TEST_F(CorpusExample, CheckSlideWindowListSize3) {
     EXPECT_EQ(30, num_samples);  // num_samples = (window_size - 1) * num_words
 
     Word w_the = word_dictionary["the"];
-    Word w_rare = word_dictionary[corpus.kRareString()];
+    Word w_rare = word_dictionary[corpus::kRareString];
     Context c_the_next = context_dictionary["c(1)=the"];
     Context c_the_prev = context_dictionary["c(-1)=the"];
-    Context c_rare_next = context_dictionary["c(1)=" + corpus.kRareString()];
-    Context c_rare_prev = context_dictionary["c(-1)=" + corpus.kRareString()];
+    Context c_rare_next = context_dictionary["c(1)=" + corpus::kRareString];
+    Context c_rare_prev = context_dictionary["c(-1)=" + corpus::kRareString];
     Context c_buffer_next = context_dictionary["c(1)=" +
-					       corpus.kBufferString()];
+					       corpus::kBufferString];
     Context c_buffer_prev = context_dictionary["c(-1)=" +
-					       corpus.kBufferString()];
+					       corpus::kBufferString];
 
     // <?> the <?> <?> the <?> <?> the <?> <?> <?> the <?> <?> <?>
     EXPECT_EQ(4, context_word_count[c_rare_next][w_the]);  // the c(1)=<?>
@@ -206,7 +206,7 @@ TEST_F(CorpusExample, CheckTransitionCounting) {
     Word w_dog = word_dictionary["dog"];
     Word w_cat = word_dictionary["cat"];
     Word w_period = word_dictionary["."];
-    Word w_rare = word_dictionary[corpus.kRareString()];
+    Word w_rare = word_dictionary[corpus::kRareString];
 
     // <?>
     // the dog <?> the cat .
