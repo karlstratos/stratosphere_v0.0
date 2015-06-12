@@ -91,6 +91,8 @@ void WordRep::InduceWordVectors() {
 void WordRep::EvaluateWordVectors() {
     if (!util_file::exists(WordVectorsPath())) { return; }
 
+    vector<string> similarity_files;
+    vector<string> analogy_files;
     /*
     // Find development datasets for evaluation.
     string wordsim353_path = "third_party/public_datasets/wordsim353.dev";

@@ -1,0 +1,58 @@
+This directory contains public datasets for testing some aspects of the quality
+of lexical representations. Each dataset is split into a held-out portion and
+a final evaluation portion, using the following script:
+   python3 scripts/split_even_odd_lines.py [original] [dev] [test]
+
+--------------------------------------------------------------------------------
+SIMILARITY DATASETS: In general, we do not distinguish between "similarity"
+(spoon, fork) and "relatedness" (spoon, ice cream).
+--------------------------------------------------------------------------------
+wordsim353.txt
+- Description: 353 word pairs (437 types) and their average scores [0, 10].
+They are merged from 153 pairs scored by 13 humans and 200 pairs scored by 16
+humans.
+- Examples: "dollar buck 9.22", "cup food 5.00", "king cabbage 0.23"
+- URL: http://www.cs.technion.ac.il/~gabr/resources/data/wordsim353/
+- Date: June 2015
+
+men.txt
+- Description: 3000 (751 types) word pairs and their average scores [0, 50].
+Mechanical Turkers made binary decisions on a pair of pairs, and a score
+indicates the number of times a pairticular pair was selected as more related
+than the compared pair (out of 50 times).
+- Examples: "floor roof 39.000000", "puppy skyline 3.000000"
+- URL: http://clic.cimec.unitn.it/~elia.bruni/MEN.html
+- Date: June 2015
+
+rw.txt
+- Description: 2034 word pairs (2951 types) and their average scores [0, 10].
+The word types are deliberately selected to be relatively rare, and (filtered)
+Mechanical Turkers assigned scores in [0, 10].
+- Examples: "promiscuous unchaste 9.33", "sanctify lustrate 5.20",
+"fording deep 5.14", "excrete make 2.80", "vicarious abnormal 0.12"
+- URL: http://www-nlp.stanford.edu/~lmthang/morphoNLM/
+- Date: June 2015
+
+--------------------------------------------------------------------------------
+SIMILARITY DATASETS
+--------------------------------------------------------------------------------
+syntactic_analogies.txt
+- Description: 8000 syntactic analogies.
+- Examples: "VBD_VBZ was is ended ends", "VBD_VB knew know was be",
+"VBZ_VB reduces reduce is be", "VBD_VB won win tried try,
+"JJR_JJ better good heavier heavy", "NNS_NN lives life men man"
+- URL: http://research.microsoft.com/en-us/um/people/gzweig/Pubs/myz_naacl13_test_set.tgz
+- Date: June 2015
+
+mixed_analogies.txt
+- Description: 19544 syntactic/semantic analogies. Types of "syntactic" nature
+are marked by "gram", types of "semantic" nature are not.
+- Examples: "gram1-adjective-to-adverb lucky luckily calm calmly",
+"gram2-opposite certain uncertain responsible irresponsible",
+"gram6-nationality-adjective Korea Korean Russia Russian",
+"capital-common-countries Athens Greece Baghdad Iraq",
+"currency Europe euro USA dollar", "city-in-state Austin Texas Miami Florida",
+"city-in-state Austin Texas Tampa Florida", "currency USA dollar Korea won",
+"family dad mom uncle aunt"
+- URL: http://www.fit.vutbr.cz/~imikolov/rnnlm/word-test.v1.txt
+- Date: January 2015

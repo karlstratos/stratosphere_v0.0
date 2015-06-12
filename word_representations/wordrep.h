@@ -83,11 +83,8 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
-    // Load a sorted list of word-count pairs from a cached file.
-    void LoadSortedWordCounts();
-
-    // Tests the quality of word vectors on simple tasks.
-    void TestQualityOfWordVectors();
+    // Evalutes word vectors on simple tasks.
+    void EvaluateWordVectors();
 
     // Performs greedy agglomerative clustering over word vectors.
     void PerformAgglomerativeClustering(size_t num_clusters);
