@@ -38,8 +38,11 @@ public:
     // Induces word vectors from cached word counts.
     void InduceWordVectors();
 
-    // Evaluate word vectors on lexical tasks.
+    // Evaluates cached word vectors on lexical tasks.
     void EvaluateWordVectors();
+
+    // Clusters cached word vectors.
+    void ClusterWordVectors();
 
     // Sets the rare word cutoff value.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
@@ -83,9 +86,6 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
-    // Evalutes word vectors on simple tasks.
-    void EvaluateWordVectors();
-
     // Performs greedy agglomerative clustering over word vectors.
     void PerformAgglomerativeClustering(size_t num_clusters);
 
@@ -129,9 +129,9 @@ private:
 	return output_directory_ + "/word_vectors_" + Signature(2) + ".txt";
     }
 
-    // Returns the path to the agglomeratively clusterered word vectors.
-    string AgglomerativePath() {
-	return output_directory_ + "/agglomerative_" + Signature(2);
+    // Returns the path to the clusterered word vectors.
+    string ClustersPath() {
+	return output_directory_ + "/clusters_" + Signature(2);
     }
 
     // Returns a string signature of parameters.

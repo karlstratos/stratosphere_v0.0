@@ -1,7 +1,7 @@
 This directory contains public datasets for testing some aspects of the quality
 of lexical representations. Each dataset is split into a held-out portion and
 a final evaluation portion, using the following script:
-   python3 scripts/split_even_odd_lines.py [original] [dev] [test]
+   python3 ../../scripts/split_even_odd_lines.py [original] [dev] [test]
 
 --------------------------------------------------------------------------------
 SIMILARITY DATASETS: In general, we do not distinguish between "similarity"
@@ -36,7 +36,7 @@ Mechanical Turkers assigned scores in [0, 10].
 --------------------------------------------------------------------------------
 SIMILARITY DATASETS
 --------------------------------------------------------------------------------
-syntactic_analogies.txt
+microsoft2013.txt
 - Description: 8000 syntactic analogies.
 - Examples: "VBD_VBZ was is ended ends", "VBD_VB knew know was be",
 "VBZ_VB reduces reduce is be", "VBD_VB won win tried try,
@@ -44,9 +44,9 @@ syntactic_analogies.txt
 - URL: http://research.microsoft.com/en-us/um/people/gzweig/Pubs/myz_naacl13_test_set.tgz
 - Date: June 2015
 
-mixed_analogies.txt
-- Description: 19544 syntactic/semantic analogies. Types of "syntactic" nature
-are marked by "gram", types of "semantic" nature are not.
+google2013.txt
+- Description: 19544 syntactic/semantic analogies. Types of syntactic nature
+are marked by "gram".
 - Examples: "gram1-adjective-to-adverb lucky luckily calm calmly",
 "gram2-opposite certain uncertain responsible irresponsible",
 "gram6-nationality-adjective Korea Korean Russia Russian",
@@ -55,4 +55,10 @@ are marked by "gram", types of "semantic" nature are not.
 "city-in-state Austin Texas Tampa Florida", "currency USA dollar Korea won",
 "family dad mom uncle aunt"
 - URL: http://www.fit.vutbr.cz/~imikolov/rnnlm/word-test.v1.txt
-- Date: January 2015
+- Date: June 2015
+
+google2013_syntactic.txt
+- Description: 10675 syntactic analogies in google2013.txt.
+
+google2013_semantic.txt
+- Description: 8869 "semantic" analogies in google2013.txt.

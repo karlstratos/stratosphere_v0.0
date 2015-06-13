@@ -55,7 +55,14 @@ namespace corpus {
     // Loads word vectors: [count] [string] [dim 1] ... [dim m].
     void load_word_vectors(const string &word_vectors_path,
 			   unordered_map<string, Eigen::VectorXd>
-			   *word_vectors);
+			   *word_vectors, bool normalize);
+
+    // Loads sorted word vectors from a file with a pre-sorted vector per line.
+    void load_sorted_word_vectors(const string &sorted_word_vectors_path,
+				  vector<size_t> *sorted_word_counts,
+				  vector<string> *sorted_word_strings,
+				  vector<Eigen::VectorXd> *sorted_word_vectors,
+				  bool normalize);
 }  // namespace corpus
 
 // A Corpus object is designged to extract useful statistics about text easily.

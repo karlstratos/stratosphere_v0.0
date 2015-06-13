@@ -3,6 +3,7 @@
 #include "wordrep.h"
 
 #include <iomanip>
+#include <libgen.h>
 #include <limits>
 #include <map>
 
@@ -90,170 +91,101 @@ void WordRep::InduceWordVectors() {
 
 void WordRep::EvaluateWordVectors() {
     if (!util_file::exists(WordVectorsPath())) { return; }
+    string dev_path = "../data/lexical/dev/";  // Path to dev files.
+    vector<string> similarity_files = {dev_path + "wordsim353.dev",
+				       dev_path + "men.dev",
+				       dev_path + "rw.dev"};
+    vector<string> analogy_files = {dev_path + "microsoft2013.dev",
+				    dev_path + "google2013.dev",
+				    dev_path + "google2013_syntactic.dev",
+				    dev_path + "google2013_semantic.dev"};
 
-    vector<string> similarity_files;
-    vector<string> analogy_files;
+    // Load word vectors.
+    unordered_map<string, Eigen::VectorXd> word_vectors;
+    bool normalized = true;
+    corpus::load_word_vectors(WordVectorsPath(), &word_vectors, normalized);
+
+    // Evaluate on word similarity/relatedness datasets.
+    vector<size_t> num_instances;
+    vector<size_t> num_handled;
+    vector<double> correlation;
+    eval_lexical::compute_correlation(similarity_files, word_vectors,
+				      normalized, &num_instances, &num_handled,
+				      &correlation);
     /*
-    // Find development datasets for evaluation.
-    string wordsim353_path = "third_party/public_datasets/wordsim353.dev";
-    string men_path = "third_party/public_datasets/men.dev";
-    string rw_path = "third_party/public_datasets/rw.dev";
-    string mturk_path = "third_party/public_datasets/mturk.dev";
-    string syn_path = "third_party/public_datasets/syntactic_analogies.dev";
-    string mixed_path = "third_party/public_datasets/mixed_analogies.dev";
-    FileManipulator file_manipulator;
-    if (!file_manipulator.Exists(wordsim353_path) ||
-	!file_manipulator.Exists(men_path) ||
-	!file_manipulator.Exists(rw_path) ||
-	!file_manipulator.Exists(mturk_path) ||
-	!file_manipulator.Exists(syn_path) ||
-	!file_manipulator.Exists(mixed_path)) {
-	// Skip evaluation (e.g., in unit tests) if files are not found.
-	return;
+    for (size_t i = 0; i < similarity_files.size(); ++i) {
+	string file_name =
+	    basename(const_cast<char*>(similarity_files[i].c_str()));
+	cout << file_name << " " << num_instances[i] << " "
+	     << num_handled[i] << " " << correlation[i] << endl;
     }
     */
 
+    // Evaluate on word analogy datasets.
+    vector<double> accuracy;
+    vector<unordered_map<string, double> > per_type_accuracy;
+    eval_lexical::compute_analogy_accuracy(
+	analogy_files, word_vectors, normalized, &num_instances, &num_handled,
+	&accuracy, &per_type_accuracy);
+
+    /*
+    for (size_t i = 0; i < analogy_files.size(); ++i) {
+	string file_name =
+	    basename(const_cast<char*>(analogy_files[i].c_str()));
+	cout << file_name << " " << num_instances[i] << " "
+	     << num_handled[i] << " " << accuracy[i] << endl;
+	for (const auto &type_pair : per_type_accuracy[i]) {
+	    cout << type_pair.first << " " << type_pair.second << endl;
+	}
+	cout << endl;
+    }
+    */
+}
+
+void WordRep::ClusterWordVectors() {
+    if (!util_file::exists(WordVectorsPath())) { return; }
+    if (util_file::exists(ClustersPath())) { return; }
+
+    // Load word vectors sorted in decreasing frequency.
     unordered_map<string, Eigen::VectorXd> word_vectors;
-    corpus::load_word_vectors(WordVectorsPath(), &word_vectors);
+    vector<size_t> sorted_word_counts;
+    vector<string> sorted_word_strings;
+    vector<Eigen::VectorXd> sorted_word_vectors;
+    bool normalized = true;
+    corpus::load_sorted_word_vectors(WordVectorsPath(), &sorted_word_counts,
+				     &sorted_word_strings, &sorted_word_vectors,
+				     normalized);
 
-}
-/*
-
-void WordRep::TestQualityOfWordVectors() {
-    string wordsim353_path = "third_party/public_datasets/wordsim353.dev";
-    string men_path = "third_party/public_datasets/men.dev";
-    string rw_path = "third_party/public_datasets/rw.dev";
-    string mturk_path = "third_party/public_datasets/mturk.dev";
-    string syn_path = "third_party/public_datasets/syntactic_analogies.dev";
-    string mixed_path = "third_party/public_datasets/mixed_analogies.dev";
-    FileManipulator file_manipulator;
-    if (!file_manipulator.Exists(wordsim353_path) ||
-	!file_manipulator.Exists(men_path) ||
-	!file_manipulator.Exists(rw_path) ||
-	!file_manipulator.Exists(mturk_path) ||
-	!file_manipulator.Exists(syn_path) ||
-	!file_manipulator.Exists(mixed_path)) {
-	// Skip evaluation (e.g., in unit tests) if files are not found.
-	return;
-    }
-    log_ << endl << "[Dev performance]" << endl;
-
-    // Use 3 decimal places for word similartiy.
-    log_ << fixed << setprecision(3);
-    Evaluator eval;
-
-    // Word similarity with wordsim353.dev.
-    size_t num_instances_wordsim353;
-    size_t num_handled_wordsim353;
-    double corr_wordsim353;
-    eval.EvaluateWordSimilarity(wordvectors_, wordsim353_path,
-				&num_instances_wordsim353,
-				&num_handled_wordsim353, &corr_wordsim353);
-    log_ << "   WS353: \t" << corr_wordsim353 << " ("
-	 << num_handled_wordsim353 << "/" << num_instances_wordsim353
-	 << " evaluated)" << endl;
-
-    // Word similarity with men.dev.
-    size_t num_instances_men;
-    size_t num_handled_men;
-    double corr_men;
-    eval.EvaluateWordSimilarity(wordvectors_, men_path, &num_instances_men,
-				&num_handled_men, &corr_men);
-    log_ << "   MEN:  \t" << corr_men << " (" << num_handled_men << "/"
-	 << num_instances_men << " evaluated)" << endl;
-
-    // Word similarity with rw.dev (rare words).
-    size_t num_instances_rw;
-    size_t num_handled_rw;
-    double corr_rw;
-    eval.EvaluateWordSimilarity(wordvectors_, rw_path, &num_instances_rw,
-				&num_handled_rw, &corr_rw);
-    log_ << "   RW:    \t" << corr_rw << " (" << num_handled_rw << "/"
-	 << num_instances_rw << " evaluated)" << endl;
-
-    // Word similarity with mturk.dev.
-    size_t num_instances_mturk;
-    size_t num_handled_mturk;
-    double corr_mturk;
-    eval.EvaluateWordSimilarity(wordvectors_, mturk_path, &num_instances_mturk,
-				&num_handled_mturk, &corr_mturk);
-    log_ << "   MTURK: \t" << corr_mturk << " (" << num_handled_mturk << "/"
-	 << num_instances_mturk << " evaluated)" << endl;
-
-    // Word analogy with syntactic_analogies.dev.
-    log_ << fixed << setprecision(2);
-    size_t num_instances_syn;
-    size_t num_handled_syn;
-    double acc_syn;
-    eval.EvaluateWordAnalogy(wordvectors_, syn_path, &num_instances_syn,
-			     &num_handled_syn, &acc_syn);
-    log_ << "   SYN: \t" << acc_syn << " (" << num_handled_syn
-	 << "/" << num_instances_syn << " evaluated)" << endl;
-
-    // Word analogy with mixed_analogies.dev.
-    size_t num_instances_mixed;
-    size_t num_handled_mixed;
-    double acc_mixed;
-    eval.EvaluateWordAnalogy(wordvectors_, mixed_path, &num_instances_mixed,
-			     &num_handled_mixed, &acc_mixed);
-    log_ << "   MIXED: \t" << acc_mixed << " (" << num_handled_mixed << "/"
-	 << num_instances_mixed << " evaluated)" << endl;
-}
-
-void WordRep::PerformAgglomerativeClustering(size_t num_clusters) {
-    FileManipulator file_manipulator;  // Do not repeat the work.
-    if (file_manipulator.Exists(AgglomerativePath())) { return; }
-
-    // Prepare a list of word vectors sorted in decreasing frequency.
-    ASSERT(wordvectors_.size() > 0, "No word vectors to cluster!");
-    vector<Eigen::VectorXd> sorted_vectors(sorted_wordcount_.size());
-    for (size_t i = 0; i < sorted_wordcount_.size(); ++i) {
-	string word_string = sorted_wordcount_[i].first;
-	sorted_vectors[i] = wordvectors_[word_string];
-    }
-
-    // Do agglomerative clustering over the sorted word vectors.
-    if (verbose_) { cerr << "Clustering" << endl; }
-    time_t begin_time_greedo = time(NULL);
-    log_ << endl << "[Agglomerative clustering]" << endl;
-    log_ << "   Number of clusters: " << num_clusters << endl;
-    Greedo greedo;
-    greedo.Cluster(sorted_vectors, num_clusters);
-    double time_greedo = difftime(time(NULL), begin_time_greedo);
-    StringManipulator string_manipulator;
-    log_ << "   Average number of tightenings: "
-	 << greedo.average_num_extra_tightening() << " (versus exhaustive "
-	 << num_clusters << ")" << endl;
-    log_ << "   Time taken: " << string_manipulator.TimeString(time_greedo)
-	 << endl;
+    // Agglomeratively cluster the sorted vectors to a tree with dim_ leaves.
+    AgglomerativeClustering cluster;
+    cluster.ClusterOrderedVectors(sorted_word_vectors, dim_);
 
     // Lexicographically sort bit strings for enhanced readability.
     vector<string> bitstring_types;
-    for (const auto &bitstring_pair : *greedo.bit2cluster()) {
+    for (const auto &bitstring_pair : *cluster.leaves()) {
 	bitstring_types.push_back(bitstring_pair.first);
     }
     sort(bitstring_types.begin(), bitstring_types.end());
 
     // Write the bit strings and their associated word types.
-    ofstream greedo_file(AgglomerativePath(), ios::out);
-    unordered_map<string, vector<size_t> > *bit2cluster = greedo.bit2cluster();
+    ofstream clusters_file(ClustersPath(), ios::out);
+    unordered_map<string, vector<size_t> > *leaves = cluster.leaves();
     for (const auto &bitstring : bitstring_types) {
-	vector<pair<string, size_t> > sorting_vector;  // Sort each cluster.
-	for (size_t cluster : bit2cluster->at(bitstring)) {
-	    string word_string = sorted_wordcount_[cluster].first;
-	    size_t count = sorted_wordcount_[cluster].second;
-	    sorting_vector.push_back(make_pair(word_string, count));
+	vector<pair<string, size_t> > v;  // Sort word types in each cluster.
+	for (Word word : leaves->at(bitstring)) {
+	    string word_string = sorted_word_strings[word];
+	    size_t word_count = sorted_word_counts[word];
+	    v.emplace_back(word_string, word_count);
 	}
-	sort(sorting_vector.begin(), sorting_vector.end(),
-	     sort_pairs_second<string, size_t, greater<size_t> >());
+	sort(v.begin(), v.end(),
+	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
 
-	for (const auto &word_pair : sorting_vector) {
-	    greedo_file << bitstring << " " << word_pair.first << " "
-			<< word_pair.second << endl;
+	for (const auto &word_pair : v) {
+	    cout << bitstring << " " << word_pair.first << " "
+		 << word_pair.second << endl;
 	}
     }
 }
-*/
 
 string WordRep::Signature(size_t version) {
     ASSERT(version <= 2, "Unrecognized signature version: " << version);

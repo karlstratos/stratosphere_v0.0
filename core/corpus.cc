@@ -138,7 +138,7 @@ namespace corpus {
 
     void load_word_vectors(const string &word_vectors_path,
 			   unordered_map<string, Eigen::VectorXd>
-			   *word_vectors) {
+			   *word_vectors, bool normalize) {
 	word_vectors->clear();
 	ifstream word_vectors_file(word_vectors_path, ios::in);
 	while (word_vectors_file.good()) {
@@ -151,7 +151,34 @@ namespace corpus {
 	    for (size_t i = 0; i < tokens.size() - 2; ++i) {
 		vector(i) = stod(tokens[i + 2]);
 	    }
+	    if (normalize) { vector.normalize(); }
 	    (*word_vectors)[tokens[1]] = vector;
+	}
+    }
+
+    void load_sorted_word_vectors(const string &sorted_word_vectors_path,
+				  vector<size_t> *sorted_word_counts,
+				  vector<string> *sorted_word_strings,
+				  vector<Eigen::VectorXd> *sorted_word_vectors,
+				  bool normalize) {
+	sorted_word_counts->clear();
+	sorted_word_strings->clear();
+	sorted_word_vectors->clear();
+	ifstream sorted_word_vectors_file(sorted_word_vectors_path, ios::in);
+	while (sorted_word_vectors_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&sorted_word_vectors_file, &tokens);
+	    if (tokens.size() == 0) { continue; }
+
+	    // line = [count] [word_string] [value_{1}] ... [value_{dim_}]
+	    Eigen::VectorXd vector(tokens.size() - 2);
+	    for (size_t i = 0; i < tokens.size() - 2; ++i) {
+		vector(i) = stod(tokens[i + 2]);
+	    }
+	    if (normalize) { vector.normalize(); }
+	    sorted_word_counts->push_back(stol(tokens[0]));
+	    sorted_word_strings->push_back(tokens[1]);
+	    sorted_word_vectors->push_back(vector);
 	}
     }
 }  // namespace corpus

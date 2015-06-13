@@ -71,6 +71,31 @@ namespace eval_sequential {
 }  // namespace eval_sequential
 
 namespace eval_lexical {
+    void compute_correlation(const vector<string> &scored_word_pairs_paths,
+			     const unordered_map<string, Eigen::VectorXd>
+			     &word_vectors, bool normalized,
+			     vector<size_t> *num_instances,
+			     vector<size_t> *num_handled,
+			     vector<double> *correlation) {
+	num_instances->clear();
+	num_handled->clear();
+	correlation->clear();
+	for (size_t i = 0; i < scored_word_pairs_paths.size(); ++i) {
+	    string scored_word_pairs_path = scored_word_pairs_paths[i];
+	    size_t its_num_instances = 0;
+	    size_t its_num_handled = 0;
+	    double its_correlation = 0.0;
+	    if (util_file::exists(scored_word_pairs_path)) {
+		compute_correlation(scored_word_pairs_path, word_vectors,
+				    normalized, &its_num_instances,
+				    &its_num_handled, &its_correlation);
+	    }
+	    num_instances->push_back(its_num_instances);
+	    num_handled->push_back(its_num_handled);
+	    correlation->push_back(its_correlation);
+	}
+    }
+
     void compute_correlation(const string &scored_word_pairs_path,
 			     const unordered_map<string, Eigen::VectorXd>
 			     &word_vectors, bool normalized,
@@ -139,6 +164,35 @@ namespace eval_lexical {
 	    }
 	}
 	*correlation = util_math::compute_spearman(gold_scores, cosine_scores);
+    }
+
+    void compute_analogy_accuracy(
+	const vector<string> &analogy_questions_paths,
+	const unordered_map<string, Eigen::VectorXd> &word_vectors,
+	bool normalized, vector<size_t> *num_instances,
+	vector<size_t> *num_handled, vector<double> *accuracy,
+	vector<unordered_map<string, double> > *per_type_accuracy) {
+	num_instances->clear();
+	num_handled->clear();
+	accuracy->clear();
+	per_type_accuracy->clear();
+	for (size_t i = 0; i < analogy_questions_paths.size(); ++i) {
+	    string analogy_questions_path = analogy_questions_paths[i];
+	    size_t its_num_instances = 0;
+	    size_t its_num_handled = 0;
+	    double its_accuracy = 0.0;
+	    unordered_map<string, double> its_per_type_accuracy;
+	    if (util_file::exists(analogy_questions_path)) {
+		compute_analogy_accuracy(analogy_questions_path, word_vectors,
+					 normalized, &its_num_instances,
+					 &its_num_handled, &its_accuracy,
+					 &its_per_type_accuracy);
+	    }
+	    num_instances->push_back(its_num_instances);
+	    num_handled->push_back(its_num_handled);
+	    accuracy->push_back(its_accuracy);
+	    per_type_accuracy->push_back(its_per_type_accuracy);
+	}
     }
 
     void compute_analogy_accuracy(

@@ -30,13 +30,14 @@ TARGETS = wordrep
 all: $(TARGETS)
 
 wordrep: main.o wordrep.o $(CORE)/corpus.o $(CORE)/util.o $(CORE)/sparsesvd.o \
-	$(SVDLIBC)/libsvd.a
+	$(CORE)/evaluate.o $(CORE)/cluster.o $(SVDLIBC)/libsvd.a
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc wordrep.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-wordrep.o: wordrep.cc wordrep.h $(CORE)/corpus.o
+wordrep.o: wordrep.cc wordrep.h $(CORE)/corpus.o $(CORE)/evaluate.o \
+	$(CORE)/cluster.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
@@ -47,6 +48,12 @@ $(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
 
 $(CORE)/util.o: $(CORE)/util.cc $(CORE)/util.h
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(CORE)/evaluate.o: $(CORE)/evaluate.cc $(CORE)/evaluate.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)

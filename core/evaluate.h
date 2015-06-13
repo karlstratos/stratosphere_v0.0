@@ -31,6 +31,14 @@ namespace eval_sequential {
 // Functions for evaluating lexical represenations. When using vectors, it is
 // more efficient to pre-normalize their 2-norms and set: normalized = true.
 namespace eval_lexical {
+    // Computes correlation on files of scored word pairs.
+    void compute_correlation(const vector<string> &scored_word_pairs_paths,
+			     const unordered_map<string, Eigen::VectorXd>
+			     &word_vectors, bool normalized,
+			     vector<size_t> *num_instances,
+			     vector<size_t> *num_handled,
+			     vector<double> *correlation);
+
     // Computes correlation on a file of scored word pairs.
     void compute_correlation(const string &scored_word_pairs_path,
 			     const unordered_map<string, Eigen::VectorXd>
@@ -43,6 +51,14 @@ namespace eval_lexical {
 	const vector<tuple<string, string, double> > &scored_word_pairs,
 	const unordered_map<string, Eigen::VectorXd> &word_vectors,
 	bool normalized, size_t *num_handled, double *correlation);
+
+    // Computes accuracy on answering analogy questions in files.
+    void compute_analogy_accuracy(
+	const vector<string> &analogy_questions_paths,
+	const unordered_map<string, Eigen::VectorXd> &word_vectors,
+	bool normalized, vector<size_t> *num_instances,
+	vector<size_t> *num_handled, vector<double> *accuracy,
+	vector<unordered_map<string, double> > *per_type_accuracy);
 
     // Computes accuracy on answering analogy questions in a file.
     void compute_analogy_accuracy(
