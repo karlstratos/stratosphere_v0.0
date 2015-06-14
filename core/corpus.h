@@ -77,7 +77,8 @@ public:
     // Writes word types sorted in decreasing frequency as a text file. Also
     // writes a word dictionary as a binary file.
     void WriteWords(size_t rare_cutoff, const string &sorted_word_types_path,
-		    const string &word_dictionary_path);
+		    const string &word_dictionary_path, size_t *num_words,
+		    size_t *num_word_types, size_t *vocabulary_size);
 
     // Writes a context dictionary as a binary file. Also writes the
     // co-occurrence counts between words and contexts as an SVDLIBC binary
@@ -86,7 +87,8 @@ public:
 		       bool sentence_per_line, const string &context_definition,
 		       size_t window_size, size_t hash_size,
 		       const string &context_dictionary_path,
-		       const string &context_word_count_path);
+		       const string &context_word_count_path,
+		       size_t *num_nonzeros);
 
     // Writes word transition counts as binary files.
     void WriteTransitions(const unordered_map<string, Word> &word_dictionary,
@@ -111,13 +113,14 @@ public:
     //    - window_size:        Size of the sliding window (odd => symmetric,
     //                          even => assymmetric).
     //    - hash_size:          Number of hash bins (0 means no hashing).
-    void SlideWindow(const unordered_map<string, Word> &word_dictionary,
-		     bool sentence_per_line,
-		     const string &context_definition, size_t window_size,
-		     size_t hash_size,
-		     unordered_map<string, Context> *context_dictionary,
-		     unordered_map<Context, unordered_map<Word, double> >
-		     *context_word_count);
+    // Returns the number of nonzeros in the co-occurrence map.
+    size_t SlideWindow(const unordered_map<string, Word> &word_dictionary,
+		       bool sentence_per_line,
+		       const string &context_definition, size_t window_size,
+		       size_t hash_size,
+		       unordered_map<string, Context> *context_dictionary,
+		       unordered_map<Context, unordered_map<Word, double> >
+		       *context_word_count);
 
     // Counts word transitions (within a word dictionary):
     //    - bigram_count[w1][w2]: count of bigram (w1, w2)
@@ -164,7 +167,7 @@ private:
     bool lowercase_ = false;
 
     // Maximum vocabulary size allowed.
-    size_t max_vocabulary_size_ = 100000000;  // 100 million
+    size_t max_vocabulary_size_ = 1000000000;  // 1 billion
 
     // Print messages to stderr?
     bool verbose_ = true;

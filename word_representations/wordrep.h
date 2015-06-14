@@ -38,9 +38,6 @@ public:
     // Induces word vectors from cached word counts.
     void InduceWordVectors();
 
-    // Evaluates cached word vectors on lexical tasks.
-    void EvaluateWordVectors();
-
     // Clusters cached word vectors.
     void ClusterWordVectors();
 
@@ -86,8 +83,20 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
-    // Performs greedy agglomerative clustering over word vectors.
-    void PerformAgglomerativeClustering(size_t num_clusters);
+    // Evaluates word vectors on lexical tasks.
+    void EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
+			     &word_vectors);
+
+    // Returns a string signature of parameters.
+    //    version=0: {rare_cutoff_}
+    //    version=1: 0 + {sentence_per_line_, window_size_, context_defintion_,
+    //                    hash_size_}
+    //    version=2: 1 + {dim_, transformation_method_, add_smooth_,
+    //                    power_smooth_, scaling_method_}
+    string Signature(size_t version);
+
+    // Reports status in a log file and optionally the standard output.
+    void Report(const string &report_string);
 
     // Returns the path to the corpus information file.
     string CorpusInfoPath() { return output_directory_ + "/corpus_info.txt"; }
@@ -134,14 +143,6 @@ private:
 	return output_directory_ + "/clusters_" + Signature(2);
     }
 
-    // Returns a string signature of parameters.
-    //    version=0: {rare_cutoff_}
-    //    version=1: 0 + {sentence_per_line_, window_size_, context_defintion_,
-    //                    hash_size_}
-    //    version=2: 1 + {dim_, transformation_method_, add_smooth_,
-    //                    power_smooth_, scaling_method_}
-    string Signature(size_t version);
-
     // Maximum word length to consider.
     const size_t kMaxWordLength_ = 100;
 
@@ -150,9 +151,6 @@ private:
 
     // Path to the output directory.
     string output_directory_;
-
-    // Log string.
-    string log_;
 
     // If a word type appears <= this number, treat it as a rare symbol.
     size_t rare_cutoff_ = 1;

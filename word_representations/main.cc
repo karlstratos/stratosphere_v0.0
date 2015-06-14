@@ -119,9 +119,6 @@ int main (int argc, char* argv[]) {
     // Induce word vectors from cached statistics.
     wordrep.InduceWordVectors();
 
-    // Evaluate cached word vectors on lexical tasks.
-    wordrep.EvaluateWordVectors();
-
     // Cluster cached word vectors.
     wordrep.ClusterWordVectors();
 }

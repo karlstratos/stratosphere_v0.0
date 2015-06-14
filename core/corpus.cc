@@ -185,43 +185,28 @@ namespace corpus {
 
 void Corpus::WriteWords(size_t rare_cutoff,
 			const string &sorted_word_types_path,
-			const string &word_dictionary_path) {
+			const string &word_dictionary_path, size_t *num_words,
+			size_t *num_word_types, size_t *vocabulary_size) {
     // 1. Write sorted word types.
-    if (util_file::exists(sorted_word_types_path)) {
-	if (verbose_) { cerr << sorted_word_types_path << " exists" << endl; }
-    } else {
-	unordered_map<string, size_t> word_count;
-	CountWords(&word_count);
-	vector<pair<string, size_t> > sorted_word_types(word_count.begin(),
-							word_count.end());
-	sort(sorted_word_types.begin(), sorted_word_types.end(),
-	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
+    unordered_map<string, size_t> word_count;
+    (*num_words) = CountWords(&word_count);
+    (*num_word_types) = word_count.size();
+    vector<pair<string, size_t> > sorted_word_types(word_count.begin(),
+						    word_count.end());
+    sort(sorted_word_types.begin(), sorted_word_types.end(),
+	 util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
 
-	ofstream sorted_word_types_file(sorted_word_types_path, ios::out);
-	for (size_t i = 0; i < sorted_word_types.size(); ++i) {
-	    sorted_word_types_file << sorted_word_types[i].first << " "
-				   << sorted_word_types[i].second << endl;
-	}
+    ofstream sorted_word_types_file(sorted_word_types_path, ios::out);
+    for (size_t i = 0; i < sorted_word_types.size(); ++i) {
+	sorted_word_types_file << sorted_word_types[i].first << " "
+			       << sorted_word_types[i].second << endl;
     }
 
     // 2. Write a word dictionary.
-    if (util_file::exists(word_dictionary_path)) {
-	if (verbose_) { cerr << word_dictionary_path << " exists" << endl; }
-    } else {
-	unordered_map<string, size_t> word_count;
-	ifstream sorted_word_types_file(sorted_word_types_path, ios::in);
-	ASSERT(sorted_word_types_file.is_open(), "Cannot open file: "
-	       << sorted_word_types_path);
-	while (sorted_word_types_file.good()) {
-	    vector<string> tokens;
-	    util_file::read_line(&sorted_word_types_file, &tokens);
-	    if (tokens.size() == 0 ) { continue; }
-	    word_count[tokens[0]] = stol(tokens[1]);
-	}
-	unordered_map<string, size_t> word_dictionary;
-	BuildWordDictionary(word_count, rare_cutoff, &word_dictionary);
-	util_file::binary_write(word_dictionary, word_dictionary_path);
-    }
+    unordered_map<string, size_t> word_dictionary;
+    BuildWordDictionary(word_count, rare_cutoff, &word_dictionary);
+    (*vocabulary_size) = word_dictionary.size();
+    util_file::binary_write(word_dictionary, word_dictionary_path);
 }
 
 void Corpus::WriteContexts(const unordered_map<string, Word> &word_dictionary,
@@ -229,23 +214,16 @@ void Corpus::WriteContexts(const unordered_map<string, Word> &word_dictionary,
 			   const string &context_definition, size_t window_size,
 			   size_t hash_size,
 			   const string &context_dictionary_path,
-			   const string &context_word_count_path) {
-    if (util_file::exists(context_dictionary_path) &&
-	util_file::exists(context_word_count_path)) {
-	if (verbose_) {
-	    cerr << context_dictionary_path << " and "
-		 << context_word_count_path << " exist" << endl;
-	}
-    } else {
-	unordered_map<string, Context> context_dictionary;
-	unordered_map<Context, unordered_map<Word, double> > context_word_count;
-	SlideWindow(word_dictionary, sentence_per_line, context_definition,
-		    window_size, hash_size, &context_dictionary,
-		    &context_word_count);
-	util_file::binary_write(context_dictionary, context_dictionary_path);
-	sparsesvd::binary_write_sparse_matrix(context_word_count,
-					      context_word_count_path);
-    }
+			   const string &context_word_count_path,
+			   size_t *num_nonzeros) {
+    unordered_map<string, Context> context_dictionary;
+    unordered_map<Context, unordered_map<Word, double> > context_word_count;
+    *num_nonzeros = SlideWindow(word_dictionary, sentence_per_line,
+				context_definition, window_size, hash_size,
+				&context_dictionary, &context_word_count);
+    util_file::binary_write(context_dictionary, context_dictionary_path);
+    sparsesvd::binary_write_sparse_matrix(context_word_count,
+					  context_word_count_path);
 }
 
 void Corpus::WriteTransitions(
@@ -264,6 +242,7 @@ void Corpus::WriteTransitions(
 }
 
 size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
+    word_count->clear();
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
     for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
@@ -292,6 +271,10 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 		// If the vocabulary is too large, subtract by the median count
 		// and eliminate at least half of the word types.
 		if (word_count->size() >= max_vocabulary_size_) {
+		    if (verbose_) {
+			cerr << endl << "VOCAB SIZE " << word_count->size()
+			     << ", SUBTRACTING BY THE MEDIAN COUNT!" << endl;
+		    }
 		    util_misc::subtract_by_median(word_count);
 		}
 	    }
@@ -302,7 +285,8 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 	}
 	if (verbose_) { cerr << " " << word_count->size() << " types" << endl; }
     }
-    size_t num_words = util_misc::sum_values(*word_count);
+    size_t num_words = 0;
+    for (const auto &word_pair : *word_count) { num_words += word_pair.second; }
     return num_words;
 }
 
@@ -329,13 +313,13 @@ size_t Corpus::BuildWordDictionary(const unordered_map<string, size_t> &count,
     return num_considered_words;
 }
 
-void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
-			 bool sentence_per_line,
-			 const string &context_definition, size_t window_size,
-			 size_t hash_size,
-			 unordered_map<string, Context> *context_dictionary,
-			 unordered_map<Context, unordered_map<Word, double> >
-			 *context_word_count) {
+size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
+			   bool sentence_per_line,
+			   const string &context_definition, size_t window_size,
+			   size_t hash_size,
+			   unordered_map<string, Context> *context_dictionary,
+			   unordered_map<Context, unordered_map<Word, double> >
+			   *context_word_count) {
     Window window(window_size, context_definition, word_dictionary,
 		  corpus::kRareString, corpus::kBufferString, hash_size,
 		  context_dictionary, context_word_count);
@@ -374,6 +358,11 @@ void Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 	if (!sentence_per_line) { window.Finish(); } // Finish the file.
 	if (verbose_) { cerr << endl; }
     }
+    size_t num_nonzeros = 0;
+    for (const auto &context_pair : *context_word_count) {
+	num_nonzeros += context_pair.second.size();
+    }
+    return num_nonzeros;
 }
 
 void Corpus::CountTransitions(

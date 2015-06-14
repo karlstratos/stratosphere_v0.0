@@ -3,7 +3,6 @@
 #include "wordrep.h"
 
 #include <iomanip>
-#include <libgen.h>
 #include <limits>
 #include <map>
 
@@ -34,17 +33,40 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
     unordered_map<string, Word> word_dictionary;
     if (!util_file::exists(SortedWordTypesPath()) ||
 	!util_file::exists(WordDictionaryPath())) {
+	Report("[EXTRACTING WORD COUNTS]");
+	time_t begin_time = time(NULL);
+	size_t num_words;
+	size_t num_word_types;
+	size_t vocabulary_size;
 	corpus.WriteWords(rare_cutoff_, SortedWordTypesPath(),
-			  WordDictionaryPath());
+			  WordDictionaryPath(), &num_words, &num_word_types,
+			  &vocabulary_size);
+	string duration = util_string::difftime_string(time(NULL), begin_time);
+	Report("   Corpus: " + util_file::get_file_name(corpus_file));
+	Report(util_string::printf_format(
+		   "   Number of words: %ld\n"
+		   "   Number of word types: %ld\n"
+		   "   Vocabulary size: %d (with frequency cutoff > %ld)",
+		   num_words, num_word_types, vocabulary_size, rare_cutoff_));
+	Report("[" + duration + "]");
     }
     util_file::binary_read(WordDictionaryPath(), &word_dictionary);
 
     // Get the context dictionary and co-occurrence counts.
     if (!util_file::exists(ContextDictionaryPath()) ||
 	!util_file::exists(ContextWordCountPath())) {
+	Report("\n[EXTRACTING WORD-CONTEXT CO-OCCURRENCE COUNTS]");
+	time_t begin_time = time(NULL);
+	size_t num_nonzeros;
 	corpus.WriteContexts(word_dictionary, sentence_per_line_,
 			     context_definition_, window_size_, hash_size_,
-			     ContextDictionaryPath(), ContextWordCountPath());
+			     ContextDictionaryPath(), ContextWordCountPath(),
+			     &num_nonzeros);
+	Report(util_string::printf_format(
+		   "   Number of distinct word-context pairs: %ld",
+		   num_nonzeros));
+	string duration = util_string::difftime_string(time(NULL), begin_time);
+	Report("[" + duration + "]");
     }
 }
 
@@ -52,12 +74,26 @@ void WordRep::InduceWordVectors() {
     if (util_file::exists(SingularValuesPath()) &&
 	util_file::exists(WordVectorsPath())) { return; }
     SMat matrix = sparsesvd::binary_read_sparse_matrix(ContextWordCountPath());
+    Report(util_string::printf_format(
+	       "\n[SINGULAR VALUE DECOMPOSITION]\n"
+	       "   Matrix dimensions: %ld x %ld (%ld nonzeros)\n"
+	       "   Desired rank: %ld\n"
+	       "   Transformation method: %s\n"
+	       "   Additive smoothing: %.2f\n"
+	       "   Power smoothing: %.2f\n"
+	       "   Scaling method: %s",
+	       matrix->rows, matrix->cols, matrix->vals, dim_,
+	       transformation_method_.c_str(), add_smooth_, power_smooth_,
+	       scaling_method_.c_str()));
+    time_t begin_time = time(NULL);
     Eigen::MatrixXd left_singular_vectors;
     Eigen::MatrixXd right_singular_vectors;
     Eigen::VectorXd singular_values;
     corpus::decompose(matrix, dim_, transformation_method_, add_smooth_,
 		      power_smooth_, scaling_method_, &left_singular_vectors,
 		      &right_singular_vectors, &singular_values);
+    string duration = util_string::difftime_string(time(NULL), begin_time);
+    Report("[" + duration + "]");
     svdFreeSMat(matrix);
 
     // Write singular values.
@@ -70,6 +106,7 @@ void WordRep::InduceWordVectors() {
 				   &sorted_word_types);
     unordered_map<string, Word> word_dictionary;
     util_file::binary_read(WordDictionaryPath(), &word_dictionary);
+    unordered_map<string, Eigen::VectorXd> word_vectors;
     ofstream word_vectors_file(WordVectorsPath(), ios::out);
     for (size_t i = 0; i < sorted_word_types.size(); ++i) {
 	string word_string = sorted_word_types[i].first;
@@ -81,65 +118,15 @@ void WordRep::InduceWordVectors() {
 	// Word vector is the corresponding row of the left singular vector
 	// matrix, normalized to have unit 2-norm.
 	Word word = word_dictionary[word_string];
-	left_singular_vectors.row(word).normalize();
-	for (size_t j = 0; j < left_singular_vectors.row(word).size(); ++ j) {
-	    word_vectors_file << " " << left_singular_vectors.row(word)(j);
+	word_vectors[word_string] = left_singular_vectors.row(word);
+	word_vectors[word_string].normalize();
+	for (size_t j = 0; j < word_vectors[word_string].size(); ++ j) {
+	    word_vectors_file << " " << word_vectors[word_string](j);
 	}
 	word_vectors_file << endl;
     }
-}
-
-void WordRep::EvaluateWordVectors() {
-    if (!util_file::exists(WordVectorsPath())) { return; }
-    string dev_path = "../data/lexical/dev/";  // Path to dev files.
-    vector<string> similarity_files = {dev_path + "wordsim353.dev",
-				       dev_path + "men.dev",
-				       dev_path + "rw.dev"};
-    vector<string> analogy_files = {dev_path + "microsoft2013.dev",
-				    dev_path + "google2013.dev",
-				    dev_path + "google2013_syntactic.dev",
-				    dev_path + "google2013_semantic.dev"};
-
-    // Load word vectors.
-    unordered_map<string, Eigen::VectorXd> word_vectors;
-    bool normalized = true;
-    corpus::load_word_vectors(WordVectorsPath(), &word_vectors, normalized);
-
-    // Evaluate on word similarity/relatedness datasets.
-    vector<size_t> num_instances;
-    vector<size_t> num_handled;
-    vector<double> correlation;
-    eval_lexical::compute_correlation(similarity_files, word_vectors,
-				      normalized, &num_instances, &num_handled,
-				      &correlation);
-    /*
-    for (size_t i = 0; i < similarity_files.size(); ++i) {
-	string file_name =
-	    basename(const_cast<char*>(similarity_files[i].c_str()));
-	cout << file_name << " " << num_instances[i] << " "
-	     << num_handled[i] << " " << correlation[i] << endl;
-    }
-    */
-
-    // Evaluate on word analogy datasets.
-    vector<double> accuracy;
-    vector<unordered_map<string, double> > per_type_accuracy;
-    eval_lexical::compute_analogy_accuracy(
-	analogy_files, word_vectors, normalized, &num_instances, &num_handled,
-	&accuracy, &per_type_accuracy);
-
-    /*
-    for (size_t i = 0; i < analogy_files.size(); ++i) {
-	string file_name =
-	    basename(const_cast<char*>(analogy_files[i].c_str()));
-	cout << file_name << " " << num_instances[i] << " "
-	     << num_handled[i] << " " << accuracy[i] << endl;
-	for (const auto &type_pair : per_type_accuracy[i]) {
-	    cout << type_pair.first << " " << type_pair.second << endl;
-	}
-	cout << endl;
-    }
-    */
+    // Evaluate word vectors on lexical tasks.
+    EvaluateWordVectors(word_vectors);
 }
 
 void WordRep::ClusterWordVectors() {
@@ -147,7 +134,6 @@ void WordRep::ClusterWordVectors() {
     if (util_file::exists(ClustersPath())) { return; }
 
     // Load word vectors sorted in decreasing frequency.
-    unordered_map<string, Eigen::VectorXd> word_vectors;
     vector<size_t> sorted_word_counts;
     vector<string> sorted_word_strings;
     vector<Eigen::VectorXd> sorted_word_vectors;
@@ -156,9 +142,16 @@ void WordRep::ClusterWordVectors() {
 				     &sorted_word_strings, &sorted_word_vectors,
 				     normalized);
 
-    // Agglomeratively cluster the sorted vectors to a tree with dim_ leaves.
+    Report(util_string::printf_format(
+	       "\n[AGGLOMERATIVE CLUSTERING]\n"
+	       "Number of clusters: %ld", dim_));
+    time_t begin_time = time(NULL);
     AgglomerativeClustering cluster;
-    cluster.ClusterOrderedVectors(sorted_word_vectors, dim_);
+    double gamma = cluster.ClusterOrderedVectors(sorted_word_vectors, dim_);
+    Report(util_string::printf_format(
+	       "   Average number of tightening: %.2f (not %ld)", gamma, dim_));
+    string duration = util_string::difftime_string(time(NULL), begin_time);
+    Report("[" + duration + "]");
 
     // Lexicographically sort bit strings for enhanced readability.
     vector<string> bitstring_types;
@@ -181,10 +174,73 @@ void WordRep::ClusterWordVectors() {
 	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
 
 	for (const auto &word_pair : v) {
-	    cout << bitstring << " " << word_pair.first << " "
-		 << word_pair.second << endl;
+	    clusters_file << bitstring << " " << word_pair.first << " "
+			  << word_pair.second << endl;
 	}
     }
+}
+
+void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
+				  &word_vectors) {
+    string dev_path = "../data/lexical/dev/";  // Path to dev files.
+    vector<string> similarity_files = {dev_path + "wordsim353.dev",
+				       dev_path + "men.dev",
+				       dev_path + "rw.dev"};
+    vector<string> analogy_files = {dev_path + "microsoft2013.dev",
+				    dev_path + "google2013.dev",
+				    dev_path + "google2013_syntactic.dev",
+				    dev_path + "google2013_semantic.dev"};
+    bool normalized = true;  // Word vectors are already normalized.
+
+    // Evaluate on word similarity/relatedness datasets.
+    Report("\n[CORRELATION IN SIMILARITY SCORES]");
+    time_t begin_time = time(NULL);
+    vector<size_t> num_instances;
+    vector<size_t> num_handled;
+    vector<double> correlation;
+    size_t max_file_name_length = 0;
+    for (const string &file_name : similarity_files) {
+	max_file_name_length = max(max_file_name_length,
+				   file_name.size() - dev_path.size());
+    }
+    eval_lexical::compute_correlation(similarity_files, word_vectors,
+				      normalized, &num_instances, &num_handled,
+				      &correlation);
+    for (size_t i = 0; i < similarity_files.size(); ++i) {
+	string file_name = util_string::buffer_string(
+	    util_file::get_file_name(similarity_files[i]),
+	    max_file_name_length + 3);
+	Report(util_string::printf_format(
+		   "%s   %.3f   (%d/%d evaluated)",
+		   file_name.c_str(), correlation[i], num_handled[i],
+		   num_instances[i]));
+    }
+    string duration = util_string::difftime_string(time(NULL), begin_time);
+    Report("[" + duration + "]");
+
+    // Evaluate on word analogy datasets.
+    Report("\n[ACCURACY IN ANALOGY QUESTIONS]");
+    begin_time = time(NULL);
+    for (const string &file_name : analogy_files) {
+	max_file_name_length = max(max_file_name_length,
+				   file_name.size() - dev_path.size());
+    }
+    vector<double> accuracy;
+    vector<unordered_map<string, double> > per_type_accuracy;
+    eval_lexical::compute_analogy_accuracy(
+	analogy_files, word_vectors, normalized, &num_instances, &num_handled,
+	&accuracy, &per_type_accuracy);
+    for (size_t i = 0; i < analogy_files.size(); ++i) {
+	string file_name = util_string::buffer_string(
+	    util_file::get_file_name(analogy_files[i]),
+	    max_file_name_length + 3);
+	Report(util_string::printf_format(
+		   "%s   %.2f   (%d/%d evaluated)",
+		   file_name.c_str(), accuracy[i], num_handled[i],
+		   num_instances[i]));
+    }
+    duration = util_string::difftime_string(time(NULL), begin_time);
+    Report("[" + duration + "]");
 }
 
 string WordRep::Signature(size_t version) {
@@ -208,4 +264,10 @@ string WordRep::Signature(size_t version) {
     }
 
     return signature;
+}
+
+void WordRep::Report(const string &report_string) {
+    ofstream log_file(LogPath(), ios::out | ios::app);
+    log_file << report_string << endl;
+    if (verbose_) { cerr << report_string << endl; }
 }

@@ -32,6 +32,12 @@ using namespace std;
 #endif
 
 namespace util_string {
+    // Buffers a string with whitespace (to the front) to have a certain length.
+    string buffer_string(const string &given_string, size_t length);
+
+    // Returns the string form of a printf format string.
+    string printf_format(const char *format, ...);
+
     // Splits a line by char delimiters.
     void split_by_chars(const string &line, const string &char_delimiters,
 			vector<string> *tokens);
@@ -45,6 +51,9 @@ namespace util_string {
 
     // Converts seconds to an hour/minute/second string: 6666 => "1h51m6s".
     string convert_seconds_to_string(double num_seconds);
+
+    // Returns an hour/minute/second string of the difftime output.
+    string difftime_string(time_t time_now, time_t time_before);
 
     // Lowercases a string.
     string lowercase(const string &original_string);
@@ -69,6 +78,9 @@ namespace util_string {
 }  // namespace util_string
 
 namespace util_file {
+    // Gets the file name from a file path.
+    string get_file_name(string file_path);
+
     // Reads the next line from a file into tokens separated by space or tab.
     // while (file.good()) {
     //     vector<string> tokens;

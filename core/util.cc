@@ -3,12 +3,31 @@
 #include "util.h"
 
 #include <dirent.h>
+#include <libgen.h>
 #include <math.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <algorithm>
 
 namespace util_string {
+    string buffer_string(const string &given_string, size_t length) {
+	string buffered_string =
+	    given_string.substr(0, min(given_string.size(), length));
+	while (buffered_string.size() < length) {
+	    buffered_string = " " + buffered_string;
+	}
+	return buffered_string;
+    }
+
+    string printf_format(const char *format, ...) {
+	char buffer[16384];
+	va_list variable_argument_list;
+	va_start(variable_argument_list, format);
+	vsnprintf(buffer, sizeof(buffer), format, variable_argument_list);
+	va_end(variable_argument_list);
+	return buffer;
+    }
+
     void split_by_chars(const string &line, const string &char_delimiters,
 			vector<string> *tokens) {
 	tokens->clear();
@@ -64,6 +83,11 @@ namespace util_string {
 	return time_string;
     }
 
+    string difftime_string(time_t time_now, time_t time_before) {
+	double num_seconds = difftime(time_now, time_before);
+	return convert_seconds_to_string(num_seconds);
+    }
+
     string lowercase(const string &original_string) {
 	string lowercased_string;
 	for (const char &character : original_string) {
@@ -100,6 +124,10 @@ namespace util_string {
 }  // namespace util_string
 
 namespace util_file {
+    string get_file_name(string file_path) {
+	return string(basename(const_cast<char *>(file_path.c_str())));
+    }
+
     void read_line(ifstream *file,  vector<string> *tokens) {
 	string line;
 	getline(*file, line);

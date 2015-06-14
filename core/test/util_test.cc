@@ -8,6 +8,25 @@
 
 #include "../util.h"
 
+// Checks the string form of a printf format string.
+TEST(PrintfFormatString, CheckBehavior) {
+    string test_string = "TEST_STRING";
+    float test_float = 3.14159;
+    size_t test_long = 999999999999999;
+    string string_string =
+	util_string::printf_format("String: %s", test_string.c_str());
+    string float_string =
+	util_string::printf_format("Float: %.2f", test_float);
+    string science_string =
+	util_string::printf_format("Science: %.2e", test_float);
+    string long_string =
+	util_string::printf_format("Long: %ld", test_long);
+    EXPECT_EQ("String: TEST_STRING", string_string);
+    EXPECT_EQ("Float: 3.14", float_string);
+    EXPECT_EQ("Science: 3.14e+00", science_string);
+    EXPECT_EQ("Long: 999999999999999", long_string);
+}
+
 // Test class for string tokenization.
 class StringTokenization : public testing::Test {
 protected:
