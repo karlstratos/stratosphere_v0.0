@@ -143,12 +143,6 @@ private:
 	return output_directory_ + "/clusters_" + Signature(2);
     }
 
-    // Maximum word length to consider.
-    const size_t kMaxWordLength_ = 100;
-
-    // Maximum sentence length to consider.
-    const size_t kMaxSentenceLength_ = 1000;
-
     // Path to the output directory.
     string output_directory_;
 
