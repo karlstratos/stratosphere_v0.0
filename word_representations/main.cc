@@ -68,7 +68,7 @@ int main (int argc, char* argv[]) {
 	cout << "--output [-]:        \t"
 	     << "path to an output directory" << endl;
 	cout << "--force, -f:         \t"
-	     << "forcefully recompute from scratch" << endl;
+	     << "forcefully recompute from scratch?" << endl;
 	cout << "--rare [" << rare_cutoff << "]:       \t"
 	     << "word types occurring <= this are considered rare" << endl;
 	cout << "--sentences:         \t"
@@ -90,9 +90,9 @@ int main (int argc, char* argv[]) {
 	cout << "--scale [" << scaling_method << "]:    \t"
 	     << "data scaling: none, ppmi, reg, cca" << endl;
 	cout << "--quiet, -q:          \t"
-	     << "do not print messages to stderr" << endl;
+	     << "do not print messages to stderr?" << endl;
 	cout << "--help, -h:           \t"
-	     << "show options and quit" << endl;
+	     << "show options and quit?" << endl;
 	exit(0);
     }
 

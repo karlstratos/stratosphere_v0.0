@@ -38,57 +38,7 @@ void HMM::CreateRandomly(size_t num_observations, size_t num_states) {
 	state_dictionary_inverse_[state] = state_string;
     }
 
-    random_device device;
-    default_random_engine engine(device());
-    normal_distribution<double> normal(0.0, 1.0);  // Standard Gaussian.
-
-    // Generate emission parameters.
-    emission_.resize(num_states);
-    for (State state = 0; state < num_states; ++state) {
-	emission_[state].resize(num_observations);
-	double state_normalizer = 0.0;
-	for (Observation observation = 0; observation < num_observations;
-	     ++observation) {
-	    double value = fabs(normal(engine));
-	    emission_[state][observation] = value;
-	    state_normalizer += value;
-	}
-	for (Observation observation = 0; observation < num_observations;
-	     ++observation) {
-	    emission_[state][observation] =
-		log(emission_[state][observation]) - log(state_normalizer);
-	}
-    }
-
-    // Generate transition parameters.
-    transition_.resize(num_states);
-    for (State state1 = 0; state1 < num_states; ++state1) {
-	transition_[state1].resize(num_states + 1);  // +stop
-	double state1_normalizer = 0.0;
-	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
-	    double value = fabs(normal(engine));
-	    transition_[state1][state2] = value;
-	    state1_normalizer += value;
-	}
-	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
-	    transition_[state1][state2] =
-		log(transition_[state1][state2]) - log(state1_normalizer);
-	}
-    }
-
-    // Generate prior parameters.
-    prior_.resize(num_states);
-    double prior_normalizer = 0.0;
-    for (State state = 0; state < num_states; ++state) {
-	double value = fabs(normal(engine));
-	prior_[state] = value;
-	prior_normalizer += value;
-    }
-    for (State state = 0; state < num_states; ++state) {
-	prior_[state] = log(prior_[state]) - log(prior_normalizer);
-    }
-
-    CheckProperDistribution();
+    InitializeParametersRandomly(num_observations, num_states);
 }
 
 void HMM::Save(const string &model_path) {
@@ -189,13 +139,68 @@ void HMM::Train(const string &data_path, bool supervised, size_t num_states) {
     bool fully_labeled;
     ReadData(data_path, &observation_string_sequences, &state_string_sequences,
 	     &fully_labeled);
-
     if (supervised) {
 	ASSERT(fully_labeled, "Data not fully labeled");
 	TrainSupervised(observation_string_sequences, state_string_sequences);
     } else {
 	ASSERT(num_states > 0, "Number of states needs to be > 0");
+	TrainUnsupervised(observation_string_sequences, num_states);
     }
+}
+
+void HMM::InitializeParametersRandomly(size_t num_observations,
+				       size_t num_states) {
+    random_device device;
+    default_random_engine engine(device());
+    normal_distribution<double> normal(0.0, 1.0);  // Standard Gaussian.
+
+    // Generate emission parameters.
+    emission_.resize(num_states);
+    for (State state = 0; state < num_states; ++state) {
+	emission_[state].resize(num_observations);
+	double state_normalizer = 0.0;
+	for (Observation observation = 0; observation < num_observations;
+	     ++observation) {
+	    double value = fabs(normal(engine));
+	    emission_[state][observation] = value;
+	    state_normalizer += value;
+	}
+	for (Observation observation = 0; observation < num_observations;
+	     ++observation) {
+	    emission_[state][observation] =
+		log(emission_[state][observation]) - log(state_normalizer);
+	}
+    }
+
+    // Generate transition parameters.
+    transition_.resize(num_states);
+    for (State state1 = 0; state1 < num_states; ++state1) {
+	transition_[state1].resize(num_states + 1);  // +stop
+	double state1_normalizer = 0.0;
+	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
+	    double value = fabs(normal(engine));
+	    transition_[state1][state2] = value;
+	    state1_normalizer += value;
+	}
+	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
+	    transition_[state1][state2] =
+		log(transition_[state1][state2]) - log(state1_normalizer);
+	}
+    }
+
+    // Generate prior parameters.
+    prior_.resize(num_states);
+    double prior_normalizer = 0.0;
+    for (State state = 0; state < num_states; ++state) {
+	double value = fabs(normal(engine));
+	prior_[state] = value;
+	prior_normalizer += value;
+    }
+    for (State state = 0; state < num_states; ++state) {
+	prior_[state] = log(prior_[state]) - log(prior_normalizer);
+    }
+
+    CheckProperDistribution();
 }
 
 void HMM::TrainSupervised(
@@ -218,6 +223,129 @@ void HMM::TrainSupervised(
     TrainSupervised(observation_sequences, state_sequences);
 }
 
+void HMM::TrainUnsupervised(
+    const vector<vector<string> > &observation_string_sequences,
+    size_t num_states) {
+    // Populate observation and state dictionaries.
+    vector<vector<Observation> > observation_sequences;
+    ConstructObservationDictionary(observation_string_sequences,
+				   &observation_sequences);
+    for (State state = 0; state < num_states; ++state) {
+	AddStateIfUnknown("state" + to_string(state));
+    }
+    InitializeParametersRandomly(NumObservations(), NumStates());
+
+    // Run EM iterations.
+    double log_likelihood = -numeric_limits<double>::infinity();
+    for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
+	 ++iteration_num) {
+	// Set up expected counts.
+	vector<vector<double> > emission_count(NumObservations());
+	for (State state = 0; state < NumStates(); ++state) {
+	    emission_count[state].resize(NumObservations(), 0.0);
+	}
+	vector<vector<double> > transition_count(NumStates());
+	for (State state = 0; state < NumStates(); ++state) {
+	    transition_count[state].resize(NumStates() + 1, 0.0);  // +stop
+	}
+	vector<double> prior_count(NumStates(), 0.0);
+
+	double new_log_likelihood = 0.0;
+	for (size_t i = 0; i < observation_sequences.size(); ++i) {
+	    size_t length = observation_sequences[i].size();
+
+	    vector<vector<double> > al;  // Forward probabilities.
+	    Forward(observation_sequences[i], &al);
+
+	    // Calculate the (log) probability of the observation sequence.
+	    double log_probability = -numeric_limits<double>::infinity();
+	    for (State state = 0; state < NumStates(); ++state) {
+		log_probability = util_math::sum_logs(
+		    log_probability, al[length - 1][state] +
+		    transition_[state][StoppingState()]);
+	    }
+	    new_log_likelihood += log_probability;
+
+	    vector<vector<double> > be;  // Backward probabilities.
+	    Backward(observation_sequences[i], &be);
+
+	    // Accumulate initial state probabilities.
+	    for (State state = 0; state < NumStates(); ++state) {
+		prior_count[state] +=
+		    exp(al[0][state] + be[0][state] - log_probability);
+	    }
+
+	    for (size_t j = 0; j < length; ++j) {
+		Observation observation = observation_sequences[i][j];
+
+		// Accumulate emission probabilities
+		for (State state = 0; state < NumStates(); ++state) {
+		    emission_count[state][observation] +=
+			exp(al[j][state] + be[j][state] - log_probability);
+		    if (j > 0) {
+			// Accumulate transition probabilities.
+			for (State previous_state = 0;
+			     previous_state < NumStates(); ++previous_state) {
+			    transition_count[previous_state][state] +=
+				exp(al[j - 1][previous_state] +
+				    transition_[previous_state][state] +
+				    emission_[state][observation] +
+				    be[j][state] - log_probability);
+			}
+		    }
+		}
+	    }
+	    // Accumulate final state probabilities.
+	    for (State state = 0; state < NumStates(); ++state) {
+		transition_count[state][StoppingState()] +=
+		    exp(al[length - 1][state] + be[length - 1][state] -
+			log_probability);
+	    }
+	}
+
+	// Update parameters from the expected counts.
+	for (State state = 0; state < num_states; ++state) {
+	    double state_normalizer = accumulate(emission_count[state].begin(),
+						 emission_count[state].end(),
+						 0.0);
+	    for (Observation observation = 0; observation < NumObservations();
+		 ++observation) {
+		emission_[state][observation] =
+		    log(emission_count[state][observation]) -
+		    log(state_normalizer);
+	    }
+	}
+	for (State state1 = 0; state1 < NumStates(); ++state1) {
+	    double state1_normalizer =
+		accumulate(transition_count[state1].begin(),
+			   transition_count[state1].end(), 0.0);
+	    for (State state2 = 0; state2 < NumStates() + 1; // +stop
+		 ++state2) {
+		transition_[state1][state2] =
+		    log(transition_count[state1][state2]) -
+		    log(state1_normalizer);
+	    }
+	}
+	double prior_normalizer = accumulate(prior_count.begin(),
+					     prior_count.end(), 0.0);
+	for (State state = 0; state < NumStates(); ++state) {
+	    prior_[state] = log(prior_count[state]) - log(prior_normalizer);
+	}
+	CheckProperDistribution();
+
+	double improvement = new_log_likelihood - log_likelihood;
+	ASSERT(improvement > -1e-5, "Negative improvement: " << improvement);
+	if (verbose_) {
+	    string line = util_string::printf_format(
+		"Iteration %ld: %.2f (%.2f)", iteration_num + 1,
+		new_log_likelihood, improvement);
+	    cerr << line << endl;
+	}
+	log_likelihood = new_log_likelihood;
+	if (improvement < 1e-10) { break; }
+    }
+}
+
 void HMM::Predict(const string &data_path, const string &prediction_path) {
     vector<vector<string> > observation_string_sequences;
     vector<vector<string> > state_string_sequences;
@@ -232,16 +360,18 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
 	predictions.push_back(prediction);
     }
 
-    // For simplicity, always report the many-to-one accuracy.
-    double position_accuracy;
-    double sequence_accuracy;
     unordered_map<string, string> label_mapping;
-    eval_sequential::compute_accuracy_mapping_labels(
-	state_string_sequences, predictions, &position_accuracy,
-	&sequence_accuracy, &label_mapping);
-    if (verbose_) {
-	cerr << "(many-to-one) per-position: " << position_accuracy
-	     << "%   per-sequence: " << sequence_accuracy << "%" << endl;
+    if (fully_labeled) {
+	// For simplicity, always report the many-to-one accuracy.
+	double position_accuracy;
+	double sequence_accuracy;
+	eval_sequential::compute_accuracy_mapping_labels(
+	    state_string_sequences, predictions, &position_accuracy,
+	    &sequence_accuracy, &label_mapping);
+	if (verbose_) {
+	    cerr << "(many-to-one) per-position: " << position_accuracy
+		 << "%   per-sequence: " << sequence_accuracy << "%" << endl;
+	}
     }
 
     if (!prediction_path.empty()) {
@@ -250,9 +380,11 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
 	for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
 	    for (size_t j = 0; j < observation_string_sequences[i].size();
 		 ++j) {
+		string state_string_predicted = (label_mapping.size() > 0) ?
+		    label_mapping[predictions[i][j]] : predictions[i][j];
 		file << observation_string_sequences[i][j] << " ";
-		file << state_string_sequences[i][j] << " ";
-		file << label_mapping[predictions[i][j]] << endl;
+		file << state_string_sequences[i][j] << " ";  // Optional
+		file << state_string_predicted << endl;
 	    }
 	    file << endl;
 	}

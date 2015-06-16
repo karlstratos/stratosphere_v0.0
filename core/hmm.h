@@ -50,6 +50,11 @@ public:
 	const vector<vector<string> > &observation_string_sequences,
 	const vector<vector<string> > &state_string_sequences);
 
+    // Trains HMM parameters from observation string sequences.
+    void TrainUnsupervised(
+	const vector<vector<string> > &observation_string_sequences,
+	size_t num_states);
+
     // Predicts state sequences for the given data.
     void Predict(const string &data_path) { Predict(data_path, ""); }
 
@@ -88,6 +93,11 @@ public:
     // Sets the rare cutoff.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
 
+    // Sets the maximum number of EM iterations.
+    void set_max_num_em_iterations(size_t max_num_em_iterations) {
+	max_num_em_iterations_ = max_num_em_iterations;
+    }
+
     // Sets the decoding method.
     void set_decoding_method(string decoding_method) {
 	decoding_method_ = decoding_method;
@@ -100,6 +110,10 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
+    // Initializes parameters randomly.
+    void InitializeParametersRandomly(size_t num_observations,
+				      size_t num_states);
+
     // Trains HMM parameters from observation and state sequences.
     void TrainSupervised(
 	const vector<vector<Observation> > &observation_sequences,
@@ -215,6 +229,9 @@ private:
     // Observation types that occur <= this number in the training data are
     // considered as a single symbol (kRareObservationString_).
     size_t rare_cutoff_ = 0;
+
+    // Maximum number of EM iterations.
+    size_t max_num_em_iterations_ = 500;
 
     // Decoding method.
     string decoding_method_ = "viterbi";

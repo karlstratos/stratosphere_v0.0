@@ -57,6 +57,7 @@ protected:
 TEST_F(LabeledDataExample, CheckSupervisedTrainingRare0) {
     HMM hmm;
     hmm.set_rare_cutoff(0);
+    hmm.set_verbose(false);
     hmm.Train(data_file_path_);
     for (const auto &state_pair: rare0_emission_) {
 	for (const auto &observation_pair: state_pair.second) {
@@ -86,6 +87,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare0) {
 TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
     HMM hmm;
     hmm.set_rare_cutoff(1);
+    hmm.set_verbose(false);
     hmm.Train(data_file_path_);
 
     // V -> <?>: 1.0
@@ -101,6 +103,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
 TEST_F(LabeledDataExample, CheckSavingAndLoadingTrainedModel) {
     HMM hmm1;
     hmm1.set_rare_cutoff(1);
+    hmm1.set_verbose(false);
     hmm1.Train(data_file_path_);
     hmm1.Save(model_file_path_);
 
@@ -136,16 +139,71 @@ protected:
 // Checks the correctness of Viterbi decoding.
 TEST_F(RandomHMM, Viterbi) {
     hmm_.set_decoding_method("viterbi");
-    hmm_.set_debug(true);
+    hmm_.set_verbose(false);
+    hmm_.set_debug(true);  // Debugging on.
     vector<string> state_string_sequence;
     hmm_.Predict(observation_string_sequence_, &state_string_sequence);
 }
 
 // Checks the correctness of the forward-backward algorithm.
 TEST_F(RandomHMM, ForwardBackward) {
-    hmm_.set_debug(true);
+    hmm_.set_verbose(false);
+    hmm_.set_debug(true);  // Debugging on.
     vector<string> state_string_sequence;
     hmm_.ComputeLogProbability(observation_string_sequence_);
+}
+
+// Test class that provides a simple unlabeled dataset.
+class UnlabeledDataExample : public testing::Test {
+protected:
+    virtual void SetUp() {
+	observation_string_sequences_.push_back(sequence1_);
+	observation_string_sequences_.push_back(sequence2_);
+	observation_string_sequences_.push_back(sequence3_);
+    }
+
+    virtual void TearDown() { }
+
+    vector<string> sequence1_ = {"the", "dog", "chased", "the", "cat"};
+    vector<string> sequence2_ = {"the", "cat", "chased", "the", "mouse"};
+    vector<string> sequence3_ = {"the", "mouse", "chased", "the", "dog"};
+    vector<vector<string> > observation_string_sequences_;
+    double tol_ = 1e-10;
+};
+
+// Runs unsupervised training with 0 rare cutoff, 3 hidden states.
+TEST_F(UnlabeledDataExample, RunUnsupervisedTrainingRare0State3NoCheck) {
+    HMM hmm;
+    hmm.set_rare_cutoff(0);
+    hmm.set_verbose(false);
+    hmm.TrainUnsupervised(observation_string_sequences_, 3);
+    vector<string> sequence1_states;
+    vector<string> sequence2_states;
+    vector<string> sequence3_states;
+    hmm.Predict(sequence1_, &sequence1_states);
+    hmm.Predict(sequence2_, &sequence2_states);
+    hmm.Predict(sequence3_, &sequence3_states);
+
+    // Will not check explicitly. A few observed local optima were:
+    // Likelihood: -10.75
+    //    state1 state2 state0 state1 state2
+    //    state1 state2 state0 state1 state2
+    //    state1 state2 state0 state1 state2
+    //
+    // Likelihood: -19.07
+    //    state2 state1 state2 state1 state0
+    //    state2 state1 state2 state1 state0
+    //    state2 state1 state2 state1 state0
+    //
+    // Likelihood: -22.21
+    //    state0 state2 state0 state0 state1
+    //    state0 state1 state0 state0 state2
+    //    state0 state2 state0 state0 state2
+    //
+    // Likelihood: -23.23
+    //    state2 state2 state0 state1 state1
+    //    state2 state2 state0 state1 state1
+    //    state2 state2 state0 state1 state1
 }
 
 int main(int argc, char** argv) {
