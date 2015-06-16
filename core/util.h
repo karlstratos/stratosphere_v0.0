@@ -32,8 +32,9 @@ using namespace std;
 #endif
 
 namespace util_string {
-    // Buffers a string with whitespace (to the front) to have a certain length.
-    string buffer_string(const string &given_string, size_t length);
+    // Buffers a string to have a certain length.
+    string buffer_string(const string &given_string, size_t length,
+			 char buffer_char, const string &align);
 
     // Returns the string form of a printf format string.
     string printf_format(const char *format, ...);

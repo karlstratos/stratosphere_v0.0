@@ -10,11 +10,22 @@
 #include <algorithm>
 
 namespace util_string {
-    string buffer_string(const string &given_string, size_t length) {
+    string buffer_string(const string &given_string, size_t length,
+			 char buffer_char, const string &align) {
 	string buffered_string =
 	    given_string.substr(0, min(given_string.size(), length));
+	bool left_turn = true;  // For align = "center".
+	string buffer(1, buffer_char);
 	while (buffered_string.size() < length) {
-	    buffered_string = " " + buffered_string;
+	    if (align == "left" || (align == "center" && left_turn)) {
+		buffered_string = buffered_string + buffer;
+		left_turn = false;
+	    } else if (align == "right" || (align == "center" && !left_turn)) {
+		buffered_string = buffer + buffered_string;
+		left_turn = true;
+	    } else {
+		ASSERT(false, "Unknown alignment method: " << align);
+	    }
 	}
 	return buffered_string;
     }
