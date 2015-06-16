@@ -33,7 +33,8 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
     unordered_map<string, Word> word_dictionary;
     if (!util_file::exists(SortedWordTypesPath()) ||
 	!util_file::exists(WordDictionaryPath())) {
-	Report("[EXTRACTING WORD COUNTS]");
+	Report(util_string::buffer_string("[EXTRACTING WORD COUNTS]", 80, '-',
+					  "right"));
 	time_t begin_time = time(NULL);
 	size_t num_words;
 	size_t num_word_types;
@@ -48,14 +49,18 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
 		   "   Number of word types: %ld\n"
 		   "   Vocabulary size: %d (with frequency cutoff > %ld)",
 		   num_words, num_word_types, vocabulary_size, rare_cutoff_));
-	Report("[" + duration + "]");
+	Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+					  "right"));
     }
     util_file::binary_read(WordDictionaryPath(), &word_dictionary);
 
     // Get the context dictionary and co-occurrence counts.
     if (!util_file::exists(ContextDictionaryPath()) ||
 	!util_file::exists(ContextWordCountPath())) {
-	Report("\n[EXTRACTING WORD-CONTEXT CO-OCCURRENCE COUNTS]");
+	Report("\n");
+	Report(util_string::buffer_string(
+		   "[EXTRACTING WORD-CONTEXT CO-OCCURRENCE COUNTS]", 80, '-',
+		   "right"));
 	time_t begin_time = time(NULL);
 	size_t num_nonzeros;
 	corpus.WriteContexts(word_dictionary, sentence_per_line_,
@@ -66,7 +71,8 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
 		   "   Number of distinct word-context pairs: %ld",
 		   num_nonzeros));
 	string duration = util_string::difftime_string(time(NULL), begin_time);
-	Report("[" + duration + "]");
+	Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+					  "right"));
     }
 }
 
@@ -74,8 +80,10 @@ void WordRep::InduceWordVectors() {
     if (util_file::exists(SingularValuesPath()) &&
 	util_file::exists(WordVectorsPath())) { return; }
     SMat matrix = sparsesvd::binary_read_sparse_matrix(ContextWordCountPath());
+    Report("\n");
+    Report(util_string::buffer_string("[SINGULAR VALUE DECOMPOSITION]",
+				      80, '-', "right"));
     Report(util_string::printf_format(
-	       "\n[SINGULAR VALUE DECOMPOSITION]\n"
 	       "   Matrix dimensions: %ld x %ld (%ld nonzeros)\n"
 	       "   Desired rank: %ld\n"
 	       "   Transformation method: %s\n"
@@ -93,7 +101,8 @@ void WordRep::InduceWordVectors() {
 		      power_smooth_, scaling_method_, &left_singular_vectors,
 		      &right_singular_vectors, &singular_values);
     string duration = util_string::difftime_string(time(NULL), begin_time);
-    Report("[" + duration + "]");
+    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+				      "right"));
     svdFreeSMat(matrix);
 
     // Write singular values.
@@ -141,17 +150,18 @@ void WordRep::ClusterWordVectors() {
     corpus::load_sorted_word_vectors(WordVectorsPath(), &sorted_word_counts,
 				     &sorted_word_strings, &sorted_word_vectors,
 				     normalized);
-
-    Report(util_string::printf_format(
-	       "\n[AGGLOMERATIVE CLUSTERING]\n"
-	       "Number of clusters: %ld", dim_));
+    Report("\n");
+    Report(util_string::buffer_string("[AGGLOMERATIVE CLUSTERING]",
+				      80, '-', "right"));
+    Report(util_string::printf_format("   Number of clusters: %ld", dim_));
     time_t begin_time = time(NULL);
     AgglomerativeClustering cluster;
     double gamma = cluster.ClusterOrderedVectors(sorted_word_vectors, dim_);
     Report(util_string::printf_format(
 	       "   Average number of tightening: %.2f (not %ld)", gamma, dim_));
     string duration = util_string::difftime_string(time(NULL), begin_time);
-    Report("[" + duration + "]");
+    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+				      "right"));
 
     // Lexicographically sort bit strings for enhanced readability.
     vector<string> bitstring_types;
@@ -193,7 +203,9 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
     bool normalized = true;  // Word vectors are already normalized.
 
     // Evaluate on word similarity/relatedness datasets.
-    Report("\n[CORRELATION IN SIMILARITY SCORES]");
+    Report("\n");
+    Report(util_string::buffer_string("[CORRELATION IN SIMILARITY SCORES]",
+				      80, '-', "right"));
     time_t begin_time = time(NULL);
     vector<size_t> num_instances;
     vector<size_t> num_handled;
@@ -206,20 +218,27 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
     eval_lexical::compute_correlation(similarity_files, word_vectors,
 				      normalized, &num_instances, &num_handled,
 				      &correlation);
+    double average_correlation = 0.0;
     for (size_t i = 0; i < similarity_files.size(); ++i) {
 	string file_name = util_string::buffer_string(
 	    util_file::get_file_name(similarity_files[i]),
-	    max_file_name_length + 3);
+	    max_file_name_length + 3, ' ', "right");
 	Report(util_string::printf_format(
 		   "%s   %.3f   (%d/%d evaluated)",
 		   file_name.c_str(), correlation[i], num_handled[i],
 		   num_instances[i]));
+	average_correlation += correlation[i] / similarity_files.size();
     }
+    Report(util_string::printf_format("   Average correlation: %.3f",
+				      average_correlation));
     string duration = util_string::difftime_string(time(NULL), begin_time);
-    Report("[" + duration + "]");
+    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+				      "right"));
 
     // Evaluate on word analogy datasets.
-    Report("\n[ACCURACY IN ANALOGY QUESTIONS]");
+    Report("\n");
+    Report(util_string::buffer_string("[ACCURACY IN ANALOGY QUESTIONS]",
+				      80, '-', "right"));
     begin_time = time(NULL);
     for (const string &file_name : analogy_files) {
 	max_file_name_length = max(max_file_name_length,
@@ -233,14 +252,36 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
     for (size_t i = 0; i < analogy_files.size(); ++i) {
 	string file_name = util_string::buffer_string(
 	    util_file::get_file_name(analogy_files[i]),
-	    max_file_name_length + 3);
+	    max_file_name_length + 3, ' ', "right");
 	Report(util_string::printf_format(
 		   "%s   %.2f   (%d/%d evaluated)",
 		   file_name.c_str(), accuracy[i], num_handled[i],
 		   num_instances[i]));
+	vector<pair<string, double> > v;
+	size_t max_type_name_length = 0;
+	for (const auto &type_pair : per_type_accuracy[i]) {
+	    v.emplace_back(type_pair.first, type_pair.second);
+	    max_type_name_length = max(type_pair.first.size(),
+				       max_type_name_length);
+	}
+	sort(v.begin(), v.end(),
+	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
+	Report(util_string::buffer_string("_____", 80, ' ', "right"));
+	for (const auto &sorted_pair : v) {
+	    string type_name = util_string::buffer_string(
+		sorted_pair.first, max_type_name_length + 5, ' ',
+		"center");
+	    string line = util_string::buffer_string(
+		util_string::printf_format("%s %.2f", type_name.c_str(),
+					   sorted_pair.second),
+		80, ' ', "right");
+	    Report(line);
+	}
+	Report(util_string::buffer_string("-----", 80, ' ', "right"));
     }
     duration = util_string::difftime_string(time(NULL), begin_time);
-    Report("[" + duration + "]");
+    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+				      "right"));
 }
 
 string WordRep::Signature(size_t version) {
