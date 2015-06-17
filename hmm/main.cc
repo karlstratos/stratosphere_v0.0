@@ -13,6 +13,7 @@ int main (int argc, char* argv[]) {
     bool train = false;
     size_t num_states = 10;
     size_t max_num_em_iterations = 500;
+    string development_path;
     string decoding_method = "viterbi";
     bool verbose = true;
 
@@ -34,6 +35,8 @@ int main (int argc, char* argv[]) {
 	    num_states = stol(argv[++i]);
 	} else if (arg == "--iter") {
 	    max_num_em_iterations = stol(argv[++i]);
+	} else if (arg == "--dev") {
+	    development_path = argv[++i];
 	} else if (arg == "--decode") {
 	    decoding_method = argv[++i];
 	} else if (arg == "--quiet" || arg == "-q") {
@@ -62,6 +65,8 @@ int main (int argc, char* argv[]) {
 	     << "number of states" << endl;
 	cout << "--iter [" << max_num_em_iterations << "]:       \t"
 	     << "maximum number of EM iterations" << endl;
+	cout << "--dev [-]:        \t"
+	     << "path to a development data file" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
 	     << "decoding method: viterbi, mbr"  << endl;
 	cout << "--quiet, -q:          \t"
@@ -74,6 +79,7 @@ int main (int argc, char* argv[]) {
     HMM hmm;
     hmm.set_rare_cutoff(rare_cutoff);
     hmm.set_max_num_em_iterations(max_num_em_iterations);
+    hmm.set_development_path(development_path);
     hmm.set_decoding_method(decoding_method);
     hmm.set_verbose(verbose);
     if (train) {
