@@ -21,10 +21,13 @@ TEST(PrintfFormatString, CheckBehavior) {
 	util_string::printf_format("Science: %.2e", test_float);
     string long_string =
 	util_string::printf_format("Long: %ld", test_long);
+    string percent_string =
+	util_string::printf_format("Percent: 100%%");
     EXPECT_EQ("String: TEST_STRING", string_string);
     EXPECT_EQ("Float: 3.14", float_string);
     EXPECT_EQ("Science: 3.14e+00", science_string);
     EXPECT_EQ("Long: 999999999999999", long_string);
+    EXPECT_EQ("Percent: 100%", percent_string);
 }
 
 // Test class for string tokenization.

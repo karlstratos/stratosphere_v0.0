@@ -98,6 +98,11 @@ public:
 	max_num_em_iterations_ = max_num_em_iterations;
     }
 
+    // Sets the path to development data.
+    void set_development_path(string development_path) {
+	development_path_ = development_path;
+    }
+
     // Sets the decoding method.
     void set_decoding_method(string decoding_method) {
 	decoding_method_ = decoding_method;
@@ -232,6 +237,9 @@ private:
 
     // Maximum number of EM iterations.
     size_t max_num_em_iterations_ = 500;
+
+    // Path to development data.
+    string development_path_;
 
     // Decoding method.
     string decoding_method_ = "viterbi";

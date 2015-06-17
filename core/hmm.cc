@@ -235,6 +235,22 @@ void HMM::TrainUnsupervised(
     }
     InitializeParametersRandomly(NumObservations(), NumStates());
 
+    // Prepare data-driven model development.
+    string temp_model_path = tmpnam(nullptr);
+    decoding_method_ = "mbr";  // More appropriate than Viterbi for EM?
+    double max_development_accuracy = 0.0;
+    vector<vector<string> > development_observation_string_sequences;
+    vector<vector<string> > development_state_string_sequences;
+    if (!development_path_.empty()) {
+	bool fully_labeled;
+	ReadData(development_path_, &development_observation_string_sequences,
+		 &development_state_string_sequences, &fully_labeled);
+	ASSERT(fully_labeled, "Development data should be labeled");
+    }
+    const size_t development_interval = 10;
+    const size_t max_no_improvement_count = 5;
+    size_t no_improvement_count = 0;
+
     // Run EM iterations.
     double log_likelihood = -numeric_limits<double>::infinity();
     for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
@@ -333,17 +349,67 @@ void HMM::TrainUnsupervised(
 	}
 	CheckProperDistribution();
 
-	double improvement = new_log_likelihood - log_likelihood;
-	ASSERT(improvement > -1e-5, "Negative improvement: " << improvement);
+	// Must always increase likelihood.
+	double likelihood_difference = new_log_likelihood - log_likelihood;
+	ASSERT(likelihood_difference > -1e-5, "Likelihood decreased by: "
+	       << likelihood_difference);
+	log_likelihood = new_log_likelihood;
+
+	// Stopping critera: development accuracy, or likelihood.
 	if (verbose_) {
 	    string line = util_string::printf_format(
-		"Iteration %ld: %.2f (%.2f)", iteration_num + 1,
-		new_log_likelihood, improvement);
-	    cerr << line << endl;
+		"Iteration %ld: %.2f (%.2f)   ", iteration_num + 1,
+		new_log_likelihood, likelihood_difference);
+	    cerr << line;  // Put a newline later.
 	}
-	log_likelihood = new_log_likelihood;
-	if (improvement < 1e-10) { break; }
+	if (!development_path_.empty()) {
+	    if ((iteration_num + 1) % development_interval != 0) {
+		if (verbose_) { cerr << endl; }
+		continue;
+	    }
+	    // Check the current accuracy.
+	    vector<vector<string> > predictions;
+	    for (size_t i = 0;
+		 i < development_observation_string_sequences.size(); ++i) {
+		vector<string> prediction;
+		Predict(development_observation_string_sequences[i],
+			&prediction);
+		predictions.push_back(prediction);
+	    }
+
+	    unordered_map<string, string> label_mapping;
+	    double position_accuracy;
+	    double sequence_accuracy;
+	    eval_sequential::compute_accuracy_mapping_labels(
+		development_state_string_sequences, predictions,
+		&position_accuracy, &sequence_accuracy, &label_mapping);
+	    if (verbose_) {
+		cerr << util_file::get_file_name(development_path_) << ": "
+		     << util_string::printf_format("%.2f%% ",
+						   position_accuracy);
+	    }
+	    if (position_accuracy > max_development_accuracy) {
+		if (verbose_) { cerr << "(new record)" << endl; }
+		max_development_accuracy = position_accuracy;
+		no_improvement_count = 0;  // Reset.
+		Save(temp_model_path);
+	    } else {
+		++no_improvement_count;
+		if (verbose_) {
+		    cerr << "(no improvement " + to_string(no_improvement_count)
+			 << ")" << endl;
+		}
+		if (no_improvement_count >= max_no_improvement_count) {
+		    Load(temp_model_path);
+		    break;
+		}
+	    }
+	} else {  // No development data is given.
+	    if (verbose_) { cerr << endl; }
+	    if (likelihood_difference < 1e-10) { break; }  // Stationary point
+	}
     }
+    remove(temp_model_path.c_str());
 }
 
 void HMM::Predict(const string &data_path, const string &prediction_path) {
@@ -369,8 +435,10 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
 	    state_string_sequences, predictions, &position_accuracy,
 	    &sequence_accuracy, &label_mapping);
 	if (verbose_) {
-	    cerr << "(many-to-one) per-position: " << position_accuracy
-		 << "%   per-sequence: " << sequence_accuracy << "%" << endl;
+	    string line = util_string::printf_format(
+		"(many-to-one) per-position: %.2f%%   per-sequence: %.2f%%",
+		position_accuracy, sequence_accuracy);
+	    cerr << line << endl;
 	}
     }
 
