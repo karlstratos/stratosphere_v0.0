@@ -72,4 +72,93 @@ namespace optimize {
 	}
 	ASSERT(fabs(l1_mass - 1.0) < 1e-10, "Does not sum to 1?" << l1_mass);
     }
+
+    void find_vertex_rows(const Eigen::MatrixXd &rows, size_t num_vertices,
+			  const unordered_map<size_t, bool> &vertex_candidates,
+			  vector<size_t> *vertex_indices) {
+	vertex_indices->clear();
+
+	// U is the orthonormal basis of the subspace spanned by currently
+	// selected vertex rows.
+	Eigen::MatrixXd U;
+	unordered_map<size_t, bool> selected_rows;
+	while (U.cols() < num_vertices) {
+	    // Find the row furthest away from the current subspace.
+	    Eigen::MatrixXd orthogonal_projection = U * U.transpose();
+	    double max_distance = 0.0;
+	    size_t vertex_row = 0;
+	    for (size_t row = 0; row < rows.rows(); ++row) {
+		// (RESTRICTION 1) Do not consider rows that are not candidates.
+		if (vertex_candidates.find(row) ==
+		    vertex_candidates.end()) { continue; }
+
+		// (RESTRICTION 2) Do not consider rows already selected.
+		if (selected_rows.find(row) !=
+		    selected_rows.end()) { continue; }
+
+		Eigen::VectorXd distance_vector = rows.row(row);
+		if (U.cols() != 0) {  // Remove the subspace projection.
+		    distance_vector -= orthogonal_projection * distance_vector;
+		}
+		double distance = distance_vector.norm();
+		if (distance > max_distance) {
+		    max_distance = distance;
+		    vertex_row = row;
+		}
+	    }
+	    selected_rows[vertex_row] = true;
+	    vertex_indices->push_back(vertex_row);
+	    Eigen::VectorXd new_direction = rows.row(vertex_row);
+	    if (U.cols() != 0) {  // Remove the subspace projection.
+		new_direction -= orthogonal_projection * new_direction;
+	    }
+	    new_direction.normalize();
+
+	    // Extend the basis.
+	    size_t vertex_num = U.cols() + 1;
+	    U.conservativeResize(rows.cols(), vertex_num);
+	    U.col(vertex_num - 1) = new_direction;
+	}
+	// Sort anchor indices by convention: e.g., [3 100 116 ... 2225].
+	sort(vertex_indices->begin(), vertex_indices->end());
+    }
+
+    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
+			      size_t max_num_updates, double stopping_threshold,
+			      bool verbose, const unordered_map<size_t, bool>
+			      &anchor_candidates, Eigen::MatrixXd *A) {
+	// Identify anchor rows by finding vertices of a convex hull.
+	vector<size_t> anchor_indices;
+	find_vertex_rows(M, rank, anchor_candidates, &anchor_indices);
+
+	// Organize anchor rows as columns of a matrix.
+	Eigen::MatrixXd anchor_columns(M.cols(), rank);
+	for (size_t i = 0; i < rank; ++i) {
+	    size_t anchor_index = anchor_indices[i];
+	    anchor_columns.col(i) = M.row(anchor_index);
+	}
+
+	// Recover each row of A as the convex coefficients for expressing
+	// that row as a combination of anchor rows.
+	A->resize(M.rows(), rank);
+	for (size_t row = 0; row < A->rows(); ++row) {
+	    Eigen::VectorXd convex_anchor_combination = M.row(row);
+	    Eigen::VectorXd convex_coefficients;
+	    compute_convex_coefficients_squared_loss(
+		anchor_columns, convex_anchor_combination, max_num_updates,
+		stopping_threshold, verbose, &convex_coefficients);
+	    (*A).row(row) = convex_coefficients;
+	}
+    }
+
+    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
+			      size_t max_num_updates, double stopping_threshold,
+			      bool verbose, Eigen::MatrixXd *A) {
+	unordered_map<size_t, bool> anchor_candidates;
+	for (size_t row = 0; row < M.rows(); ++row) {
+	    anchor_candidates[row] = true;  // Consider all rows for anchors.
+	}
+	anchor_factorization(M, rank, max_num_updates, stopping_threshold,
+			     verbose, anchor_candidates, A);
+    }
 }  // namespace optimize
