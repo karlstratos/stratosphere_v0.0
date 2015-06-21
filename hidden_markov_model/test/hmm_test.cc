@@ -11,15 +11,12 @@
 class LabeledDataExample : public testing::Test {
 protected:
     virtual void SetUp() {
-	// the_D dog_N saw_V the_D cat_N ._S
-	// the_D dog_N barked_V ._S
-	// the_D cat_N laughed_V !_S
 	model_file_path_ = tmpnam(nullptr);
 	data_file_path_ = tmpnam(nullptr);
 	ofstream data_file(data_file_path_, ios::out);
-	data_file << "the D\ndog N\nsaw V\nthe D\ncat N\n. S\n" << endl;
-	data_file << "the D\ndog N\nbarked V\n. S\n" << endl;
-	data_file << "the D\ncat N\nlaughed V\n! S" << endl;
+	data_file << "the__D dog__N saw__V the__D cat__N .__S" << endl;
+	data_file << "the__D dog__N barked__V .__S" << endl;
+	data_file << "the__D cat__N laughed__V !__S" << endl;
 
 	// MLE parameter estimates.
 	rare0_emission_["D"]["the"] = 1.0;

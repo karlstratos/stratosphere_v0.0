@@ -207,6 +207,9 @@ private:
     void MinimumBayesRisk(const vector<Observation> &observation_sequence,
 			  vector<State> *state_sequence);
 
+    // Special string for separating observation/state in data files.
+    const string kObservationStateSeperator_ = "__";
+
     // Special string for representing rare words.
     const string kRareObservationString_ = "<?>";
 

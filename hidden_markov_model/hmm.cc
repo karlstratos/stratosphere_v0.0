@@ -617,32 +617,34 @@ void HMM::ReadData(const string &data_path,
 		   vector<vector<string> > *state_string_sequences,
 		   bool *fully_labeled) {
     (*fully_labeled) = true;
-    vector<string> observation_string_sequence;
-    vector<string> state_string_sequence;
     ifstream data_file(data_path, ios::in);
     while (data_file.good()) {
 	vector<string> tokens;
 	util_file::read_line(&data_file, &tokens);
-	if (tokens.size() > 0) {
-	    observation_string_sequence.push_back(tokens[0]);
-	    string state_string;
-	    if (tokens.size() == 1) {  // "the"
-		(*fully_labeled) = false;
-	    } else if (tokens.size() == 2) {  // "the DET"
-		state_string = tokens[1];
-	    } else {  // Invalid
-		ASSERT(false, util_string::convert_to_string(tokens));
+	if (tokens.size() > 0) {  // We have a sequence.
+	    vector<string> observation_string_sequence;
+	    vector<string> state_string_sequence;
+	    for (size_t i = 0; i < tokens.size(); ++i) {
+		vector<string> seperated_token;
+		util_string::split_by_string(
+		    tokens[i], kObservationStateSeperator_, &seperated_token);
+		string state_string;
+		if (seperated_token.size() == 1) {  // Observation
+		    (*fully_labeled) = false;
+		} else if (seperated_token.size() == 2) {  // Observation-State
+		    state_string = seperated_token[1];
+		} else {
+		    ASSERT(false, "Special seperator string \""
+			   << kObservationStateSeperator_ << "\" present: "
+			   << tokens[i]);
+		}
+		observation_string_sequence.push_back(seperated_token[0]);
+		state_string_sequence.push_back(state_string);
 	    }
-	    state_string_sequence.push_back(state_string);
-	} else {
-	    if (observation_string_sequence.size() > 0) {
-		// End of a sequence.
-		observation_string_sequences->push_back(
-		    observation_string_sequence);
-		state_string_sequences->push_back(state_string_sequence);
-		observation_string_sequence.clear();
-		state_string_sequence.clear();
-	    }
+
+	    observation_string_sequences->push_back(
+		observation_string_sequence);
+	    state_string_sequences->push_back(state_string_sequence);
 	}
     }
 }
