@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 
-#include "../core/hmm.h"
+#include "hmm.h"
 
 int main (int argc, char* argv[]) {
     string model_path;

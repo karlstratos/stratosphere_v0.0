@@ -7,8 +7,8 @@
 #include <numeric>
 #include <random>
 
-#include "util.h"
-#include "evaluate.h"
+#include "../core/util.h"
+#include "../core/evaluate.h"
 
 void HMM::Clear() {
     observation_dictionary_.clear();

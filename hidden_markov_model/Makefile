@@ -29,13 +29,13 @@ TARGETS = hmm
 
 all: $(TARGETS)
 
-hmm: main.o $(CORE)/hmm.o $(CORE)/util.o $(CORE)/evaluate.o
+hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-main.o: main.cc $(CORE)/hmm.o
+main.o: main.cc hmm.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-$(CORE)/hmm.o: $(CORE)/hmm.cc $(CORE)/hmm.h
+hmm.o: hmm.cc hmm.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(CORE)/util.o: $(CORE)/util.cc $(CORE)/util.h

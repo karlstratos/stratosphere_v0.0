@@ -2,8 +2,8 @@
 //
 //  Code for inducing word representations.
 
-#ifndef WORD_REPRESENTATIONS_WORDREP_H_
-#define WORD_REPRESENTATIONS_WORDREP_H_
+#ifndef WORD_REPRESENTATION_WORDREP_H_
+#define WORD_REPRESENTATION_WORDREP_H_
 
 #include <Eigen/Dense>
 #include <fstream>
@@ -180,4 +180,4 @@ private:
     bool verbose_ = true;
 };
 
-#endif  // WORD_REPRESENTATIONS_WORDREP_H_
+#endif  // WORD_REPRESENTATION_WORDREP_H_

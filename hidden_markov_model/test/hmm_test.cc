@@ -5,7 +5,7 @@
 #include "gtest/gtest.h"
 
 #include "../hmm.h"
-#include "../util.h"
+#include "../../core/util.h"
 
 // Test class that provides a simple labeled dataset.
 class LabeledDataExample : public testing::Test {

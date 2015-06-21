@@ -2,8 +2,8 @@
 //
 // An implementation of hidden Markove models (HMMs).
 
-#ifndef CORE_HMM_H_
-#define CORE_HMM_H_
+#ifndef HIDDEN_MARKOV_MODEL_HMM_H_
+#define HIDDEN_MARKOV_MODEL_HMM_H_
 
 #include <string>
 #include <unordered_map>
@@ -251,4 +251,4 @@ private:
     bool debug_ = false;
 };
 
-#endif  // CORE_HMM_H_
+#endif  // HIDDEN_MARKOV_MODEL_HMM_H_
