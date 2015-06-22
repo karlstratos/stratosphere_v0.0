@@ -11,10 +11,10 @@ int main (int argc, char* argv[]) {
     string prediction_path;
     size_t rare_cutoff = 5;
     bool train = false;
-    size_t num_states = 10;
+    size_t num_states = 0;
     size_t max_num_em_iterations = 500;
     string development_path;
-    string decoding_method = "viterbi";
+    string decoding_method = "mbr";
     bool verbose = true;
 
     // Parse command line arguments.
@@ -83,11 +83,14 @@ int main (int argc, char* argv[]) {
     hmm.set_decoding_method(decoding_method);
     hmm.set_verbose(verbose);
     if (train) {
-	bool supervised = (num_states == 0);
-	hmm.Train(data_path, supervised, num_states);
+	if (num_states == 0) {  // Supervised learning
+	    hmm.TrainSupervised(data_path);
+	} else {  // Unsupervised learning
+	    hmm.TrainUnsupervised(data_path, num_states);
+	}
 	hmm.Save(model_path);
     } else {
 	hmm.Load(model_path);
-	hmm.Predict(data_path, prediction_path);
+	hmm.Evaluate(data_path, prediction_path);
     }
 }

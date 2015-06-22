@@ -55,7 +55,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare0) {
     HMM hmm;
     hmm.set_rare_cutoff(0);
     hmm.set_verbose(false);
-    hmm.Train(data_file_path_);
+    hmm.TrainSupervised(data_file_path_);
     for (const auto &state_pair: rare0_emission_) {
 	for (const auto &observation_pair: state_pair.second) {
 	    EXPECT_NEAR(observation_pair.second,
@@ -85,7 +85,7 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
     HMM hmm;
     hmm.set_rare_cutoff(1);
     hmm.set_verbose(false);
-    hmm.Train(data_file_path_);
+    hmm.TrainSupervised(data_file_path_);
 
     // V -> <?>: 1.0
     // S -> <?>: 1.0 / 3.0;
@@ -101,7 +101,7 @@ TEST_F(LabeledDataExample, CheckSavingAndLoadingTrainedModel) {
     HMM hmm1;
     hmm1.set_rare_cutoff(1);
     hmm1.set_verbose(false);
-    hmm1.Train(data_file_path_);
+    hmm1.TrainSupervised(data_file_path_);
     hmm1.Save(model_file_path_);
 
     HMM hmm2(model_file_path_);  // Loading.
@@ -154,17 +154,16 @@ TEST_F(RandomHMM, ForwardBackward) {
 class UnlabeledDataExample : public testing::Test {
 protected:
     virtual void SetUp() {
-	observation_string_sequences_.push_back(sequence1_);
-	observation_string_sequences_.push_back(sequence2_);
-	observation_string_sequences_.push_back(sequence3_);
+	data_file_path_ = tmpnam(nullptr);
+	ofstream data_file(data_file_path_, ios::out);
+	data_file << "the dog chased the cat" << endl;
+	data_file << "the cat chased the mouse" << endl;
+	data_file << "the mouse chased the dog" << endl;
     }
 
-    virtual void TearDown() { }
+    virtual void TearDown() { remove(data_file_path_.c_str()); }
 
-    vector<string> sequence1_ = {"the", "dog", "chased", "the", "cat"};
-    vector<string> sequence2_ = {"the", "cat", "chased", "the", "mouse"};
-    vector<string> sequence3_ = {"the", "mouse", "chased", "the", "dog"};
-    vector<vector<string> > observation_string_sequences_;
+    string data_file_path_;
     double tol_ = 1e-10;
 };
 
@@ -173,13 +172,7 @@ TEST_F(UnlabeledDataExample, RunUnsupervisedTrainingRare0State3NoCheck) {
     HMM hmm;
     hmm.set_rare_cutoff(0);
     hmm.set_verbose(false);
-    hmm.TrainUnsupervised(observation_string_sequences_, 3);
-    vector<string> sequence1_states;
-    vector<string> sequence2_states;
-    vector<string> sequence3_states;
-    hmm.Predict(sequence1_, &sequence1_states);
-    hmm.Predict(sequence2_, &sequence2_states);
-    hmm.Predict(sequence3_, &sequence3_states);
+    hmm.TrainUnsupervised(data_file_path_, 3);
 
     // Will not check explicitly. A few observed local optima were:
     // Likelihood: -10.75

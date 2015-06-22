@@ -38,7 +38,7 @@ void HMM::CreateRandomly(size_t num_observations, size_t num_states) {
 	state_dictionary_inverse_[state] = state_string;
     }
 
-    InitializeParametersRandomly(num_observations, num_states);
+    InitializeParametersRandomly();
 }
 
 void HMM::Save(const string &model_path) {
@@ -133,123 +133,123 @@ void HMM::Load(const string &model_path) {
     CheckProperDistribution();
 }
 
-void HMM::Train(const string &data_path, bool supervised, size_t num_states) {
-    vector<vector<string> > observation_string_sequences;
-    vector<vector<string> > state_string_sequences;
-    bool fully_labeled;
-    ReadData(data_path, &observation_string_sequences, &state_string_sequences,
-	     &fully_labeled);
-    if (supervised) {
-	ASSERT(fully_labeled, "Data not fully labeled");
-	TrainSupervised(observation_string_sequences, state_string_sequences);
-    } else {
-	ASSERT(num_states > 0, "Number of states needs to be > 0");
-	TrainUnsupervised(observation_string_sequences, num_states);
+void HMM::TrainSupervised(const string &data_path) {
+    Clear();
+
+    // First, construct observation and state dictionaries.
+    ConstructDictionaries(data_path, true);
+
+    // Next, collect co-occurrence counts...
+    vector<vector<size_t> > emission_count(NumObservations());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_count[state].resize(NumObservations(), 0);
     }
-}
+    vector<vector<size_t> > transition_count(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	transition_count[state].resize(NumStates() + 1, 0);  // +stop
+    }
+    vector<size_t> prior_count(NumStates(), 0);
 
-void HMM::InitializeParametersRandomly(size_t num_observations,
-				       size_t num_states) {
-    random_device device;
-    default_random_engine engine(device());
-    normal_distribution<double> normal(0.0, 1.0);  // Standard Gaussian.
+    // ... from the labeled data.
+    ifstream data_file(data_path, ios::in);
+    ASSERT(data_file.is_open(), "Cannot open " << data_path);
+    vector<string> observation_string_sequence;
+    vector<string> state_string_sequence;
+    while (ReadLine(true, &data_file, &observation_string_sequence,
+		    &state_string_sequence)) {
+	size_t length = observation_string_sequence.size();
+	vector<Observation> observation_sequence;
+	vector<State> state_sequence;
+	ConvertObservationSequence(observation_string_sequence,
+				   &observation_sequence);
+	ConvertStateSequence(state_string_sequence, &state_sequence);
 
-    // Generate emission parameters.
-    emission_.resize(num_states);
-    for (State state = 0; state < num_states; ++state) {
-	emission_[state].resize(num_observations);
-	double state_normalizer = 0.0;
-	for (Observation observation = 0; observation < num_observations;
-	     ++observation) {
-	    double value = fabs(normal(engine));
-	    emission_[state][observation] = value;
-	    state_normalizer += value;
+	++prior_count[state_sequence[0]];  // Initial State
+	for (size_t i = 0; i < length; ++i) {
+	    Observation observation = observation_sequence[i];
+	    State state = state_sequence[i];
+	    ++emission_count[state][observation];  // State -> Observation
+	    if (i > 0) {
+		State previous_state = state_sequence[i - 1];
+		++transition_count[previous_state][state];  // State' -> State
+	    }
 	}
-	for (Observation observation = 0; observation < num_observations;
+	State final_state = state_sequence[length - 1];
+	++transition_count[final_state][StoppingState()];  // State -> <STOP>
+    }
+
+    // Finally, set maximum-likelihood parameter values.
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	size_t state_normalizer = accumulate(emission_count[state].begin(),
+					     emission_count[state].end(), 0);
+	emission_[state].resize(NumObservations(),
+				-numeric_limits<double>::infinity());
+	for (Observation observation = 0; observation < NumObservations();
 	     ++observation) {
 	    emission_[state][observation] =
-		log(emission_[state][observation]) - log(state_normalizer);
+		log(emission_count[state][observation]) - log(state_normalizer);
 	}
     }
-
-    // Generate transition parameters.
-    transition_.resize(num_states);
-    for (State state1 = 0; state1 < num_states; ++state1) {
-	transition_[state1].resize(num_states + 1);  // +stop
-	double state1_normalizer = 0.0;
-	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
-	    double value = fabs(normal(engine));
-	    transition_[state1][state2] = value;
-	    state1_normalizer += value;
-	}
-	for (State state2 = 0; state2 < num_states + 1; ++state2) {  // +stop
+    transition_.resize(NumStates());
+    for (State state1 = 0; state1 < NumStates(); ++state1) {
+	size_t state1_normalizer = accumulate(transition_count[state1].begin(),
+					      transition_count[state1].end(),
+					      0);
+	transition_[state1].resize(NumStates() + 1,  // +stop
+				   -numeric_limits<double>::infinity());
+	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
 	    transition_[state1][state2] =
-		log(transition_[state1][state2]) - log(state1_normalizer);
+		log(transition_count[state1][state2]) - log(state1_normalizer);
 	}
     }
-
-    // Generate prior parameters.
-    prior_.resize(num_states);
-    double prior_normalizer = 0.0;
-    for (State state = 0; state < num_states; ++state) {
-	double value = fabs(normal(engine));
-	prior_[state] = value;
-	prior_normalizer += value;
+    size_t prior_normalizer =
+	accumulate(prior_count.begin(), prior_count.end(), 0);
+    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = log(prior_count[state]) - log(prior_normalizer);
     }
-    for (State state = 0; state < num_states; ++state) {
-	prior_[state] = log(prior_[state]) - log(prior_normalizer);
-    }
-
     CheckProperDistribution();
 }
 
-void HMM::TrainSupervised(
-    const vector<vector<string> > &observation_string_sequences,
-    const vector<vector<string> > &state_string_sequences) {
-    ASSERT(observation_string_sequences.size() == state_string_sequences.size(),
-	   "Number of sequences not matching");
+void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
     Clear();
 
-    vector<vector<Observation> > observation_sequences;
-    ConstructObservationDictionary(observation_string_sequences,
-				   &observation_sequences);
-    vector<vector<State> > state_sequences(state_string_sequences.size());
-    for (size_t i = 0; i < state_string_sequences.size(); ++i) {
-	for (size_t j = 0; j < state_string_sequences[i].size(); ++j) {
-	    State state = AddStateIfUnknown(state_string_sequences[i][j]);
-	    state_sequences[i].push_back(state);
-	}
-    }
-    TrainSupervised(observation_sequences, state_sequences);
-}
+    // Construct observation dictionaries from the data.
+    ConstructDictionaries(data_path, false);
 
-void HMM::TrainUnsupervised(
-    const vector<vector<string> > &observation_string_sequences,
-    size_t num_states) {
-    // Populate observation and state dictionaries.
-    vector<vector<Observation> > observation_sequences;
-    ConstructObservationDictionary(observation_string_sequences,
-				   &observation_sequences);
+    // But manually construct synthetic state dictionaries.
+    state_dictionary_.clear();
+    state_dictionary_inverse_.clear();
     for (State state = 0; state < num_states; ++state) {
 	AddStateIfUnknown("state" + to_string(state));
     }
-    InitializeParametersRandomly(NumObservations(), NumStates());
+
+    // Initialize HMM parameters randomly.
+    InitializeParametersRandomly();
 
     // Prepare data-driven model development.
-    string temp_model_path = tmpnam(nullptr);
-    decoding_method_ = "mbr";  // More appropriate than Viterbi for EM?
-    double max_development_accuracy = 0.0;
     vector<vector<string> > development_observation_string_sequences;
     vector<vector<string> > development_state_string_sequences;
     if (!development_path_.empty()) {
-	bool fully_labeled;
-	ReadData(development_path_, &development_observation_string_sequences,
-		 &development_state_string_sequences, &fully_labeled);
-	ASSERT(fully_labeled, "Development data should be labeled");
+	ifstream development_file(development_path_, ios::in);
+	ASSERT(development_file.is_open(), "Cannot open " << development_path_);
+	vector<string> observation_string_sequence;
+	vector<string> state_string_sequence;
+	while (ReadLine(true, &development_file, &observation_string_sequence,
+			&state_string_sequence)) {
+	    development_observation_string_sequences.push_back(
+		observation_string_sequence);
+	    development_state_string_sequences.push_back(state_string_sequence);
+	}
     }
-    const size_t development_interval = 10;
-    const size_t max_no_improvement_count = 5;
+    string temp_model_path = tmpnam(nullptr);
+    decoding_method_ = "mbr";  // More appropriate than Viterbi for EM.
+    const size_t development_interval = 10;  // To check development accuracy.
+    double max_development_accuracy = 0.0;
+    const size_t max_no_improvement_count = 10;  // Number of "lives".
     size_t no_improvement_count = 0;
+
 
     // Run EM iterations.
     double log_likelihood = -numeric_limits<double>::infinity();
@@ -266,14 +266,23 @@ void HMM::TrainUnsupervised(
 	}
 	vector<double> prior_count(NumStates(), 0.0);
 
+	// Go through the data to accumulated expected counts.
 	double new_log_likelihood = 0.0;
-	for (size_t i = 0; i < observation_sequences.size(); ++i) {
-	    size_t length = observation_sequences[i].size();
+	ifstream data_file(data_path, ios::in);
+	ASSERT(data_file.is_open(), "Cannot open " << data_path);
+	vector<string> observation_string_sequence;
+	vector<string> state_string_sequence;  // Won't be used.
+	while (ReadLine(false, &data_file, &observation_string_sequence,
+			&state_string_sequence)) {
+	    size_t length = observation_string_sequence.size();
+	    vector<Observation> observation_sequence;
+	    ConvertObservationSequence(observation_string_sequence,
+				       &observation_sequence);
 
 	    vector<vector<double> > al;  // Forward probabilities.
-	    Forward(observation_sequences[i], &al);
+	    Forward(observation_sequence, &al);
 
-	    // Calculate the (log) probability of the observation sequence.
+	    // Calculate the log probability of the observation sequence.
 	    double log_probability = -numeric_limits<double>::infinity();
 	    for (State state = 0; state < NumStates(); ++state) {
 		log_probability = util_math::sum_logs(
@@ -283,7 +292,7 @@ void HMM::TrainUnsupervised(
 	    new_log_likelihood += log_probability;
 
 	    vector<vector<double> > be;  // Backward probabilities.
-	    Backward(observation_sequences[i], &be);
+	    Backward(observation_sequence, &be);
 
 	    // Accumulate initial state probabilities.
 	    for (State state = 0; state < NumStates(); ++state) {
@@ -291,22 +300,22 @@ void HMM::TrainUnsupervised(
 		    exp(al[0][state] + be[0][state] - log_probability);
 	    }
 
-	    for (size_t j = 0; j < length; ++j) {
-		Observation observation = observation_sequences[i][j];
+	    for (size_t i = 0; i < length; ++i) {
+		Observation observation = observation_sequence[i];
 
 		// Accumulate emission probabilities
 		for (State state = 0; state < NumStates(); ++state) {
 		    emission_count[state][observation] +=
-			exp(al[j][state] + be[j][state] - log_probability);
-		    if (j > 0) {
+			exp(al[i][state] + be[i][state] - log_probability);
+		    if (i > 0) {
 			// Accumulate transition probabilities.
 			for (State previous_state = 0;
 			     previous_state < NumStates(); ++previous_state) {
 			    transition_count[previous_state][state] +=
-				exp(al[j - 1][previous_state] +
+				exp(al[i - 1][previous_state] +
 				    transition_[previous_state][state] +
 				    emission_[state][observation] +
-				    be[j][state] - log_probability);
+				    be[i][state] - log_probability);
 			}
 		    }
 		}
@@ -365,9 +374,9 @@ void HMM::TrainUnsupervised(
 	if (!development_path_.empty()) {
 	    if ((iteration_num + 1) % development_interval != 0) {
 		if (verbose_) { cerr << endl; }
-		continue;
+		continue;  // Not at a checking interval.
 	    }
-	    // Check the current accuracy.
+	    // Check the accuracy on the (labeled) development data.
 	    vector<vector<string> > predictions;
 	    for (size_t i = 0;
 		 i < development_observation_string_sequences.size(); ++i) {
@@ -412,36 +421,41 @@ void HMM::TrainUnsupervised(
     remove(temp_model_path.c_str());
 }
 
-void HMM::Predict(const string &data_path, const string &prediction_path) {
+void HMM::Evaluate(const string &labeled_data_path,
+		   const string &prediction_path) {
+    // Load the test data while making predictions.
+    ifstream data_file(labeled_data_path, ios::in);
+    ASSERT(data_file.is_open(), "Cannot open " << labeled_data_path);
+    bool labeled = true;
     vector<vector<string> > observation_string_sequences;
     vector<vector<string> > state_string_sequences;
-    bool fully_labeled;
-    ReadData(data_path, &observation_string_sequences, &state_string_sequences,
-	     &fully_labeled);
-
     vector<vector<string> > predictions;
-    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+    vector<string> observation_string_sequence;
+    vector<string> state_string_sequence;
+    while (ReadLine(labeled, &data_file, &observation_string_sequence,
+		    &state_string_sequence)) {
+	observation_string_sequences.push_back(observation_string_sequence);
+	state_string_sequences.push_back(state_string_sequence);
 	vector<string> prediction;
-	Predict(observation_string_sequences[i], &prediction);
+	Predict(observation_string_sequence, &prediction);
 	predictions.push_back(prediction);
     }
 
+    // For simplicity, always report the many-to-one accuracy.
     unordered_map<string, string> label_mapping;
-    if (fully_labeled) {
-	// For simplicity, always report the many-to-one accuracy.
-	double position_accuracy;
-	double sequence_accuracy;
-	eval_sequential::compute_accuracy_mapping_labels(
-	    state_string_sequences, predictions, &position_accuracy,
-	    &sequence_accuracy, &label_mapping);
-	if (verbose_) {
-	    string line = util_string::printf_format(
-		"(many-to-one) per-position: %.2f%%   per-sequence: %.2f%%",
-		position_accuracy, sequence_accuracy);
-	    cerr << line << endl;
-	}
+    double position_accuracy;
+    double sequence_accuracy;
+    eval_sequential::compute_accuracy_mapping_labels(
+	state_string_sequences, predictions, &position_accuracy,
+	&sequence_accuracy, &label_mapping);
+    if (verbose_) {
+	string line = util_string::printf_format(
+	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%",
+	    decoding_method_.c_str(), position_accuracy, sequence_accuracy);
+	cerr << line << endl;
     }
 
+    // If the prediction path is not "", write predictions in that file.
     if (!prediction_path.empty()) {
 	ofstream file(prediction_path, ios::out);
 	ASSERT(file.is_open(), "Cannot open file: " << prediction_path);
@@ -451,7 +465,7 @@ void HMM::Predict(const string &data_path, const string &prediction_path) {
 		string state_string_predicted = (label_mapping.size() > 0) ?
 		    label_mapping[predictions[i][j]] : predictions[i][j];
 		file << observation_string_sequences[i][j] << " ";
-		file << state_string_sequences[i][j] << " ";  // Optional
+		file << state_string_sequences[i][j] << " ";
 		file << state_string_predicted << endl;
 	    }
 	    file << endl;
@@ -524,65 +538,58 @@ double HMM::StoppingProbability(string state_string) {
     return 0.0;
 }
 
-void HMM::TrainSupervised(
-    const vector<vector<Observation> > &observation_sequences,
-    const vector<vector<State> > &state_sequences) {
-    // Gather co-occurrence counts.
-    vector<vector<size_t> > emission_count(NumObservations());
-    for (State state = 0; state < NumStates(); ++state) {
-	emission_count[state].resize(NumObservations(), 0);
-    }
-    vector<vector<size_t> > transition_count(NumStates());
-    for (State state = 0; state < NumStates(); ++state) {
-	transition_count[state].resize(NumStates() + 1, 0);  // +stop
-    }
-    vector<size_t> prior_count(NumStates(), 0);
-    for (size_t i = 0; i < observation_sequences.size(); ++i) {
-	size_t length = observation_sequences[i].size();
-        ASSERT(length > 0 && length == state_sequences[i].size(),
-	       "Invalid sequence pair");
-	State initial_state = state_sequences[i][0];
-	++prior_count[initial_state];
-	for (size_t j = 0; j < length; ++j) {
-	    Observation observation = observation_sequences[i][j];
-	    State state = state_sequences[i][j];
-	    ++emission_count[state][observation];
-	    if (j > 0) { ++transition_count[state_sequences[i][j - 1]][state]; }
-	}
-	++transition_count[state_sequences[i][length - 1]][StoppingState()];
-    }
+void HMM::InitializeParametersRandomly() {
+    ASSERT(NumObservations() > 0 && NumStates(), "Must have dictionaries");
+    random_device device;
+    default_random_engine engine(device());
+    normal_distribution<double> normal(0.0, 1.0);  // Standard Gaussian.
 
-    // Set parameters.
+    // Generate emission parameters.
     emission_.resize(NumStates());
     for (State state = 0; state < NumStates(); ++state) {
-	size_t state_normalizer = accumulate(emission_count[state].begin(),
-					     emission_count[state].end(), 0);
-	emission_[state].resize(NumObservations(),
-				-numeric_limits<double>::infinity());
+	emission_[state].resize(NumObservations());
+	double state_normalizer = 0.0;
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    double value = fabs(normal(engine));
+	    emission_[state][observation] = value;
+	    state_normalizer += value;
+	}
 	for (Observation observation = 0; observation < NumObservations();
 	     ++observation) {
 	    emission_[state][observation] =
-		log(emission_count[state][observation]) - log(state_normalizer);
+		log(emission_[state][observation]) - log(state_normalizer);
 	}
     }
+
+    // Generate transition parameters.
     transition_.resize(NumStates());
     for (State state1 = 0; state1 < NumStates(); ++state1) {
-	size_t state1_normalizer = accumulate(transition_count[state1].begin(),
-					      transition_count[state1].end(),
-					      0);
-	transition_[state1].resize(NumStates() + 1,  // +stop
-				   -numeric_limits<double>::infinity());
+	transition_[state1].resize(NumStates() + 1);  // +stop
+	double state1_normalizer = 0.0;
+	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
+	    double value = fabs(normal(engine));
+	    transition_[state1][state2] = value;
+	    state1_normalizer += value;
+	}
 	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
 	    transition_[state1][state2] =
-		log(transition_count[state1][state2]) - log(state1_normalizer);
+		log(transition_[state1][state2]) - log(state1_normalizer);
 	}
     }
-    size_t prior_normalizer =
-	accumulate(prior_count.begin(), prior_count.end(), 0);
-    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
+
+    // Generate prior parameters.
+    prior_.resize(NumStates());
+    double prior_normalizer = 0.0;
     for (State state = 0; state < NumStates(); ++state) {
-	prior_[state] = log(prior_count[state]) - log(prior_normalizer);
+	double value = fabs(normal(engine));
+	prior_[state] = value;
+	prior_normalizer += value;
     }
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = log(prior_[state]) - log(prior_normalizer);
+    }
+
     CheckProperDistribution();
 }
 
@@ -612,64 +619,64 @@ void HMM::CheckProperDistribution() {
     ASSERT(fabs(prior_sum - 1.0) < 1e-10, "Prior: " << prior_sum);
 }
 
-void HMM::ReadData(const string &data_path,
-		   vector<vector<string> > *observation_string_sequences,
-		   vector<vector<string> > *state_string_sequences,
-		   bool *fully_labeled) {
-    (*fully_labeled) = true;
-    ifstream data_file(data_path, ios::in);
-    while (data_file.good()) {
+bool HMM::ReadLine(bool labeled, ifstream *file,
+		   vector<string> *observation_string_sequence,
+		   vector<string> *state_string_sequence) {
+    observation_string_sequence->clear();
+    state_string_sequence->clear();
+    while (file->good()) {
 	vector<string> tokens;
-	util_file::read_line(&data_file, &tokens);
-	if (tokens.size() > 0) {  // We have a sequence.
-	    vector<string> observation_string_sequence;
-	    vector<string> state_string_sequence;
-	    for (size_t i = 0; i < tokens.size(); ++i) {
-		vector<string> seperated_token;
-		util_string::split_by_string(
-		    tokens[i], kObservationStateSeperator_, &seperated_token);
-		string state_string;
-		if (seperated_token.size() == 1) {  // Observation
-		    (*fully_labeled) = false;
-		} else if (seperated_token.size() == 2) {  // Observation-State
-		    state_string = seperated_token[1];
-		} else {
-		    ASSERT(false, "Special seperator string \""
-			   << kObservationStateSeperator_ << "\" present: "
-			   << tokens[i]);
-		}
-		observation_string_sequence.push_back(seperated_token[0]);
-		state_string_sequence.push_back(state_string);
+	util_file::read_line(file, &tokens);
+	if (tokens.size() == 0) { continue; }  // Skip empty lines.
+	for (size_t i = 0; i < tokens.size(); ++i) {
+	    vector<string> seperated_token;
+	    util_string::split_by_string(tokens[i], kObservationStateSeperator_,
+					 &seperated_token);
+	    if (labeled) {
+		ASSERT(seperated_token.size() == 2, "Wrong format for labeled "
+		       "data with seperator \"" << kObservationStateSeperator_
+		       << "\": " << tokens[i]);
+		observation_string_sequence->push_back(seperated_token[0]);
+		state_string_sequence->push_back(seperated_token[1]);
+	    } else {
+		ASSERT(seperated_token.size() == 1, "Wrong format for unlabeled"
+		       " data with seperator \"" << kObservationStateSeperator_
+		       << "\": " << tokens[i]);
+		observation_string_sequence->push_back(seperated_token[0]);
+		state_string_sequence->push_back("");  // To match lengths.
 	    }
-
-	    observation_string_sequences->push_back(
-		observation_string_sequence);
-	    state_string_sequences->push_back(state_string_sequence);
 	}
+	return true;  // Successfully read a non-empty line.
     }
+    return false;  // There was no more non-empty line to read.
 }
 
-void HMM::ConstructObservationDictionary(
-    const vector<vector<string> > observation_string_sequences,
-    vector<vector<Observation> > *observation_sequences) {
+void HMM::ConstructDictionaries(const string &data_path, bool labeled) {
+    observation_dictionary_.clear();
+    observation_dictionary_inverse_.clear();
+    state_dictionary_.clear();
+    state_dictionary_inverse_.clear();
+
+    // Get the frequency of observation types. Also get state types if labeled.
     unordered_map<string, size_t> observation_string_count;
-    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	for (size_t j = 0; j < observation_string_sequences[i].size(); ++j) {
-	    ++observation_string_count[observation_string_sequences[i][j]];
+    ifstream data_file(data_path, ios::in);
+    ASSERT(data_file.is_open(), "Cannot open " << data_path);
+    vector<string> observation_string_sequence;
+    vector<string> state_string_sequence;
+    while (ReadLine(labeled, &data_file, &observation_string_sequence,
+		    &state_string_sequence)) {
+	for (size_t i = 0; i < observation_string_sequence.size(); ++i) {
+	    ++observation_string_count[observation_string_sequence[i]];
+	    if (labeled) { AddStateIfUnknown(state_string_sequence[i]); }
 	}
     }
-    observation_sequences->resize(observation_string_sequences.size());
-    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	(*observation_sequences)[i].clear();
-	for (size_t j = 0; j < observation_string_sequences[i].size(); ++j) {
-	    string observation_string = observation_string_sequences[i][j];
-	    if (observation_string_count[observation_string] <= rare_cutoff_) {
-		observation_string = kRareObservationString_;
-	    }
-	    Observation observation =
-		AddObservationIfUnknown(observation_string);
-	    (*observation_sequences)[i].push_back(observation);
-	}
+
+    // Only include frequent observation types in the dictionary.
+    for (const auto observation_string_pair : observation_string_count) {
+	size_t observation_count = observation_string_pair.second;
+	string observation_string = (observation_count > rare_cutoff_) ?
+	    observation_string_pair.first : kRareObservationString_;
+	AddObservationIfUnknown(observation_string);
     }
 }
 
@@ -711,6 +718,19 @@ void HMM::ConvertObservationSequence(
 	    observation = UnknownObservation();
 	}
 	observation_sequence->push_back(observation);
+    }
+}
+
+void HMM::ConvertStateSequence(const vector<string> &state_string_sequence,
+			       vector<State> *state_sequence) {
+    ASSERT(state_dictionary_.size() > 0, "No state dictionary");
+    state_sequence->clear();
+    for (size_t i = 0; i < state_string_sequence.size(); ++i) {
+	string state_string = state_string_sequence[i];
+	ASSERT(state_dictionary_.find(state_string) != state_dictionary_.end(),
+	       "No state string: " << state_string);
+	State state = state_dictionary_[state_string];
+	state_sequence->push_back(state);
     }
 }
 

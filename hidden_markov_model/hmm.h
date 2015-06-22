@@ -40,26 +40,15 @@ public:
     void Load(const string &model_path);
 
     // Trains HMM parameters from a text file of labeled sequences.
-    void Train(const string &data_path) { Train(data_path, true, 0); }
+    void TrainSupervised(const string &data_path);
 
-    // Trains HMM parameters from a text file of labeled/unlabeled sequences.
-    void Train(const string &data_path, bool supervised, size_t num_states);
+    // Trains HMM parameters from a text file of unlabeled sequences.
+    void TrainUnsupervised(const string &data_path, size_t num_states);
 
-    // Trains HMM parameters from observation and state string sequences.
-    void TrainSupervised(
-	const vector<vector<string> > &observation_string_sequences,
-	const vector<vector<string> > &state_string_sequences);
-
-    // Trains HMM parameters from observation string sequences.
-    void TrainUnsupervised(
-	const vector<vector<string> > &observation_string_sequences,
-	size_t num_states);
-
-    // Predicts state sequences for the given data.
-    void Predict(const string &data_path) { Predict(data_path, ""); }
-
-    // Predicts state sequences for the given data and writes them in a file.
-    void Predict(const string &data_path, const string &prediction_path);
+    // Evaluates the sequence labeling accuracy of the HMM on a labeled dataset,
+    // writes predictions in a file (if prediction_path != "").
+    void Evaluate(const string &labeled_data_path,
+		  const string &prediction_path);
 
     // Predicts a state sequence.
     void Predict(const vector<string> &observation_string_sequence,
@@ -68,12 +57,6 @@ public:
     // Computes the log probability of the observation string sequence.
     double ComputeLogProbability(
 	const vector<string> &observation_string_sequence);
-
-    // Returns the number of observation types.
-    size_t NumObservations() { return observation_dictionary_.size(); }
-
-    // Returns the number of state types.
-    size_t NumStates() { return state_dictionary_.size(); }
 
     // Returns the emission probability.
     double EmissionProbability(string state_string, string observation_string);
@@ -86,6 +69,12 @@ public:
 
     // Returns the stopping probability.
     double StoppingProbability(string state_string);
+
+    // Returns the number of observation types.
+    size_t NumObservations() { return observation_dictionary_.size(); }
+
+    // Returns the number of state types.
+    size_t NumStates() { return state_dictionary_.size(); }
 
     // Returns the special string for representing rare words.
     string RareObservationString() { return kRareObservationString_; }
@@ -108,43 +97,33 @@ public:
 	decoding_method_ = decoding_method;
     }
 
-    // Sets whether to turn on the debug mode.
-    void set_debug(bool debug) { debug_ = debug; }
-
     // Sets the flag for printing messages to stderr.
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
+    // Sets whether to turn on the debug mode.
+    void set_debug(bool debug) { debug_ = debug; }
+
 private:
-    // Initializes parameters randomly.
-    void InitializeParametersRandomly(size_t num_observations,
-				      size_t num_states);
-
-    // Trains HMM parameters from observation and state sequences.
-    void TrainSupervised(
-	const vector<vector<Observation> > &observation_sequences,
-	const vector<vector<State> > &state_sequences);
-
     // Returns the index corresponding to an unknown observation.
     Observation UnknownObservation() { return NumObservations(); }
 
     // Returns the index corresponding to a special stopping state.
     State StoppingState() { return NumStates(); }
 
+    // Initializes parameters randomly (must already have dictionaries).
+    void InitializeParametersRandomly();
+
     // Check if parameters form proper distributions.
     void CheckProperDistribution();
 
-    // Reads labeled/unlabeled sequences from a text file: each line has an
-    // (observation, state) pair and an empty line indicates the end of a
-    // sequence.
-    void ReadData(const string &data_path,
-		  vector<vector<string> > *observation_string_sequences,
-		  vector<vector<string> > *state_string_sequences,
-		  bool *fully_labeled);
+    // Reads a line from a data file. Returns true if success, false if there is
+    // no more non-empty line: while (ReadLine(...)) { /* process line */ }
+    bool ReadLine(bool labeled, ifstream *file,
+		  vector<string> *observation_string_sequence,
+		  vector<string> *state_string_sequence);
 
-    // Constructs the observation dictionary while converting string sequences.
-    void ConstructObservationDictionary(
-	const vector<vector<string> > observation_string_sequences,
-	vector<vector<Observation> > *observation_sequences);
+    // Constructs observation (and state, if labeled) dictionaries.
+    void ConstructDictionaries(const string &data_path, bool labeled);
 
     // Adds the observation string to the dictionary if not already known.
     Observation AddObservationIfUnknown(const string &observation_string);
@@ -156,6 +135,10 @@ private:
     void ConvertObservationSequence(
 	const vector<string> &observation_string_sequence,
 	vector<Observation> *observation_sequence);
+
+    // Converts a state sequence from strings to indices.
+    void ConvertStateSequence(const vector<string> &state_string_sequence,
+			      vector<State> *state_sequence);
 
     // Converts a state sequence from indices to strings.
     void ConvertStateSequence(const vector<State> &state_sequence,
@@ -245,7 +228,7 @@ private:
     string development_path_;
 
     // Decoding method.
-    string decoding_method_ = "viterbi";
+    string decoding_method_ = "mbr";
 
     // Print messages to stderr?
     bool verbose_ = true;
