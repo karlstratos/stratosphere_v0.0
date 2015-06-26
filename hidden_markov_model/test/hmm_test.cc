@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 #include "../hmm.h"
+#include "../../core/corpus.h"
 #include "../../core/util.h"
 
 // Test class that provides a simple labeled dataset.
@@ -89,11 +90,9 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
 
     // V -> <?>: 1.0
     // S -> <?>: 1.0 / 3.0;
-    EXPECT_NEAR(1.0, hmm.EmissionProbability("V", hmm.RareObservationString()),
-		tol_);
+    EXPECT_NEAR(1.0, hmm.EmissionProbability("V", corpus::kRareString), tol_);
     EXPECT_NEAR(1.0 / 3.0,
-		hmm.EmissionProbability("S", hmm.RareObservationString()),
-		tol_);
+		hmm.EmissionProbability("S", corpus::kRareString), tol_);
 }
 
 // Checks saving and loading a trained model
@@ -108,11 +107,9 @@ TEST_F(LabeledDataExample, CheckSavingAndLoadingTrainedModel) {
     // V -> <?>: 1.0
     // S -> <?>: 1.0 / 3.0;
     EXPECT_NEAR(1.0,
-		hmm2.EmissionProbability("V", hmm2.RareObservationString()),
-		tol_);
+		hmm2.EmissionProbability("V", corpus::kRareString), tol_);
     EXPECT_NEAR(1.0 / 3.0,
-		hmm2.EmissionProbability("S", hmm2.RareObservationString()),
-		tol_);
+		hmm2.EmissionProbability("S", corpus::kRareString), tol_);
 }
 
 // Test class that provides a random HMM.

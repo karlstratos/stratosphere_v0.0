@@ -42,10 +42,7 @@ namespace optimize {
 		    cerr << "\r" << update_num << ": CURRENT_LOSS - "
 			 << "OPTIMAL_LOSS <= " << duality_gap << "   " << flush;
 		}
-		if (duality_gap <= stopping_threshold) {
-		    if (verbose) { cerr << endl; }
-		    break;
-		}
+		if (duality_gap <= stopping_threshold) { break; }
 	    }
 
 	    // Step 2. Find the optimal step size.
@@ -126,15 +123,17 @@ namespace optimize {
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
 			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, Eigen::MatrixXd *A) {
+			      &anchor_candidates, Eigen::MatrixXd *A,
+			      vector<size_t> *anchor_indices) {
+	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
+
 	// Identify anchor rows by finding vertices of a convex hull.
-	vector<size_t> anchor_indices;
-	find_vertex_rows(M, rank, anchor_candidates, &anchor_indices);
+	find_vertex_rows(M, rank, anchor_candidates, anchor_indices);
 
 	// Organize anchor rows as columns of a matrix.
 	Eigen::MatrixXd anchor_columns(M.cols(), rank);
 	for (size_t i = 0; i < rank; ++i) {
-	    size_t anchor_index = anchor_indices[i];
+	    size_t anchor_index = (*anchor_indices)[i];
 	    anchor_columns.col(i) = M.row(anchor_index);
 	}
 
@@ -148,7 +147,9 @@ namespace optimize {
 		anchor_columns, convex_anchor_combination, max_num_updates,
 		stopping_threshold, verbose, &convex_coefficients);
 	    (*A).row(row) = convex_coefficients;
+	    if (verbose) { cerr << row + 1 << "/" << A->rows() << "    "; }
 	}
+	if (verbose) { cerr << endl; }
     }
 
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
@@ -158,7 +159,8 @@ namespace optimize {
 	for (size_t row = 0; row < M.rows(); ++row) {
 	    anchor_candidates[row] = true;  // Consider all rows for anchors.
 	}
+	vector<size_t> anchor_indices;
 	anchor_factorization(M, rank, max_num_updates, stopping_threshold,
-			     verbose, anchor_candidates, A);
+			     verbose, anchor_candidates, A, &anchor_indices);
     }
 }  // namespace optimize

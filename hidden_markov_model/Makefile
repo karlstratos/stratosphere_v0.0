@@ -29,7 +29,8 @@ TARGETS = hmm
 
 all: $(TARGETS)
 
-hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o
+hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o $(CORE)/corpus.o \
+	$(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a $(CORE)/optimize.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc hmm.o
@@ -44,8 +45,17 @@ $(CORE)/util.o: $(CORE)/util.cc $(CORE)/util.h
 $(CORE)/evaluate.o: $(CORE)/evaluate.cc $(CORE)/evaluate.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
+$(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/sparsesvd.o: $(CORE)/sparsesvd.cc $(CORE)/sparsesvd.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
 $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
+
+$(CORE)/optimize.o: $(CORE)/optimize.cc $(CORE)/optimize.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:

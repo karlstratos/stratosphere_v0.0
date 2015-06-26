@@ -5,6 +5,7 @@
 #ifndef HIDDEN_MARKOV_MODEL_HMM_H_
 #define HIDDEN_MARKOV_MODEL_HMM_H_
 
+#include <Eigen/Dense>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -76,15 +77,35 @@ public:
     // Returns the number of state types.
     size_t NumStates() { return state_dictionary_.size(); }
 
-    // Returns the special string for representing rare words.
-    string RareObservationString() { return kRareObservationString_; }
-
     // Sets the rare cutoff.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
+
+    // Sets the unsupervised learning method.
+    void set_unsupervised_learning_method(string unsupervised_learning_method) {
+	unsupervised_learning_method_ = unsupervised_learning_method;
+    }
 
     // Sets the maximum number of EM iterations.
     void set_max_num_em_iterations(size_t max_num_em_iterations) {
 	max_num_em_iterations_ = max_num_em_iterations;
+    }
+
+    // Sets the maximum number of Frank-Wolfe iterations.
+    void set_max_num_fw_iterations(size_t max_num_fw_iterations) {
+	max_num_fw_iterations_ = max_num_fw_iterations;
+    }
+
+    // Sets the context window size.
+    void set_window_size(size_t window_size) { window_size_ = window_size; }
+
+    // Sets the context definition.
+    void set_context_definition(string context_definition) {
+	context_definition_ = context_definition;
+    }
+
+    // Sets the number of anchor candidates.
+    void set_num_anchor_candidates(size_t num_anchor_candidates) {
+	num_anchor_candidates_ = num_anchor_candidates;
     }
 
     // Sets the path to development data.
@@ -110,11 +131,40 @@ private:
     // Returns the index corresponding to a special stopping state.
     State StoppingState() { return NumStates(); }
 
+    // Runs the anchor algorithm (must already have dictionaries).
+    void RunAnchor(const string &data_path,
+		   const unordered_map<Observation, size_t> &observation_count);
+
+    // Builds a convex hull of observation vectors as rows of a matrix.
+    void BuildConvexHull(const string &data_path, Eigen::MatrixXd *convex_hull);
+
+    // Decomposes a convex hull matrix to obtain the "flipped emission" matrix,
+    // whose i-th row is: P(State=1|Observation=i) ... P(State=m|Observation=i).
+    void DecomposeConvexHull(const Eigen::MatrixXd &convex_hull,
+			     const unordered_map<Observation, size_t>
+			     &observation_count,
+			     Eigen::MatrixXd *flipped_emission,
+			     vector<Observation> *anchor_observations);
+
+    // Recovers the prior and transition parameters given the emission
+    // parameters.
+    void RecoverPriorTransitionGivenEmission(
+	const string &data_path,
+	const unordered_map<Observation, size_t> &observation_count);
+
+    // Runs the Baum-Welch algorithm (must already have dictionaries).
+    void RunBaumWelch(const string &data_path);
+
     // Initializes parameters randomly (must already have dictionaries).
     void InitializeParametersRandomly();
 
     // Check if parameters form proper distributions.
     void CheckProperDistribution();
+
+    // Reads lines from a data file.
+    void ReadLines(const string &file_path, bool labeled,
+		   vector<vector<string> > *observation_string_sequences,
+		   vector<vector<string> > *state_string_sequences);
 
     // Reads a line from a data file. Returns true if success, false if there is
     // no more non-empty line: while (ReadLine(...)) { /* process line */ }
@@ -124,6 +174,12 @@ private:
 
     // Constructs observation (and state, if labeled) dictionaries.
     void ConstructDictionaries(const string &data_path, bool labeled);
+
+    // Constructs observation (and state, if labeled) dictionaries. Also
+    // counts filtered observation types.
+    void ConstructDictionaries(const string &data_path, bool labeled,
+			       unordered_map<Observation, size_t>
+			       *observation_count);
 
     // Adds the observation string to the dictionary if not already known.
     Observation AddObservationIfUnknown(const string &observation_string);
@@ -193,9 +249,6 @@ private:
     // Special string for separating observation/state in data files.
     const string kObservationStateSeperator_ = "__";
 
-    // Special string for representing rare words.
-    const string kRareObservationString_ = "<?>";
-
     // Maps an observation string to a unique index.
     unordered_map<string, Observation> observation_dictionary_;
 
@@ -218,11 +271,26 @@ private:
     vector<double> prior_;
 
     // Observation types that occur <= this number in the training data are
-    // considered as a single symbol (kRareObservationString_).
+    // considered as a single symbol (corpus::kRareString).
     size_t rare_cutoff_ = 0;
+
+    // Unsupervised learning method.
+    string unsupervised_learning_method_ = "em";
 
     // Maximum number of EM iterations.
     size_t max_num_em_iterations_ = 500;
+
+    // Maximum number of Frank-Wolfe iterations.
+    size_t max_num_fw_iterations_ = 1000;
+
+    // Size of the sliding window (odd => symmetric, even => assymmetric).
+    size_t window_size_ = 5;
+
+    // Context definition.
+    string context_definition_ = "list";
+
+    // Number of anchor candidates (most frequent observation types).
+    size_t num_anchor_candidates_ = 100;
 
     // Path to development data.
     string development_path_;

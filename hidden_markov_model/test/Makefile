@@ -69,7 +69,8 @@ gtest_main.a: gtest-all.o gtest_main.o
 # depending on whether it defines its own main() function.
 
 hmm_test: hmm_test.o $(SRC)/hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
-	gtest_main.a
+	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
+	$(CORE)/optimize.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 hmm_test.o: hmm_test.cc

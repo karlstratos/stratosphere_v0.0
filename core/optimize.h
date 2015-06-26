@@ -42,11 +42,12 @@ namespace optimize {
     //
     // Assumption 2 implies that M.row(i) is therefore some convex combination
     // of M.row(anchor(1)) ... M.row(anchor(m)), and the convex coefficients are
-    // exactly A.row(i). This is essentially the algorithm.
+    // exactly A.row(i).
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
 			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, Eigen::MatrixXd *A);
+			      &anchor_candidates, Eigen::MatrixXd *A,
+			      vector<size_t> *anchor_indices);
 
     // Anchor factorization without anchor candidate restriction.
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
