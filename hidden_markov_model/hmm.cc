@@ -229,7 +229,7 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
 	AddStateIfUnknown("state" + to_string(state));
     }
 
-    if (unsupervised_learning_method_ == "em") {
+    if (unsupervised_learning_method_ == "bw") {
 	RunBaumWelch(data_path);
     } else if (unsupervised_learning_method_ == "anchor") {
 	RunAnchor(data_path, observation_count);
@@ -361,36 +361,14 @@ void HMM::RunAnchor(const string &data_path, const unordered_map<Observation,
     Eigen::MatrixXd convex_hull;
     BuildConvexHull(data_path, &convex_hull);
 
-    // Decompose the convex hull matrix to obtain the "flipped emission"
-    // p(State|Observation).
-    Eigen::MatrixXd flipped_emission;
-    vector<Observation> anchor_observations;
-    DecomposeConvexHull(convex_hull, observation_count, &flipped_emission,
-			&anchor_observations);
-
-    // Recover the emission parameters by using the Bayes rule.
-    emission_.resize(NumStates());
-    for (State state = 0; state < NumStates(); ++state) {
-	emission_[state].resize(NumObservations());
-	double state_normalizer = 0.0;
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    emission_[state][observation] =
-		flipped_emission(observation, state) *
-		observation_count.at(observation);
-	    state_normalizer += emission_[state][observation];
-	}
-	// Convert to log and normalize.
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    emission_[state][observation] = log(emission_[state][observation])
-		- log(state_normalizer);
-	}
-    }
+    // Recover emission parameters from the convex hull.
+    RecoverEmissionFromConvexHull(convex_hull, observation_count);
 
     // Recover the prior and transition parameters given the emission
     // parameters.
     RecoverPriorTransitionGivenEmission(data_path, observation_count);
+
+    CheckProperDistribution();
 }
 
 void HMM::BuildConvexHull(const string &data_path,
@@ -442,15 +420,16 @@ void HMM::BuildConvexHull(const string &data_path,
     }
 }
 
-void HMM::DecomposeConvexHull(const Eigen::MatrixXd &convex_hull,
-			      const unordered_map<Observation, size_t>
-			      &observation_count,
-			      Eigen::MatrixXd *flipped_emission,
-			      vector<Observation> *anchor_observations) {
-    // Choose candidates for anchors...
-    unordered_map<Observation, bool> anchor_candidates;
+void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
+					const unordered_map<Observation, size_t>
+					&observation_count) {
+    // First, perform anchor factorization on the convex hull matrix to
+    // obtain the "flipped emission" p(State|Observation).
+    Eigen::MatrixXd flipped_emission;
+    anchor_observations_.clear();
 
-    // ... as the most frequent observation types.
+    // Restrict anchor candidates for anchors to frequent observation types.
+    unordered_map<Observation, bool> anchor_candidates;
     vector<pair<Observation, size_t> > sorted_observations;
     for (const auto &observation_pair : observation_count) {
 	sorted_observations.emplace_back(observation_pair.first,
@@ -461,20 +440,134 @@ void HMM::DecomposeConvexHull(const Eigen::MatrixXd &convex_hull,
     for (size_t i = 0; i < num_anchor_candidates_; ++i) {
 	anchor_candidates[sorted_observations[i].first] = true;
     }
-
-    // Perform the anchor factorization.
-    anchor_observations->clear();
     optimize::anchor_factorization(convex_hull, NumStates(),
 				   max_num_fw_iterations_, 1e-10, verbose_,
-				   anchor_candidates, flipped_emission,
-				   anchor_observations);
+				   anchor_candidates, &flipped_emission,
+				   &anchor_observations_);
     if (verbose_) {
-	cerr << anchor_observations->size() << " anchor observations (out of "
+	cerr << anchor_observations_.size() << " anchor observations (out of "
 	     << num_anchor_candidates_ << " candidates): " << endl;
-	for (size_t i = 0; i < anchor_observations->size(); ++i) {
+	for (size_t i = 0; i < anchor_observations_.size(); ++i) {
 	    cerr << "   State " << i + 1 << ": \""
-		 << observation_dictionary_inverse_[(*anchor_observations)[i]]
+		 << observation_dictionary_inverse_[anchor_observations_[i]]
 		 << "\"" << endl;
+	}
+    }
+
+    // Next, recover the actual emission parameters from the flipped emission
+    // parameters with the Bayes rule.
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_[state].resize(NumObservations());
+	double state_normalizer = 0.0;
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] =
+		flipped_emission(observation, state) *
+		observation_count.at(observation);
+	    state_normalizer += emission_[state][observation];
+	}
+	// Convert to log and normalize.
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] = log(emission_[state][observation])
+		- log(state_normalizer);
+	}
+    }
+
+    if (!log_path_.empty()) {
+	// Get max string legnths for pretty outputs.
+	size_t max_anchor_string_length = 0;
+	size_t max_observation_string_length = 0;
+	for (State state = 0; state < NumStates(); ++state) {
+	    string anchor_string = observation_dictionary_inverse_[
+		anchor_observations_[state]];
+	    if (anchor_string.size() > max_anchor_string_length) {
+		max_anchor_string_length = anchor_string.size();
+	    }
+	}
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    string observation_string =
+		observation_dictionary_inverse_[observation];
+	    if (observation_string.size() > max_observation_string_length) {
+		max_observation_string_length = observation_string.size();
+	    }
+	}
+	const size_t buffer = 3;
+
+	// Write anchor observations.
+	ofstream log_file(log_path_, ios::out);
+	log_file << endl << "ANCHOR OBSERVATION STRINGS" << endl;
+	for (State state = 0; state < NumStates(); ++state) {
+	    string anchor_string = observation_dictionary_inverse_[
+		anchor_observations_[state]];
+	    string line = util_string::printf_format(
+		"State %d \"%s\"", state + 1, observation_dictionary_inverse_[
+		    anchor_observations_[state]].c_str());
+	    log_file << line << endl;
+	}
+
+	// For each observation, write most likely states (anchor observations).
+	log_file << endl << "FLIPPED EMISSION PROBABILITIES "
+		 << "P(STATE|OBSERVATION)" << endl;
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    vector<pair<string, double> > v;
+	    for (State state = 0; state < NumStates(); ++state) {
+		v.emplace_back(observation_dictionary_inverse_[
+				   anchor_observations_[state]],
+			       flipped_emission(observation, state));
+	    }
+	    sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+		 double, greater<double> >());
+
+	    string line = util_string::buffer_string(
+		util_string::printf_format(
+		    "%s ",
+		    observation_dictionary_inverse_[observation].c_str()),
+		max_observation_string_length + buffer, ' ', "left");
+	    log_file << line;
+	    for (size_t i = 0; i < min((int) v.size(), 5); ++i) {  // Top 5
+		line = util_string::buffer_string(
+		    util_string::printf_format("%s (%.2f)",
+					       v[i].first.c_str(),
+					       v[i].second),
+		    max_anchor_string_length + buffer + 7, ' ', "right");
+		log_file << line;
+	    }
+	    log_file << endl;
+
+	}
+
+	// For each state (anchor observation), write most likely observations.
+	log_file << endl << "EMISSION PROBABILITIES" << endl;
+	for (State state = 0; state < NumStates(); ++state) {
+	    vector<pair<string, double> > v;
+	    for (Observation observation = 0; observation < NumObservations();
+		 ++observation) {
+		v.emplace_back(observation_dictionary_inverse_[observation],
+			       exp(emission_[state][observation]));
+	    }
+	    sort(v.begin(), v.end(),
+		 util_misc::sort_pairs_second<string, double,
+		 greater<double> >());
+
+	    string line = util_string::buffer_string(
+		util_string::printf_format(
+		    "%s", observation_dictionary_inverse_[
+			anchor_observations_[state]].c_str()),
+		max_anchor_string_length + buffer, ' ', "left");
+	    log_file << line;
+	    for (size_t i = 0; i < min((int) v.size(), 5); ++i) {  // Top 5
+		line = util_string::buffer_string(
+		    util_string::printf_format("%s (%.2f) ",
+					       v[i].first.c_str(),
+					       v[i].second),
+		    max_observation_string_length + buffer + 7, ' ', "right");
+		log_file << line;
+	    }
+	    log_file << endl;
 	}
     }
 }
@@ -526,10 +619,6 @@ void HMM::RecoverPriorTransitionGivenEmission(
     }
 
     // 2. Recover the transition parameters from observation bigrams.
-    transition_.resize(NumStates());
-    for (State state = 0; state < NumStates(); ++state) {
-	transition_[state].resize(NumStates() + 1);  // +stop
-    }
     Eigen::VectorXd average_observation_probabilities =
 	Eigen::VectorXd::Zero(NumObservations());
     double num_observations = util_misc::sum_values(observation_count);
@@ -546,13 +635,22 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	max_num_fw_iterations_, 1e-10, verbose_, &average_state_probabilities);
     if (verbose_) { cerr << endl; }
 
-    // Organize transition parameters into a matrix.
+    // Keep transition parameters as a matrix for convenience.
     Eigen::MatrixXd transition_matrix(NumStates() + 1, NumStates());  // +stop
     transition_matrix =  // Initialize uniformly.
 	Eigen::MatrixXd::Constant(NumStates() + 1, NumStates(), 1.0);  // +stop
     for (State state = 0; state < NumStates(); ++state) {
 	transition_matrix.col(state) /=  // Each column is a distribution.
 	    transition_matrix.col(state).lpNorm<1>();
+    }
+    transition_.resize(NumStates());  // Fill the actual transition parameters.
+    for (State state = 0; state < NumStates(); ++state) {
+	transition_[state].resize(NumStates() + 1);  // +stop
+	for (State next_state = 0; next_state < NumStates() + 1;  // +stop
+	     ++next_state) {
+	    transition_[state][next_state] =
+		log(transition_matrix(next_state, state));
+	}
     }
 
     // Prepare data-driven model development.
@@ -567,7 +665,7 @@ void HMM::RecoverPriorTransitionGivenEmission(
     decoding_method_ = "mbr";  // More appropriate than Viterbi for EM.
     const size_t development_interval = 1;  // To check development accuracy.
     double max_development_accuracy = 0.0;
-    const size_t max_no_improvement_count = 10;  // Number of "lives".
+    const size_t max_no_improvement_count = 3;  // Number of "lives".
     size_t no_improvement_count = 0;
 
     // Start EM iterations.
@@ -583,28 +681,17 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	// Pre-compute a matrix of state bigram probabilities.
 	Eigen::MatrixXd state_bigram_probabilities =
 	    transition_matrix * average_state_probabilities.asDiagonal();
-
-	// Go through observed bigram counts to accumulate expected counts.
 	double new_log_likelihood = 0.0;
-	for (const auto &observation_bigram_pair1 : observation_bigram_count) {
-	    Observation observation = observation_bigram_pair1.first;
 
-	    // Compute a vector of p(observation, next_state) where next_state
-	    // includes the special stopping state.
-	    Eigen::VectorXd next_state_probabilities_with_observation_all =
-		state_bigram_probabilities *
-		emission_matrix.row(observation).transpose();
-
-	    // (a) Address the next state being the stopping state.
+	// Go through the observed final counts.
+	for (const auto &observation_pair : final_observation_count) {
+	    Observation observation = observation_pair.first;
 	    double probability_final_observation =
-		next_state_probabilities_with_observation_all(StoppingState());
+		state_bigram_probabilities.row(StoppingState()).dot(
+		    emission_matrix.row(observation));
 	    if (probability_final_observation > 0.0) {
-		// Some observations have zero probability of being final.
-		size_t final_count =
-		    (final_observation_count.find(observation) !=
-		     final_observation_count.end()) ?
-		    final_observation_count[observation] : 0;
-
+		// Only consider "possible" observations.
+		size_t final_count = observation_pair.second;
 		new_log_likelihood +=
 		    final_count * log(probability_final_observation);
 
@@ -612,46 +699,62 @@ void HMM::RecoverPriorTransitionGivenEmission(
 		    // Accumulate the probability of stopping given the
 		    // observation.
 		    double state_stopping_probability_given_observation =
-			state_bigram_probabilities(StoppingState(), state) *
-			emission_matrix(observation, state) /
+			emission_matrix(observation, state) *
+			state_bigram_probabilities(StoppingState(), state) /
 			probability_final_observation;
 		    state_bigram_count[state][StoppingState()] += final_count *
 			state_stopping_probability_given_observation;
 		}
 	    }
+	}
 
-	    // (b) Address the next state not being the stopping state.
+	// Go through the observed bigram counts.
+	for (const auto &observation_bigram_pair1 : observation_bigram_count) {
+	    Observation observation = observation_bigram_pair1.first;
 
-	    // (This subvector assumes that the stopping state has the highest
-	    // index.)
+	    // Compute a vector of p(observation, next_state).
+	    Eigen::VectorXd next_state_probabilities_with_observation_all =
+		state_bigram_probabilities *
+		emission_matrix.row(observation).transpose();
+
+	    // Note: This subvector operation assumes that the stopping state
+	    //       has the highest index.
 	    Eigen::VectorXd next_state_probabilities_with_observation =
 		next_state_probabilities_with_observation_all.head(NumStates());
 
 	    for (const auto &observation_bigram_pair2 :
 		     observation_bigram_pair1.second) {
 		Observation next_observation = observation_bigram_pair2.first;
-		size_t bigram_count = observation_bigram_pair2.second;
 		double observation_bigram_probability =
 		    emission_matrix.row(next_observation).dot(
 			next_state_probabilities_with_observation);
-		new_log_likelihood +=
-		    bigram_count * log(observation_bigram_probability);
 
-		for (State state = 0; state < NumStates(); ++state) {
-		    for (State next_state = 0; next_state < NumStates();
-			 ++next_state) {
-			// Accumulate the probability of transitioning from one
-			// state to another given the observation bigram.
-			double state_bigram_probability_with_observed_bigram =
-			    emission_matrix(next_observation, next_state) *
-			    state_bigram_probabilities(next_state, state) *
-			    emission_matrix(observation, state);
-			double state_bigram_probability_given_observed_bigram =
-			    state_bigram_probability_with_observed_bigram /
-			    observation_bigram_probability;
-			state_bigram_count[state][next_state] +=
-			    bigram_count *
-			    state_bigram_probability_given_observed_bigram;
+		if (observation_bigram_probability > 0.0) {
+		    // Only consider "possible" observations.
+		    size_t bigram_count = observation_bigram_pair2.second;
+		    new_log_likelihood +=
+			bigram_count * log(observation_bigram_probability);
+
+		    for (State state = 0; state < NumStates(); ++state) {
+			for (State next_state = 0; next_state < NumStates();
+			     ++next_state) {
+			    // Accumulate the probability of transitioning from
+			    // one state to another given the observation
+			    // bigram.
+			    double
+				state_bigram_probability_with_observed_bigram =
+				emission_matrix(observation, state) *
+				state_bigram_probabilities(next_state, state) *
+				emission_matrix(next_observation, next_state);
+
+			    double
+				state_bigram_probability_given_observed_bigram =
+				state_bigram_probability_with_observed_bigram /
+				observation_bigram_probability;
+			    state_bigram_count[state][next_state] +=
+				bigram_count *
+				state_bigram_probability_given_observed_bigram;
+			}
 		    }
 		}
 	    }
@@ -662,6 +765,10 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	    double state_normalizer =
 		accumulate(state_bigram_count[state].begin(),
 			   state_bigram_count[state].end(), 0.0);
+	    if (state_normalizer <= 0.0) {
+		// Don't update if this state is not "seen" in the data.
+		continue;
+	    }
 	    for (State next_state = 0; next_state < NumStates() + 1;  // +stop
 		 ++next_state) {
 		transition_matrix(next_state, state) =
@@ -731,6 +838,69 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	}
     }
     remove(temp_model_path.c_str());
+
+    if (!log_path_.empty()) {
+	// Get max string legnths for pretty outputs.
+	size_t max_anchor_string_length = 0;
+	for (State state = 0; state < NumStates(); ++state) {
+	    string anchor_string = observation_dictionary_inverse_[
+		anchor_observations_[state]];
+	    if (anchor_string.size() > max_anchor_string_length) {
+		max_anchor_string_length = anchor_string.size();
+	    }
+	}
+	const size_t buffer = 3;
+
+	// Write prior probabilities for states (anchor observations).
+	ofstream log_file(log_path_, ios::out | ios::app);
+	log_file << endl << "PRIOR PROBABILITIES" << endl;
+	vector<pair<string, double> > v;
+	for (State state = 0; state < NumStates(); ++state) {
+	    v.emplace_back(observation_dictionary_inverse_[
+			       anchor_observations_[state]],
+			   exp(prior_[state]));
+	}
+	sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+	     double, greater<double> >());
+	for (State state = 0; state < NumStates(); ++state) {
+	    string anchor_string = util_string::buffer_string(
+		v[state].first, max_anchor_string_length + buffer, ' ',
+		"right");
+	    string line = util_string::printf_format("%s   %.2f",
+						     anchor_string.c_str(),
+						     v[state].second);
+	    log_file << line << endl;
+	}
+
+	// Write transition  probabilities between states (anchor observations).
+	log_file << endl << "TRANSITION PROBABILITIES" << endl;
+	for (State state = 0; state < NumStates(); ++state) {
+	    vector<pair<string, double> > v;
+	    for (State next_state = 0; next_state < NumStates(); ++next_state) {
+		v.emplace_back(observation_dictionary_inverse_[
+				   anchor_observations_[next_state]],
+			       exp(transition_[state][next_state]));
+	    }
+	    sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+		double, greater<double> >());
+
+	    string line = util_string::buffer_string(
+		util_string::printf_format(
+		    "%s", observation_dictionary_inverse_[
+			anchor_observations_[state]].c_str()),
+		max_anchor_string_length + buffer, ' ', "left");
+	    log_file << line;
+	    for (size_t i = 0; i < min((int) v.size(), 5); ++i) {  // Top 5
+		line = util_string::buffer_string(
+		    util_string::printf_format("%s (%.2f) ",
+					       v[i].first.c_str(),
+					       v[i].second),
+		    max_anchor_string_length + buffer + 7, ' ', "right");
+		log_file << line;
+	    }
+	    log_file << endl;
+	}
+    }
 }
 
 void HMM::RunBaumWelch(const string &data_path) {

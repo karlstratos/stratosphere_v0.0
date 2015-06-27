@@ -11,7 +11,7 @@ int main (int argc, char* argv[]) {
     string prediction_path;
     size_t rare_cutoff = 5;
     bool train = false;
-    string unsupervised_learning_method = "em";
+    string unsupervised_learning_method = "bw";
     size_t num_states = 0;
     size_t max_num_em_iterations = 500;
     size_t max_num_fw_iterations = 1000;
@@ -21,6 +21,7 @@ int main (int argc, char* argv[]) {
     string development_path;
     string decoding_method = "mbr";
     bool verbose = true;
+    string log_path;
 
     // Parse command line arguments.
     bool display_options_and_quit = false;
@@ -56,6 +57,8 @@ int main (int argc, char* argv[]) {
 	    decoding_method = argv[++i];
 	} else if (arg == "--quiet" || arg == "-q") {
 	    verbose = false;
+	} else if (arg == "--log") {
+	    log_path = argv[++i];
 	} else if (arg == "--help" || arg == "-h"){
 	    display_options_and_quit = true;
 	} else {
@@ -77,7 +80,7 @@ int main (int argc, char* argv[]) {
 	cout << "--train:          \t"
 	     << "train a model?" << endl;
 	cout << "--unsup [" << unsupervised_learning_method << "]:     \t"
-	     << "unsupervised learning method: em, anchor"  << endl;
+	     << "unsupervised learning method: bw, anchor"  << endl;
 	cout << "--states [" << num_states << "]:       \t"
 	     << "number of states" << endl;
 	cout << "--emiter [" << max_num_em_iterations << "]:       \t"
@@ -94,6 +97,8 @@ int main (int argc, char* argv[]) {
 	     << "path to a development data file" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
 	     << "decoding method: viterbi, mbr"  << endl;
+	cout << "--log [-]:        \t"
+	     << "path to a log file" << endl;
 	cout << "--quiet, -q:          \t"
 	     << "do not print messages to stderr?" << endl;
 	cout << "--help, -h:           \t"
@@ -111,6 +116,7 @@ int main (int argc, char* argv[]) {
     hmm.set_num_anchor_candidates(num_anchor_candidates);
     hmm.set_development_path(development_path);
     hmm.set_decoding_method(decoding_method);
+    hmm.set_log_path(log_path);
     hmm.set_verbose(verbose);
     if (train) {
 	if (num_states == 0) {  // Supervised learning

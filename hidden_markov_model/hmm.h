@@ -124,6 +124,9 @@ public:
     // Sets whether to turn on the debug mode.
     void set_debug(bool debug) { debug_ = debug; }
 
+    // Sets the path to a log file.
+    void set_log_path(string log_path) { log_path_ = log_path; }
+
 private:
     // Returns the index corresponding to an unknown observation.
     Observation UnknownObservation() { return NumObservations(); }
@@ -138,13 +141,11 @@ private:
     // Builds a convex hull of observation vectors as rows of a matrix.
     void BuildConvexHull(const string &data_path, Eigen::MatrixXd *convex_hull);
 
-    // Decomposes a convex hull matrix to obtain the "flipped emission" matrix,
-    // whose i-th row is: P(State=1|Observation=i) ... P(State=m|Observation=i).
-    void DecomposeConvexHull(const Eigen::MatrixXd &convex_hull,
-			     const unordered_map<Observation, size_t>
-			     &observation_count,
-			     Eigen::MatrixXd *flipped_emission,
-			     vector<Observation> *anchor_observations);
+    // Recover emission parameters by decomposing a convex hull of observation
+    // vectors.
+    void RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
+				       const unordered_map<Observation, size_t>
+				       &observation_count);
 
     // Recovers the prior and transition parameters given the emission
     // parameters.
@@ -270,12 +271,15 @@ private:
     // Prior log probabilities.
     vector<double> prior_;
 
+    // Anchor observations.
+    vector<Observation> anchor_observations_;
+
     // Observation types that occur <= this number in the training data are
     // considered as a single symbol (corpus::kRareString).
     size_t rare_cutoff_ = 0;
 
     // Unsupervised learning method.
-    string unsupervised_learning_method_ = "em";
+    string unsupervised_learning_method_ = "bw";
 
     // Maximum number of EM iterations.
     size_t max_num_em_iterations_ = 500;
@@ -303,6 +307,9 @@ private:
 
     // Turn on the debug mode?
     bool debug_ = false;
+
+    // Path to a log file.
+    string log_path_;
 };
 
 #endif  // HIDDEN_MARKOV_MODEL_HMM_H_
