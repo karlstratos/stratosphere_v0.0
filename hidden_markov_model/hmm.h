@@ -59,6 +59,17 @@ public:
     double ComputeLogProbability(
 	const vector<string> &observation_string_sequence);
 
+    // Reads lines from a data file.
+    void ReadLines(const string &file_path, bool labeled,
+		   vector<vector<string> > *observation_string_sequences,
+		   vector<vector<string> > *state_string_sequences);
+
+    // Reads a line from a data file. Returns true if success, false if there is
+    // no more non-empty line: while (ReadLine(...)) { /* process line */ }
+    bool ReadLine(bool labeled, ifstream *file,
+		  vector<string> *observation_string_sequence,
+		  vector<string> *state_string_sequence);
+
     // Returns the emission probability.
     double EmissionProbability(string state_string, string observation_string);
 
@@ -161,17 +172,6 @@ private:
 
     // Check if parameters form proper distributions.
     void CheckProperDistribution();
-
-    // Reads lines from a data file.
-    void ReadLines(const string &file_path, bool labeled,
-		   vector<vector<string> > *observation_string_sequences,
-		   vector<vector<string> > *state_string_sequences);
-
-    // Reads a line from a data file. Returns true if success, false if there is
-    // no more non-empty line: while (ReadLine(...)) { /* process line */ }
-    bool ReadLine(bool labeled, ifstream *file,
-		  vector<string> *observation_string_sequence,
-		  vector<string> *state_string_sequence);
 
     // Constructs observation (and state, if labeled) dictionaries.
     void ConstructDictionaries(const string &data_path, bool labeled);

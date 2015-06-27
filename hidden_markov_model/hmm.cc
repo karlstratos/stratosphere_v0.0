@@ -311,6 +311,54 @@ double HMM::ComputeLogProbability(
     return ComputeLogProbability(observation_sequence);
 }
 
+void HMM::ReadLines(const string &file_path, bool labeled,
+		    vector<vector<string> > *observation_string_sequences,
+		    vector<vector<string> > *state_string_sequences) {
+    observation_string_sequences->clear();
+    state_string_sequences->clear();
+    ifstream file(file_path, ios::in);
+    ASSERT(file.is_open(), "Cannot open " << file_path);
+    vector<string> observation_string_sequence;
+    vector<string> state_string_sequence;
+    while (ReadLine(labeled, &file, &observation_string_sequence,
+		    &state_string_sequence)) {
+	observation_string_sequences->push_back(observation_string_sequence);
+	state_string_sequences->push_back(state_string_sequence);
+    }
+}
+
+bool HMM::ReadLine(bool labeled, ifstream *file,
+		   vector<string> *observation_string_sequence,
+		   vector<string> *state_string_sequence) {
+    observation_string_sequence->clear();
+    state_string_sequence->clear();
+    while (file->good()) {
+	vector<string> tokens;
+	util_file::read_line(file, &tokens);
+	if (tokens.size() == 0) { continue; }  // Skip empty lines.
+	for (size_t i = 0; i < tokens.size(); ++i) {
+	    vector<string> seperated_token;
+	    util_string::split_by_string(tokens[i], kObservationStateSeperator_,
+					 &seperated_token);
+	    if (labeled) {
+		ASSERT(seperated_token.size() == 2, "Wrong format for labeled "
+		       "data with seperator \"" << kObservationStateSeperator_
+		       << "\": " << tokens[i]);
+		observation_string_sequence->push_back(seperated_token[0]);
+		state_string_sequence->push_back(seperated_token[1]);
+	    } else {
+		ASSERT(seperated_token.size() == 1, "Wrong format for unlabeled"
+		       " data with seperator \"" << kObservationStateSeperator_
+		       << "\": " << tokens[i]);
+		observation_string_sequence->push_back(seperated_token[0]);
+		state_string_sequence->push_back("");  // To match lengths.
+	    }
+	}
+	return true;  // Successfully read a non-empty line.
+    }
+    return false;  // There was no more non-empty line to read.
+}
+
 double HMM::EmissionProbability(string state_string,
 				string observation_string) {
     if (state_dictionary_.find(state_string) != state_dictionary_.end()) {
@@ -1171,54 +1219,6 @@ void HMM::CheckProperDistribution() {
 	prior_sum += exp(prior_[state]);
     }
     ASSERT(fabs(prior_sum - 1.0) < 1e-10, "Prior: " << prior_sum);
-}
-
-void HMM::ReadLines(const string &file_path, bool labeled,
-		    vector<vector<string> > *observation_string_sequences,
-		    vector<vector<string> > *state_string_sequences) {
-    observation_string_sequences->clear();
-    state_string_sequences->clear();
-    ifstream file(file_path, ios::in);
-    ASSERT(file.is_open(), "Cannot open " << file_path);
-    vector<string> observation_string_sequence;
-    vector<string> state_string_sequence;
-    while (ReadLine(labeled, &file, &observation_string_sequence,
-		    &state_string_sequence)) {
-	observation_string_sequences->push_back(observation_string_sequence);
-	state_string_sequences->push_back(state_string_sequence);
-    }
-}
-
-bool HMM::ReadLine(bool labeled, ifstream *file,
-		   vector<string> *observation_string_sequence,
-		   vector<string> *state_string_sequence) {
-    observation_string_sequence->clear();
-    state_string_sequence->clear();
-    while (file->good()) {
-	vector<string> tokens;
-	util_file::read_line(file, &tokens);
-	if (tokens.size() == 0) { continue; }  // Skip empty lines.
-	for (size_t i = 0; i < tokens.size(); ++i) {
-	    vector<string> seperated_token;
-	    util_string::split_by_string(tokens[i], kObservationStateSeperator_,
-					 &seperated_token);
-	    if (labeled) {
-		ASSERT(seperated_token.size() == 2, "Wrong format for labeled "
-		       "data with seperator \"" << kObservationStateSeperator_
-		       << "\": " << tokens[i]);
-		observation_string_sequence->push_back(seperated_token[0]);
-		state_string_sequence->push_back(seperated_token[1]);
-	    } else {
-		ASSERT(seperated_token.size() == 1, "Wrong format for unlabeled"
-		       " data with seperator \"" << kObservationStateSeperator_
-		       << "\": " << tokens[i]);
-		observation_string_sequence->push_back(seperated_token[0]);
-		state_string_sequence->push_back("");  // To match lengths.
-	    }
-	}
-	return true;  // Successfully read a non-empty line.
-    }
-    return false;  // There was no more non-empty line to read.
 }
 
 void HMM::ConstructDictionaries(const string &data_path, bool labeled) {
