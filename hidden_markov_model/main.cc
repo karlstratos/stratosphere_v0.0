@@ -124,6 +124,9 @@ int main (int argc, char* argv[]) {
 	} else {  // Unsupervised learning
 	    hmm.TrainUnsupervised(data_path, num_states);
 	}
+	if (!development_path.empty()) {
+	    hmm.Evaluate(development_path, prediction_path);
+	}
 	hmm.Save(model_path);
     } else {
 	hmm.Load(model_path);

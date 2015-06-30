@@ -337,20 +337,18 @@ bool HMM::ReadLine(bool labeled, ifstream *file,
 	util_file::read_line(file, &tokens);
 	if (tokens.size() == 0) { continue; }  // Skip empty lines.
 	for (size_t i = 0; i < tokens.size(); ++i) {
-	    vector<string> seperated_token;
-	    util_string::split_by_string(tokens[i], kObservationStateSeperator_,
-					 &seperated_token);
 	    if (labeled) {
+		vector<string> seperated_token;
+		util_string::split_by_string(tokens[i],
+					     kObservationStateSeperator_,
+					     &seperated_token);
 		ASSERT(seperated_token.size() == 2, "Wrong format for labeled "
 		       "data with seperator \"" << kObservationStateSeperator_
 		       << "\": " << tokens[i]);
 		observation_string_sequence->push_back(seperated_token[0]);
 		state_string_sequence->push_back(seperated_token[1]);
 	    } else {
-		ASSERT(seperated_token.size() == 1, "Wrong format for unlabeled"
-		       " data with seperator \"" << kObservationStateSeperator_
-		       << "\": " << tokens[i]);
-		observation_string_sequence->push_back(seperated_token[0]);
+		observation_string_sequence->push_back(tokens[i]);
 		state_string_sequence->push_back("");  // To match lengths.
 	    }
 	}
