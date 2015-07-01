@@ -282,7 +282,7 @@ private:
     string unsupervised_learning_method_ = "bw";
 
     // Maximum number of EM iterations.
-    size_t max_num_em_iterations_ = 500;
+    size_t max_num_em_iterations_ = 1000;
 
     // Maximum number of Frank-Wolfe iterations.
     size_t max_num_fw_iterations_ = 1000;

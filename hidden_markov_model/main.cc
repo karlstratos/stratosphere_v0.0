@@ -13,7 +13,7 @@ int main (int argc, char* argv[]) {
     bool train = false;
     string unsupervised_learning_method = "bw";
     size_t num_states = 0;
-    size_t max_num_em_iterations = 500;
+    size_t max_num_em_iterations = 1000;
     size_t max_num_fw_iterations = 1000;
     size_t window_size = 5;
     string context_definition = "list";
