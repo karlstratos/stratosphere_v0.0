@@ -117,6 +117,17 @@ public:
 	context_definition_ = context_definition;
     }
 
+    // Sets the convex hull method.
+    void set_convex_hull_method(string convex_hull_method) {
+	convex_hull_method_ = convex_hull_method;
+    }
+
+    // Sets the additive smoothing value.
+    void set_add_smooth(double add_smooth) { add_smooth_ = add_smooth; }
+
+    // Sets the power smoothing value.
+    void set_power_smooth(double power_smooth) { power_smooth_ = power_smooth; }
+
     // Sets the number of anchor candidates.
     void set_num_anchor_candidates(size_t num_anchor_candidates) {
 	num_anchor_candidates_ = num_anchor_candidates;
@@ -298,6 +309,15 @@ private:
 
     // Context definition.
     string context_definition_ = "list";
+
+    // Convex hull method.
+    string convex_hull_method_ = "classic";
+
+    // Additive smoothing value.
+    double add_smooth_ = 0.0;
+
+    // Power smoothing value.
+    double power_smooth_ = 0.5;
 
     // Number of anchor candidates (most frequent observation types).
     size_t num_anchor_candidates_ = 100;

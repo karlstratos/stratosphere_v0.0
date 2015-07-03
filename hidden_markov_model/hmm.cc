@@ -432,40 +432,55 @@ void HMM::BuildConvexHull(const string &data_path,
 		       window_size_, 0, &context_dictionary,
 		       &context_observation_count);
 
-    // Normalize rows so that each row is p(Context|Observation).
-    vector<size_t> observation_count(observation_dictionary_.size());
-    for (const auto &context_pair : context_observation_count) {
-	for (const auto &observation_pair : context_pair.second) {
-	    Observation observation = observation_pair.first;
-	    size_t cooccurrence_count = observation_pair.second;
-	    observation_count[observation] += cooccurrence_count;
-	}
-    }
-    for (const auto &context_pair : context_observation_count) {
-	Context context = context_pair.first;
-	for (const auto &observation_pair : context_pair.second) {
-	    Observation observation = observation_pair.first;
-	    context_observation_count[context][observation] /=
-		(double) observation_count[observation];
-	}
-    }
-
-    // Project the convex hull to the best-fit subspace whose dimension is
-    // the number of HMM states.
-    SMat conditional_probability_matrix =
-	sparsesvd::convert_column_map(context_observation_count);
     Eigen::MatrixXd left_singular_vectors;
     Eigen::MatrixXd right_singular_vectors;
     Eigen::VectorXd singular_values;
-    size_t svd_rank;
-    sparsesvd::compute_svd(conditional_probability_matrix, NumStates(),
-			   &left_singular_vectors, &right_singular_vectors,
-			   &singular_values, &svd_rank);
-    svdFreeSMat(conditional_probability_matrix);
-    ASSERT(svd_rank == NumStates(), "Defficient rank: " << svd_rank);
-    (*convex_hull) = left_singular_vectors;
-    for (size_t i = 0; i < convex_hull->cols(); ++i) {
-	(*convex_hull).col(i) *= singular_values(i);
+    if (convex_hull_method_ == "cca") {
+	// Performs CCA to build a convex hull. Under the hard-clustering
+	// assumption on HMMs, this also constructs a valid convex hull.
+	SMat matrix = sparsesvd::convert_column_map(context_observation_count);
+	corpus::decompose(matrix, NumStates(), "power", add_smooth_,
+			  power_smooth_, "cca", &left_singular_vectors,
+			  &right_singular_vectors, &singular_values);
+	svdFreeSMat(matrix);
+	(*convex_hull) = left_singular_vectors;
+    } else if (convex_hull_method_ == "classic") {
+	// Original algorithm of Arora et al. (2012) that normalizes rows to
+	// have form p(Context|Observation). The vector dimension (the size of
+	// the corpus) is subsequently reduced.
+	vector<size_t> observation_count(observation_dictionary_.size());
+	for (const auto &context_pair : context_observation_count) {
+	    for (const auto &observation_pair : context_pair.second) {
+		Observation observation = observation_pair.first;
+		size_t cooccurrence_count = observation_pair.second;
+		observation_count[observation] += cooccurrence_count;
+	    }
+	}
+	for (const auto &context_pair : context_observation_count) {
+	    Context context = context_pair.first;
+	    for (const auto &observation_pair : context_pair.second) {
+		Observation observation = observation_pair.first;
+		context_observation_count[context][observation] /=
+		    (double) observation_count[observation];
+	    }
+	}
+
+	// Project the convex hull to the best-fit subspace whose dimension is
+	// the number of HMM states.
+	SMat conditional_probability_matrix =
+	    sparsesvd::convert_column_map(context_observation_count);
+	size_t svd_rank;
+	sparsesvd::compute_svd(conditional_probability_matrix, NumStates(),
+			       &left_singular_vectors, &right_singular_vectors,
+			       &singular_values, &svd_rank);
+	svdFreeSMat(conditional_probability_matrix);
+	ASSERT(svd_rank == NumStates(), "Defficient rank: " << svd_rank);
+	(*convex_hull) = left_singular_vectors;
+	for (size_t i = 0; i < convex_hull->cols(); ++i) {
+	    (*convex_hull).col(i) *= singular_values(i);
+	}
+    } else {
+	ASSERT(false, "Unknown convex hull method: " << convex_hull_method_);
     }
 }
 

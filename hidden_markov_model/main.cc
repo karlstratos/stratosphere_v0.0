@@ -18,6 +18,9 @@ int main (int argc, char* argv[]) {
     size_t max_num_fw_iterations = 1000;
     size_t window_size = 5;
     string context_definition = "list";
+    string convex_hull_method = "classic";
+    double add_smooth = 10.0;
+    double power_smooth = 0.5;
     size_t num_anchor_candidates = 100;
     string development_path;
     string decoding_method = "mbr";
@@ -52,6 +55,12 @@ int main (int argc, char* argv[]) {
 	    window_size = stol(argv[++i]);
 	} else if (arg == "--context") {
 	    context_definition = argv[++i];
+	} else if (arg == "--hull") {
+	    convex_hull_method = argv[++i];
+	} else if (arg == "--add") {
+	    add_smooth = stod(argv[++i]);
+	} else if (arg == "--power") {
+	    power_smooth = stod(argv[++i]);
 	} else if (arg == "--cand") {
 	    num_anchor_candidates = stol(argv[++i]);
 	} else if (arg == "--dev") {
@@ -96,6 +105,12 @@ int main (int argc, char* argv[]) {
 	     << "window size: \"word\"=center, \"context\"=non-center" << endl;
 	cout << "--context [" << context_definition << "]: \t"
 	     << "context definition: bag, list"  << endl;
+	cout << "--hull [" << convex_hull_method << "]: \t"
+	     << "convex hull method: classic, cca"  << endl;
+	cout << "--add [" << add_smooth << "]:          \t"
+	     << "additive smoothing" << endl;
+	cout << "--power [" << power_smooth << "]:    \t"
+	     << "power smoothing" << endl;
 	cout << "--cand [" << num_anchor_candidates << "]:   \t"
 	     << "number of candidates to consider for anchors" << endl;
 	cout << "--dev [-]:        \t"
@@ -119,6 +134,9 @@ int main (int argc, char* argv[]) {
     hmm.set_max_num_fw_iterations(max_num_fw_iterations);
     hmm.set_window_size(window_size);
     hmm.set_context_definition(context_definition);
+    hmm.set_convex_hull_method(convex_hull_method);
+    hmm.set_add_smooth(add_smooth);
+    hmm.set_power_smooth(power_smooth);
     hmm.set_num_anchor_candidates(num_anchor_candidates);
     hmm.set_development_path(development_path);
     hmm.set_decoding_method(decoding_method);
