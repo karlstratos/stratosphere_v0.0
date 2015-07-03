@@ -47,6 +47,7 @@ void HMM::CreateRandomly(size_t num_observations, size_t num_states) {
 void HMM::Save(const string &model_path) {
     ofstream model_file(model_path, ios::out | ios::binary);
     util_file::binary_write_primitive(rare_cutoff_, model_file);
+    util_file::binary_write_primitive(lowercase_, model_file);
     size_t num_observations = NumObservations();
     size_t num_states = NumStates();
     util_file::binary_write_primitive(num_observations, model_file);
@@ -88,6 +89,7 @@ void HMM::Load(const string &model_path) {
     size_t num_observations;
     size_t num_states;
     util_file::binary_read_primitive(model_file, &rare_cutoff_);
+    util_file::binary_read_primitive(model_file, &lowercase_);
     util_file::binary_read_primitive(model_file, &num_observations);
     util_file::binary_read_primitive(model_file, &num_states);
     for (size_t i = 0; i < num_observations; ++i) {
@@ -422,6 +424,7 @@ void HMM::BuildConvexHull(const string &data_path,
     // Extract observation-context co-occurrence counts using the observation
     // dictionary.
     Corpus corpus(data_path, verbose_);
+    corpus.set_lowercase(lowercase_);
     unordered_map<string, Context> context_dictionary;
     unordered_map<Context, unordered_map<Observation, double> >
 	context_observation_count;
@@ -635,6 +638,7 @@ void HMM::RecoverPriorTransitionGivenEmission(
 
     // Count observations needed for transition estimation from the corpus.
     Corpus corpus(data_path, verbose_);
+    corpus.set_lowercase(lowercase_);
     unordered_map<Observation, unordered_map<Observation, size_t> >
 	observation_bigram_count;
     unordered_map<Observation, size_t> initial_observation_count;
@@ -1242,7 +1246,10 @@ void HMM::ConstructDictionaries(const string &data_path, bool labeled,
     while (ReadLine(labeled, &data_file, &observation_string_sequence,
 		    &state_string_sequence)) {
 	for (size_t i = 0; i < observation_string_sequence.size(); ++i) {
-	    ++observation_string_count[observation_string_sequence[i]];
+	    string observation_string = (lowercase_) ?
+		util_string::lowercase(observation_string_sequence[i]) :
+		observation_string_sequence[i];
+	    ++observation_string_count[observation_string];
 	    if (labeled) { AddStateIfUnknown(state_string_sequence[i]); }
 	}
     }
@@ -1284,7 +1291,9 @@ void HMM::ConvertObservationSequence(
     ASSERT(observation_dictionary_.size() > 0, "No observation dictionary");
     observation_sequence->clear();
     for (size_t i = 0; i < observation_string_sequence.size(); ++i) {
-	string observation_string = observation_string_sequence[i];
+	string observation_string = (lowercase_) ?
+	    util_string::lowercase(observation_string_sequence[i]) :
+	    observation_string_sequence[i];
 	Observation observation;
 	if (observation_dictionary_.find(observation_string) !=
 	    observation_dictionary_.end()) {  // In dictionary.

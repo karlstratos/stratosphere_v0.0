@@ -91,6 +91,9 @@ public:
     // Sets the rare cutoff.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
 
+    // Sets the flag for lowercasing all observation strings.
+    void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
+
     // Sets the unsupervised learning method.
     void set_unsupervised_learning_method(string unsupervised_learning_method) {
 	unsupervised_learning_method_ = unsupervised_learning_method;
@@ -277,6 +280,9 @@ private:
     // Observation types that occur <= this number in the training data are
     // considered as a single symbol (corpus::kRareString).
     size_t rare_cutoff_ = 0;
+
+    // Lowercase all observation strings?
+    bool lowercase_ = false;
 
     // Unsupervised learning method.
     string unsupervised_learning_method_ = "bw";
