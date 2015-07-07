@@ -31,14 +31,15 @@ all: $(TARGETS)
 
 map_clusters: map_clusters.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
 	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
-	$(CORE)/optimize.o
+	$(CORE)/optimize.o $(CORE)/eigen_helper.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 map_clusters.o: map_clusters.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o $(CORE)/corpus.o \
-	$(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a $(CORE)/optimize.o
+	$(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a $(CORE)/optimize.o \
+	$(CORE)/eigen_helper.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc hmm.o
@@ -63,6 +64,9 @@ $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
 $(CORE)/optimize.o: $(CORE)/optimize.cc $(CORE)/optimize.h
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/eigen_helper.o: $(CORE)/eigen_helper.cc $(CORE)/eigen_helper.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean

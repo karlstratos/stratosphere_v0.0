@@ -12,6 +12,35 @@
 #include "util.h"
 
 namespace eigen_helper {
+    // Converts an unordered map (column -> {row: value}) to an Eigen sparse
+    // matrix.
+    template<typename T, typename EigenSparseMatrix>
+    void convert_column_map(
+	const unordered_map<size_t, unordered_map<size_t, T> > &column_map,
+	EigenSparseMatrix *matrix) {
+	matrix->resize(0, 0);
+	size_t num_rows = 0;
+	size_t num_columns = 0;
+	vector<Eigen::Triplet<T> > triplet_list;  // {(row, column, value)}
+	size_t num_nonzeros = 0;
+	for (const auto &column_pair: column_map) {
+	    num_nonzeros += column_pair.second.size();
+	}
+	triplet_list.reserve(num_nonzeros);
+	for (const auto &column_pair: column_map) {
+	    size_t column = column_pair.first;
+	    if (column >= num_columns) { num_columns = column + 1; }
+	    for (const auto &row_pair: column_pair.second) {
+		size_t row = row_pair.first;
+		if (row >= num_rows) { num_rows = row + 1; }
+		T value = row_pair.second;
+		triplet_list.emplace_back(row, column, value);
+	    }
+	}
+	matrix->resize(num_rows, num_columns);
+	matrix->setFromTriplets(triplet_list.begin(), triplet_list.end());
+    }
+
     // Writes an Eigen dense matrix to a binary file.
     template<typename EigenDenseMatrix>
     void binary_write_matrix(const EigenDenseMatrix& matrix,

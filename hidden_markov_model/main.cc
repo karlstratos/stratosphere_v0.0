@@ -18,7 +18,7 @@ int main (int argc, char* argv[]) {
     size_t max_num_fw_iterations = 1000;
     size_t window_size = 5;
     string context_definition = "list";
-    string convex_hull_method = "classic";
+    string convex_hull_method = "svd";
     double add_smooth = 10.0;
     double power_smooth = 0.5;
     size_t num_anchor_candidates = 100;
@@ -106,7 +106,7 @@ int main (int argc, char* argv[]) {
 	cout << "--context [" << context_definition << "]: \t"
 	     << "context definition: bag, list"  << endl;
 	cout << "--hull [" << convex_hull_method << "]: \t"
-	     << "convex hull method: classic, cca"  << endl;
+	     << "convex hull method: brown, svd, cca, rand"  << endl;
 	cout << "--add [" << add_smooth << "]:          \t"
 	     << "additive smoothing" << endl;
 	cout << "--power [" << power_smooth << "]:    \t"

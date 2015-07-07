@@ -311,7 +311,7 @@ private:
     string context_definition_ = "list";
 
     // Convex hull method.
-    string convex_hull_method_ = "classic";
+    string convex_hull_method_ = "svd";
 
     // Additive smoothing value.
     double add_smooth_ = 0.0;

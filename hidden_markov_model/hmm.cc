@@ -8,6 +8,7 @@
 #include <random>
 
 #include "../core/corpus.h"
+#include "../core/eigen_helper.h"
 #include "../core/evaluate.h"
 #include "../core/optimize.h"
 #include "../core/sparsesvd.h"
@@ -432,28 +433,45 @@ void HMM::BuildConvexHull(const string &data_path,
 		       window_size_, 0, &context_dictionary,
 		       &context_observation_count);
 
-    Eigen::MatrixXd left_singular_vectors;
-    Eigen::MatrixXd right_singular_vectors;
-    Eigen::VectorXd singular_values;
-    if (convex_hull_method_ == "cca") {
-	// Performs CCA to build a convex hull. Under the hard-clustering
-	// assumption on HMMs, this also constructs a valid convex hull.
-	SMat matrix = sparsesvd::convert_column_map(context_observation_count);
-	corpus::decompose(matrix, NumStates(), "power", add_smooth_,
-			  power_smooth_, "cca", &left_singular_vectors,
-			  &right_singular_vectors, &singular_values);
-	svdFreeSMat(matrix);
-	(*convex_hull) = left_singular_vectors;
-    } else if (convex_hull_method_ == "classic") {
-	// Original algorithm of Arora et al. (2012) that normalizes rows to
-	// have form p(Context|Observation). The vector dimension (the size of
-	// the corpus) is subsequently reduced.
+    // For methods requiring CCA, pre-compute CCA projections.
+    Eigen::MatrixXd cca_left_singular_vectors;
+    Eigen::MatrixXd cca_right_singular_vectors;
+    if (convex_hull_method_ == "brown" || convex_hull_method_ == "cca") {
+	SMat cooccurrence_count_matrix =
+	    sparsesvd::convert_column_map(context_observation_count);
+	Eigen::VectorXd cca_singular_values;
+	corpus::decompose(cooccurrence_count_matrix, NumStates(), "power",
+			  add_smooth_, power_smooth_, "cca",
+			  &cca_left_singular_vectors,
+			  &cca_right_singular_vectors, &cca_singular_values);
+	svdFreeSMat(cooccurrence_count_matrix);
+    }
+
+    if (convex_hull_method_ == "brown") {
+	// Under the Brown assumption, the rows of the left CCA projection
+	// matrix form a convex hull (Stratos et al., 2014; 2015).
+	(*convex_hull) = cca_left_singular_vectors;
+
+	/*
+	// TODO: Normalize?
+	for (size_t i = 0; i < convex_hull->rows(); ++i) {
+	    (*convex_hull).row(i) /= convex_hull->row(i).lpNorm<2>();
+	}
+	*/
+    } else if (convex_hull_method_ == "svd" || convex_hull_method_ == "cca" ||
+	       convex_hull_method_ == "rand") {
+	// Under the anchor assumption, the rows v(x) form a convex hull,
+	// where x is an observation type corresponding to a row and
+	// v_i(x) is the probability of the i-th context given x.
 	vector<size_t> observation_count(observation_dictionary_.size());
+	vector<size_t> context_count(context_dictionary.size());  // For CCA
 	for (const auto &context_pair : context_observation_count) {
+	    Context context = context_pair.first;
 	    for (const auto &observation_pair : context_pair.second) {
 		Observation observation = observation_pair.first;
 		size_t cooccurrence_count = observation_pair.second;
 		observation_count[observation] += cooccurrence_count;
+		context_count[context] += cooccurrence_count;
 	    }
 	}
 	for (const auto &context_pair : context_observation_count) {
@@ -465,20 +483,43 @@ void HMM::BuildConvexHull(const string &data_path,
 	    }
 	}
 
-	// Project the convex hull to the best-fit subspace whose dimension is
-	// the number of HMM states.
-	SMat conditional_probability_matrix =
-	    sparsesvd::convert_column_map(context_observation_count);
-	size_t svd_rank;
-	sparsesvd::compute_svd(conditional_probability_matrix, NumStates(),
-			       &left_singular_vectors, &right_singular_vectors,
-			       &singular_values, &svd_rank);
-	svdFreeSMat(conditional_probability_matrix);
-	ASSERT(svd_rank == NumStates(), "Defficient rank: " << svd_rank);
-	(*convex_hull) = left_singular_vectors;
-	for (size_t i = 0; i < convex_hull->cols(); ++i) {
-	    (*convex_hull).col(i) *= singular_values(i);
+	// Choose a projection from the original convex hull dimension to a
+	// subspace of dimension NumStates().
+	Eigen::MatrixXd projection_matrix;
+	if (convex_hull_method_ == "svd") {
+	    // Use the best-fit subspace projection given by the right singular
+	    // vectors.
+	    SMat conditional_probability_matrix =
+		sparsesvd::convert_column_map(context_observation_count);
+	    Eigen::MatrixXd left_singular_vectors;
+	    Eigen::VectorXd singular_values;
+	    size_t svd_rank;
+	    sparsesvd::compute_svd(conditional_probability_matrix, NumStates(),
+				   &left_singular_vectors,
+				   &projection_matrix, &singular_values,
+				   &svd_rank);
+	    svdFreeSMat(conditional_probability_matrix);
+	} else if (convex_hull_method_ == "cca") {
+	    // Use the context-side CCA projection.
+	    projection_matrix = cca_right_singular_vectors;
+	    for (Context i = 0; i < projection_matrix.rows(); ++i) {
+		projection_matrix.row(i) /= sqrt(context_count[i] +
+						 add_smooth_);
+	    }
+	} else if (convex_hull_method_ == "rand") {
+	    // Use a random projection.
+	    eigen_helper::generate_random_projection(context_dictionary.size(),
+						     NumStates(),
+						     &projection_matrix);
+	} else {
+	    ASSERT(false, "This should not be reached");
 	}
+
+	// Project the original high-dimensional convex hull.
+	Eigen::SparseMatrix<double, Eigen::RowMajor> original_convex_hull;
+	eigen_helper::convert_column_map(context_observation_count,
+					 &original_convex_hull);
+	(*convex_hull) = original_convex_hull * projection_matrix;
     } else {
 	ASSERT(false, "Unknown convex hull method: " << convex_hull_method_);
     }
