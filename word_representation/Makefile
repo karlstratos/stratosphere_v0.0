@@ -61,4 +61,5 @@ $(SVDLIBC)/libsvd.a:
 .PHONY: clean
 clean:
 	rm -f $(TARGETS) *.o $(CORE)/*.o
+	rm -rf scripts/__pycache__ scripts/*.pyc
 	make -C $(SVDLIBC) clean
