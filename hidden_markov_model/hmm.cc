@@ -232,13 +232,21 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
 	AddStateIfUnknown("state" + to_string(state));
     }
 
-    if (unsupervised_learning_method_ == "bw") {
+    if (unsupervised_learning_method_ == "cluster") {
+	ASSERT(!cluster_path_.empty(), "Need a cluster file");
+	InitializeParametersFromClusters(cluster_path_);
+    } else if (unsupervised_learning_method_ == "bw") {
 	RunBaumWelch(data_path);
     } else if (unsupervised_learning_method_ == "anchor") {
 	RunAnchor(data_path, observation_count);
     } else {
 	ASSERT(false, "Unknown unsupervised learning method: "
 	       << unsupervised_learning_method_);
+    }
+
+    // Optionally perform post-training local search.
+    if (unsupervised_learning_method_ != "bw" && post_training_local_search_) {
+	RunBaumWelch(data_path);
     }
 }
 
@@ -436,10 +444,10 @@ void HMM::BuildConvexHull(const string &data_path,
     // For methods requiring CCA, pre-compute CCA projections.
     Eigen::MatrixXd cca_left_singular_vectors;
     Eigen::MatrixXd cca_right_singular_vectors;
+    Eigen::VectorXd cca_singular_values;
     if (convex_hull_method_ == "brown" || convex_hull_method_ == "cca") {
 	SMat cooccurrence_count_matrix =
 	    sparsesvd::convert_column_map(context_observation_count);
-	Eigen::VectorXd cca_singular_values;
 	corpus::decompose(cooccurrence_count_matrix, NumStates(), "power",
 			  add_smooth_, power_smooth_, "cca",
 			  &cca_left_singular_vectors,
@@ -448,16 +456,12 @@ void HMM::BuildConvexHull(const string &data_path,
     }
 
     if (convex_hull_method_ == "brown") {
-	// Under the Brown assumption, the rows of the left CCA projection
-	// matrix form a convex hull (Stratos et al., 2014; 2015).
+	// Under the Brown assumption, the normalized rows of the left CCA
+	// projection matrix form a (trivial) convex hull.
 	(*convex_hull) = cca_left_singular_vectors;
-
-	/*
-	// TODO: Normalize?
 	for (size_t i = 0; i < convex_hull->rows(); ++i) {
-	    (*convex_hull).row(i) /= convex_hull->row(i).lpNorm<2>();
+	    (*convex_hull).row(i).normalize();
 	}
-	*/
     } else if (convex_hull_method_ == "svd" || convex_hull_method_ == "cca" ||
 	       convex_hull_method_ == "rand") {
 	// Under the anchor assumption, the rows v(x) form a convex hull,
@@ -769,9 +773,7 @@ void HMM::RecoverPriorTransitionGivenEmission(
     }
     string temp_model_path = tmpnam(nullptr);
     decoding_method_ = "mbr";  // More appropriate than Viterbi for EM.
-    const size_t development_interval = 1;  // To check development accuracy.
     double max_development_accuracy = 0.0;
-    const size_t max_no_improvement_count = 3;  // Number of "lives".
     size_t no_improvement_count = 0;
 
     // Start EM iterations.
@@ -897,7 +899,7 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	    cerr << line;  // Put a newline later.
 	}
 	if (!development_path_.empty()) {
-	    if ((iteration_num + 1) % development_interval != 0) {
+	    if ((iteration_num + 1) % development_interval_ != 0) {
 		if (verbose_) { cerr << endl; }
 		continue;  // Not at a checking interval.
 	    }
@@ -933,7 +935,7 @@ void HMM::RecoverPriorTransitionGivenEmission(
 		    cerr << "(no improvement " + to_string(no_improvement_count)
 			 << ")" << endl;
 		}
-		if (no_improvement_count >= max_no_improvement_count) {
+		if (no_improvement_count >= max_num_no_improvement_) {
 		    Load(temp_model_path);
 		    break;
 		}
@@ -1010,8 +1012,10 @@ void HMM::RecoverPriorTransitionGivenEmission(
 }
 
 void HMM::RunBaumWelch(const string &data_path) {
-    // Initialize HMM parameters randomly.
-    InitializeParametersRandomly();
+    if (emission_.size() == 0 || transition_.size() == 0 ||
+	prior_.size() == 0) {  // Initialize parameters randomly.
+	InitializeParametersRandomly();
+    }
 
     // Prepare data-driven model development.
     vector<vector<string> > development_observation_string_sequences;
@@ -1023,12 +1027,11 @@ void HMM::RunBaumWelch(const string &data_path) {
     }
     string temp_model_path = tmpnam(nullptr);
     decoding_method_ = "mbr";  // More appropriate than Viterbi for EM.
-    const size_t development_interval = 10;  // To check development accuracy.
     double max_development_accuracy = 0.0;
-    const size_t max_no_improvement_count = 10;  // Number of "lives".
     size_t no_improvement_count = 0;
 
     // Run EM iterations.
+    if (verbose_) { cerr << endl << "BAUM-WELCH ITERATIONS" << endl; }
     double log_likelihood = -numeric_limits<double>::infinity();
     for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
 	 ++iteration_num) {
@@ -1066,6 +1069,11 @@ void HMM::RunBaumWelch(const string &data_path) {
 		    log_probability, al[length - 1][state] +
 		    transition_[state][StoppingState()]);
 	    }
+	    if (log_probability == -numeric_limits<double>::infinity()) {
+		// This line contains an observation sequence that has
+		// probability 0 under the parameter values. Just skip it!
+		continue;
+	    }
 	    new_log_likelihood += log_probability;
 
 	    vector<vector<double> > be;  // Backward probabilities.
@@ -1084,6 +1092,12 @@ void HMM::RunBaumWelch(const string &data_path) {
 		for (State state = 0; state < NumStates(); ++state) {
 		    emission_count[state][observation] +=
 			exp(al[i][state] + be[i][state] - log_probability);
+		    if (isnan(emission_count[state][observation])) {
+			cout << al[i][state] << endl;
+			cout << be[i][state] << endl;
+			cout << log_probability << endl;
+			exit(0);
+		    }
 		    if (i > 0) {
 			// Accumulate transition probabilities.
 			for (State previous_state = 0;
@@ -1149,7 +1163,7 @@ void HMM::RunBaumWelch(const string &data_path) {
 	    cerr << line;  // Put a newline later.
 	}
 	if (!development_path_.empty()) {
-	    if ((iteration_num + 1) % development_interval != 0) {
+	    if ((iteration_num + 1) % development_interval_ != 0) {
 		if (verbose_) { cerr << endl; }
 		continue;  // Not at a checking interval.
 	    }
@@ -1185,7 +1199,7 @@ void HMM::RunBaumWelch(const string &data_path) {
 		    cerr << "(no improvement " + to_string(no_improvement_count)
 			 << ")" << endl;
 		}
-		if (no_improvement_count >= max_no_improvement_count) {
+		if (no_improvement_count >= max_num_no_improvement_) {
 		    Load(temp_model_path);
 		    break;
 		}
@@ -1199,7 +1213,7 @@ void HMM::RunBaumWelch(const string &data_path) {
 }
 
 void HMM::InitializeParametersRandomly() {
-    ASSERT(NumObservations() > 0 && NumStates(), "Must have dictionaries");
+    ASSERT(NumObservations() > 0 && NumStates() > 0, "Must have dictionaries");
     random_device device;
     default_random_engine engine(device());
     normal_distribution<double> normal(0.0, 1.0);  // Standard Gaussian.
@@ -1243,6 +1257,87 @@ void HMM::InitializeParametersRandomly() {
     double prior_normalizer = 0.0;
     for (State state = 0; state < NumStates(); ++state) {
 	double value = fabs(normal(engine));
+	prior_[state] = value;
+	prior_normalizer += value;
+    }
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = log(prior_[state]) - log(prior_normalizer);
+    }
+
+    CheckProperDistribution();
+}
+
+void HMM::InitializeParametersFromClusters(const string &cluster_path) {
+    ASSERT(NumObservations() > 0 && NumStates() > 0, "Must have dictionaries");
+
+    // Read clusters.
+    unordered_map<string, unordered_map<string, bool> > observation_clusters;
+    ifstream cluster_file(cluster_path, ios::in);
+    ASSERT(cluster_file.is_open(), "Cannot open " << cluster_path);
+    while (cluster_file.good()) {
+	vector<string> tokens;
+	util_file::read_line(&cluster_file, &tokens);
+	if (tokens.size() == 0) { continue; }
+
+	// Assume each line has the form: <cluster> <observation> <junk>
+	observation_clusters[tokens[0]][tokens[1]] = true;
+    }
+
+    // Map hidden states to clusters.
+    vector<string> cluster_strings;  // 7 -> "cluster30"
+    for (const auto &cluster_pair : observation_clusters) {
+	cluster_strings.push_back(cluster_pair.first);
+    }
+    double near_zero = 1e-15;
+
+    // Assign emission parameters.
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_[state].resize(NumObservations());
+	double state_normalizer = 0.0;
+	unordered_map<string, bool> active;  // Active observation strings.
+	if (state < cluster_strings.size()) {
+	    active = observation_clusters[cluster_strings[state]];
+	}
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    string observation_string =
+		observation_dictionary_inverse_[observation];
+
+	    // Check if the observation is active in this state.
+	    double value = (active.find(observation_string) != active.end()) ?
+		1.0 / active.size() : near_zero;
+	    emission_[state][observation] = value;
+	    state_normalizer += value;
+	}
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] =
+		log(emission_[state][observation]) - log(state_normalizer);
+	}
+    }
+
+    // Assign transition parameters uniformly.
+    transition_.resize(NumStates());
+    for (State state1 = 0; state1 < NumStates(); ++state1) {
+	transition_[state1].resize(NumStates() + 1);  // +stop
+	double state1_normalizer = 0.0;
+	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
+	    double value = near_zero;
+	    transition_[state1][state2] = value;
+	    state1_normalizer += value;
+	}
+	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
+	    transition_[state1][state2] =
+		log(transition_[state1][state2]) - log(state1_normalizer);
+	}
+    }
+
+    // Assign prior parameters uniformly.
+    prior_.resize(NumStates());
+    double prior_normalizer = 0.0;
+    for (State state = 0; state < NumStates(); ++state) {
+	double value = near_zero;
 	prior_[state] = value;
 	prior_normalizer += value;
     }

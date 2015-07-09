@@ -70,7 +70,7 @@ gtest_main.a: gtest-all.o gtest_main.o
 
 hmm_test: hmm_test.o $(SRC)/hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
 	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
-	$(CORE)/optimize.o gtest_main.a
+	$(CORE)/optimize.o $(CORE)/eigen_helper.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 hmm_test.o: hmm_test.cc

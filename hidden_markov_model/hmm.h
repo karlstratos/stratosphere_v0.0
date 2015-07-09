@@ -109,6 +109,17 @@ public:
 	max_num_fw_iterations_ = max_num_fw_iterations;
     }
 
+    // Sets the interval to check development accuracy.
+    void set_development_interval(size_t development_interval) {
+	development_interval_ = development_interval;
+    }
+
+    // Sets the maximum number of iterations without improvement before
+    // stopping.
+    void set_max_num_no_improvement(size_t max_num_no_improvement) {
+	max_num_no_improvement_ = max_num_no_improvement;
+    }
+
     // Sets the context window size.
     void set_window_size(size_t window_size) { window_size_ = window_size; }
 
@@ -136,6 +147,16 @@ public:
     // Sets the path to development data.
     void set_development_path(string development_path) {
 	development_path_ = development_path;
+    }
+
+    // Sets the path to clusters.
+    void set_cluster_path(string cluster_path) {
+	cluster_path_ = cluster_path;
+    }
+
+    // Sets the flag for doing post-training local search.
+    void set_post_training_local_search(bool post_training_local_search) {
+	post_training_local_search_ = post_training_local_search;
     }
 
     // Sets the decoding method.
@@ -179,10 +200,18 @@ private:
 	const unordered_map<Observation, size_t> &observation_count);
 
     // Runs the Baum-Welch algorithm (must already have dictionaries).
+    // - If parameters exist, simply start from them.
+    // - Otherwise, initialize them randomly.
     void RunBaumWelch(const string &data_path);
 
     // Initializes parameters randomly (must already have dictionaries).
     void InitializeParametersRandomly();
+
+    // Initializes parameters from clusters (must already have dictionaries).
+    // - For each state with a cluster, assign nearly all its emission
+    //   probabilities to the observations in the cluster.
+    // - Otherwise, assign uniformly.
+    void InitializeParametersFromClusters(const string &cluster_path);
 
     // Check if parameters form proper distributions.
     void CheckProperDistribution();
@@ -304,6 +333,12 @@ private:
     // Maximum number of Frank-Wolfe iterations.
     size_t max_num_fw_iterations_ = 1000;
 
+    // Interval to check development accuracy.
+    size_t development_interval_ = 10;
+
+    // Maximum number of iterations without improvement before stopping.
+    size_t max_num_no_improvement_ = 10;
+
     // Size of the sliding window (odd => symmetric, even => assymmetric).
     size_t window_size_ = 5;
 
@@ -324,6 +359,12 @@ private:
 
     // Path to development data.
     string development_path_;
+
+    // Path to clusters.
+    string cluster_path_;
+
+    // Do post-training local search?
+    bool post_training_local_search_ = true;
 
     // Decoding method.
     string decoding_method_ = "mbr";

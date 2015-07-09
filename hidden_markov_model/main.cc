@@ -16,6 +16,8 @@ int main (int argc, char* argv[]) {
     size_t num_states = 0;
     size_t max_num_em_iterations = 1000;
     size_t max_num_fw_iterations = 1000;
+    size_t development_interval = 10;
+    size_t max_num_no_improvement = 10;
     size_t window_size = 5;
     string context_definition = "list";
     string convex_hull_method = "svd";
@@ -23,6 +25,8 @@ int main (int argc, char* argv[]) {
     double power_smooth = 0.5;
     size_t num_anchor_candidates = 100;
     string development_path;
+    string cluster_path;
+    bool post_training_local_search = false;
     string decoding_method = "mbr";
     bool verbose = true;
     string log_path;
@@ -51,6 +55,10 @@ int main (int argc, char* argv[]) {
 	    max_num_em_iterations = stol(argv[++i]);
 	} else if (arg == "--fwiter") {
 	    max_num_fw_iterations = stol(argv[++i]);
+	} else if (arg == "--check") {
+	    development_interval = stol(argv[++i]);
+	} else if (arg == "--lives") {
+	    max_num_no_improvement = stol(argv[++i]);
 	} else if (arg == "--window") {
 	    window_size = stol(argv[++i]);
 	} else if (arg == "--context") {
@@ -65,6 +73,10 @@ int main (int argc, char* argv[]) {
 	    num_anchor_candidates = stol(argv[++i]);
 	} else if (arg == "--dev") {
 	    development_path = argv[++i];
+	} else if (arg == "--cluster") {
+	    cluster_path = argv[++i];
+	} else if (arg == "--postmortem" || arg == "-p") {
+	    post_training_local_search = true;
 	} else if (arg == "--decode") {
 	    decoding_method = argv[++i];
 	} else if (arg == "--quiet" || arg == "-q") {
@@ -101,11 +113,16 @@ int main (int argc, char* argv[]) {
 	     << "maximum number of EM iterations" << endl;
 	cout << "--fwiter [" << max_num_fw_iterations << "]:       \t"
 	     << "maximum number of Frank-Wolfe iterations" << endl;
+	cout << "--check [" << development_interval << "]:        \t"
+	     << "interval to check development accuracy" << endl;
+	cout << "--lives [" << max_num_no_improvement << "]:       \t"
+	     << "maximum number of iterations without improvement before "
+	     << "stopping" << endl;
 	cout << "--window [" << window_size << "]:     \t"
 	     << "window size: \"word\"=center, \"context\"=non-center" << endl;
 	cout << "--context [" << context_definition << "]: \t"
 	     << "context definition: bag, list"  << endl;
-	cout << "--hull [" << convex_hull_method << "]: \t"
+	cout << "--hull [" << convex_hull_method << "]:     \t"
 	     << "convex hull method: brown, svd, cca, rand"  << endl;
 	cout << "--add [" << add_smooth << "]:          \t"
 	     << "additive smoothing" << endl;
@@ -115,6 +132,10 @@ int main (int argc, char* argv[]) {
 	     << "number of candidates to consider for anchors" << endl;
 	cout << "--dev [-]:        \t"
 	     << "path to a development data file" << endl;
+	cout << "--cluster [-]:   \t"
+	     << "path to clusters" << endl;
+	cout << "--postmortem, -p:   \t"
+	     << "do post-training local search?" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
 	     << "decoding method: viterbi, mbr"  << endl;
 	cout << "--log [-]:        \t"
@@ -132,6 +153,8 @@ int main (int argc, char* argv[]) {
     hmm.set_unsupervised_learning_method(unsupervised_learning_method);
     hmm.set_max_num_em_iterations(max_num_em_iterations);
     hmm.set_max_num_fw_iterations(max_num_fw_iterations);
+    hmm.set_development_interval(development_interval);
+    hmm.set_max_num_no_improvement(max_num_no_improvement);
     hmm.set_window_size(window_size);
     hmm.set_context_definition(context_definition);
     hmm.set_convex_hull_method(convex_hull_method);
@@ -139,6 +162,8 @@ int main (int argc, char* argv[]) {
     hmm.set_power_smooth(power_smooth);
     hmm.set_num_anchor_candidates(num_anchor_candidates);
     hmm.set_development_path(development_path);
+    hmm.set_cluster_path(cluster_path);
+    hmm.set_post_training_local_search(post_training_local_search);
     hmm.set_decoding_method(decoding_method);
     hmm.set_log_path(log_path);
     hmm.set_verbose(verbose);
