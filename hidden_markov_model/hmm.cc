@@ -1092,7 +1092,7 @@ void HMM::RunBaumWelch(const string &data_path) {
 		for (State state = 0; state < NumStates(); ++state) {
 		    emission_count[state][observation] +=
 			exp(al[i][state] + be[i][state] - log_probability);
-		    if (isnan(emission_count[state][observation])) {
+		    if (std::isnan(emission_count[state][observation])) {
 			cout << al[i][state] << endl;
 			cout << be[i][state] << endl;
 			cout << log_probability << endl;
