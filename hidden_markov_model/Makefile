@@ -31,7 +31,7 @@ all: $(TARGETS)
 
 map_clusters: map_clusters.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
 	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
-	$(CORE)/optimize.o $(CORE)/eigen_helper.o
+	$(CORE)/optimize.o $(CORE)/eigen_helper.o $(CORE)/features.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 map_clusters.o: map_clusters.cc
@@ -39,7 +39,7 @@ map_clusters.o: map_clusters.cc
 
 hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o $(CORE)/corpus.o \
 	$(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a $(CORE)/optimize.o \
-	$(CORE)/eigen_helper.o
+	$(CORE)/eigen_helper.o $(CORE)/features.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc hmm.o
@@ -68,6 +68,9 @@ $(CORE)/optimize.o: $(CORE)/optimize.cc $(CORE)/optimize.h
 
 $(CORE)/eigen_helper.o: $(CORE)/eigen_helper.cc $(CORE)/eigen_helper.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
+
+$(CORE)/features.o: $(CORE)/features.cc $(CORE)/features.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:

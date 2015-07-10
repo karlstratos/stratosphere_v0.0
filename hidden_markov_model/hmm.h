@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../core/corpus.h"
+
 using namespace std;
 
 typedef size_t Observation;
@@ -133,6 +135,11 @@ public:
 	convex_hull_method_ = convex_hull_method;
     }
 
+    // Sets the context extension.
+    void set_context_extension(string context_extension) {
+	context_extension_ = context_extension;
+    }
+
     // Sets the additive smoothing value.
     void set_add_smooth(double add_smooth) { add_smooth_ = add_smooth; }
 
@@ -142,6 +149,11 @@ public:
     // Sets the number of anchor candidates.
     void set_num_anchor_candidates(size_t num_anchor_candidates) {
 	num_anchor_candidates_ = num_anchor_candidates;
+    }
+
+    // Sets the weight for new context features.
+    void set_extension_weight(double extension_weight) {
+	extension_weight_ = extension_weight;
     }
 
     // Sets the path to development data.
@@ -186,6 +198,12 @@ private:
 
     // Builds a convex hull of observation vectors as rows of a matrix.
     void BuildConvexHull(const string &data_path, Eigen::MatrixXd *convex_hull);
+
+    // Extends the context space (i.e., add additional columns to the
+    // observation-context co-occurrence matrix).
+    void ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
+			    unordered_map<Context, unordered_map<Observation,
+			    double> > *context_observation_count);
 
     // Recover emission parameters by decomposing a convex hull of observation
     // vectors.
@@ -348,6 +366,9 @@ private:
     // Convex hull method.
     string convex_hull_method_ = "svd";
 
+    // Context extension.
+    string context_extension_ = "";
+
     // Additive smoothing value.
     double add_smooth_ = 0.0;
 
@@ -356,6 +377,9 @@ private:
 
     // Number of anchor candidates (most frequent observation types).
     size_t num_anchor_candidates_ = 100;
+
+    // Weight for new context features v: weight * ||u|| = ||v|| (l2 norm).
+    double extension_weight_ = 1.0;
 
     // Path to development data.
     string development_path_;

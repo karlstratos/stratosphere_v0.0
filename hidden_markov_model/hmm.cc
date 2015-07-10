@@ -7,9 +7,9 @@
 #include <numeric>
 #include <random>
 
-#include "../core/corpus.h"
 #include "../core/eigen_helper.h"
 #include "../core/evaluate.h"
+#include "../core/features.h"
 #include "../core/optimize.h"
 #include "../core/sparsesvd.h"
 #include "../core/util.h"
@@ -441,6 +441,15 @@ void HMM::BuildConvexHull(const string &data_path,
 		       window_size_, 0, &context_dictionary,
 		       &context_observation_count);
 
+    // Extend the context space (i.e., add additional columns to the
+    // observation-context co-occurrence matrix).
+    ExtendContextSpace(&context_dictionary, &context_observation_count);
+
+    if (verbose_) {
+	cerr << observation_dictionary_.size() << " x "
+	     << context_dictionary.size() << " word-context matrix" << endl;
+    }
+
     // For methods requiring CCA, pre-compute CCA projections.
     Eigen::MatrixXd cca_left_singular_vectors;
     Eigen::MatrixXd cca_right_singular_vectors;
@@ -526,6 +535,57 @@ void HMM::BuildConvexHull(const string &data_path,
 	(*convex_hull) = original_convex_hull * projection_matrix;
     } else {
 	ASSERT(false, "Unknown convex hull method: " << convex_hull_method_);
+    }
+}
+
+void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
+			     unordered_map<Context, unordered_map<Observation,
+			     double> > *context_observation_count) {
+    // What context extensions are specified?
+    vector<string> extension_types;
+    util_string::split_by_chars(context_extension_, ",", &extension_types);
+    if (extension_types.size() == 0) { return; }  // No extension.
+
+    // Go through the co-occurrence matrix to aggregate squared observation
+    // counts.
+    vector<double> observation_squared_l2_norm(observation_dictionary_.size());
+    for (const auto &context_pair : *context_observation_count) {
+	for (const auto &observation_pair : context_pair.second) {
+	    observation_squared_l2_norm[observation_pair.first] +=
+		pow(observation_pair.second, 2);
+	}
+    }
+
+    // Go through the observation strings to extend the context dictionary.
+    unordered_map<Observation, vector<Context> > new_contexts;
+    for (const auto &observation_string_pair : observation_dictionary_) {
+	string observation_string = observation_string_pair.first;
+	Observation observation = observation_string_pair.second;
+	for (const string &extension_type : extension_types) {
+	    if (extension_type == "basic") {
+		string basic_word_shape = "<basic-word-shape>=" +
+		    features::basic_word_shape(observation_string);
+		if (context_dictionary->find(basic_word_shape) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[basic_word_shape] =
+			context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[basic_word_shape];
+		new_contexts[observation].push_back(new_context);
+	    }
+	}
+    }
+
+    // For each observation "row", append new vector v to the original vector u,
+    // such that: weight * ||u|| = ||v|| (using l2 norm).
+    for (Observation observation = 0; observation < NumObservations();
+	 ++observation) {
+	for (Context new_context : new_contexts[observation]) {
+	    (*context_observation_count)[new_context][observation] =
+		sqrt(pow(extension_weight_, 2) *
+		     observation_squared_l2_norm[observation] /
+		     new_contexts[observation].size());
+	}
     }
 }
 

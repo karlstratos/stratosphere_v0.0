@@ -21,9 +21,11 @@ int main (int argc, char* argv[]) {
     size_t window_size = 5;
     string context_definition = "list";
     string convex_hull_method = "svd";
+    string context_extension = "";
     double add_smooth = 10.0;
     double power_smooth = 0.5;
     size_t num_anchor_candidates = 100;
+    double extension_weight = 1.0;
     string development_path;
     string cluster_path;
     bool post_training_local_search = false;
@@ -65,12 +67,16 @@ int main (int argc, char* argv[]) {
 	    context_definition = argv[++i];
 	} else if (arg == "--hull") {
 	    convex_hull_method = argv[++i];
+	} else if (arg == "--extend") {
+	    context_extension = argv[++i];
 	} else if (arg == "--add") {
 	    add_smooth = stod(argv[++i]);
 	} else if (arg == "--power") {
 	    power_smooth = stod(argv[++i]);
 	} else if (arg == "--cand") {
 	    num_anchor_candidates = stol(argv[++i]);
+	} else if (arg == "--extweight") {
+	    extension_weight = stod(argv[++i]);
 	} else if (arg == "--dev") {
 	    development_path = argv[++i];
 	} else if (arg == "--cluster") {
@@ -158,9 +164,11 @@ int main (int argc, char* argv[]) {
     hmm.set_window_size(window_size);
     hmm.set_context_definition(context_definition);
     hmm.set_convex_hull_method(convex_hull_method);
+    hmm.set_context_extension(context_extension);
     hmm.set_add_smooth(add_smooth);
     hmm.set_power_smooth(power_smooth);
     hmm.set_num_anchor_candidates(num_anchor_candidates);
+    hmm.set_extension_weight(extension_weight);
     hmm.set_development_path(development_path);
     hmm.set_cluster_path(cluster_path);
     hmm.set_post_training_local_search(post_training_local_search);
