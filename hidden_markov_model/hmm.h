@@ -90,11 +90,11 @@ public:
     // Returns the number of state types.
     size_t NumStates() { return state_dictionary_.size(); }
 
-    // Sets the rare cutoff.
-    void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
-
     // Sets the flag for lowercasing all observation strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
+
+    // Sets the rare cutoff.
+    void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
 
     // Sets the unsupervised learning method.
     void set_unsupervised_learning_method(string unsupervised_learning_method) {
@@ -341,12 +341,12 @@ private:
     // Anchor observations.
     vector<Observation> anchor_observations_;
 
+    // Lowercase all observation strings?
+    bool lowercase_ = false;
+
     // Observation types that occur <= this number in the training data are
     // considered as a single symbol (corpus::kRareString).
     size_t rare_cutoff_ = 0;
-
-    // Lowercase all observation strings?
-    bool lowercase_ = false;
 
     // Unsupervised learning method.
     string unsupervised_learning_method_ = "bw";

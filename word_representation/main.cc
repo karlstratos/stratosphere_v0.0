@@ -9,6 +9,7 @@ int main (int argc, char* argv[]) {
     string corpus_path;
     string output_directory;
     bool from_scratch = false;
+    bool lowercase = false;
     size_t rare_cutoff = 10;
     bool sentence_per_line = false;
     size_t window_size = 11;
@@ -31,6 +32,8 @@ int main (int argc, char* argv[]) {
 	    output_directory = argv[++i];
 	} else if (arg == "--force" || arg == "-f") {
 	    from_scratch = true;
+	} else if (arg == "--lowercase") {
+	    lowercase = true;
 	} else if (arg == "--rare") {
 	    rare_cutoff = stol(argv[++i]);
 	} else if (arg == "--sentences") {
@@ -69,6 +72,8 @@ int main (int argc, char* argv[]) {
 	     << "path to an output directory" << endl;
 	cout << "--force, -f:         \t"
 	     << "forcefully recompute from scratch?" << endl;
+	cout << "--lowercase:          \t"
+	     << "lowercase all word strings?" << endl;
 	cout << "--rare [" << rare_cutoff << "]:       \t"
 	     << "word types occurring <= this are considered rare" << endl;
 	cout << "--sentences:         \t"
@@ -98,6 +103,7 @@ int main (int argc, char* argv[]) {
 
     // Initialize a WordRep object.
     WordRep wordrep(output_directory);
+    wordrep.set_lowercase(lowercase);
     wordrep.set_rare_cutoff(rare_cutoff);
     wordrep.set_sentence_per_line(sentence_per_line);
     wordrep.set_window_size(window_size);

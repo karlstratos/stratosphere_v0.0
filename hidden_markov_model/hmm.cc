@@ -47,8 +47,8 @@ void HMM::CreateRandomly(size_t num_observations, size_t num_states) {
 
 void HMM::Save(const string &model_path) {
     ofstream model_file(model_path, ios::out | ios::binary);
-    util_file::binary_write_primitive(rare_cutoff_, model_file);
     util_file::binary_write_primitive(lowercase_, model_file);
+    util_file::binary_write_primitive(rare_cutoff_, model_file);
     size_t num_observations = NumObservations();
     size_t num_states = NumStates();
     util_file::binary_write_primitive(num_observations, model_file);
@@ -89,8 +89,8 @@ void HMM::Load(const string &model_path) {
     ifstream model_file(model_path, ios::in | ios::binary);
     size_t num_observations;
     size_t num_states;
-    util_file::binary_read_primitive(model_file, &rare_cutoff_);
     util_file::binary_read_primitive(model_file, &lowercase_);
+    util_file::binary_read_primitive(model_file, &rare_cutoff_);
     util_file::binary_read_primitive(model_file, &num_observations);
     util_file::binary_read_primitive(model_file, &num_states);
     for (size_t i = 0; i < num_observations; ++i) {

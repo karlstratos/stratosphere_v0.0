@@ -9,8 +9,8 @@ int main (int argc, char* argv[]) {
     string model_path;
     string data_path;
     string prediction_path;
-    size_t rare_cutoff = 5;
     bool lowercase = false;
+    size_t rare_cutoff = 5;
     bool train = false;
     string unsupervised_learning_method = "bw";
     size_t num_states = 0;
@@ -43,10 +43,10 @@ int main (int argc, char* argv[]) {
 	    data_path = argv[++i];
 	} else if (arg == "--pred") {
 	    prediction_path = argv[++i];
-	} else if (arg == "--rare") {
-	    rare_cutoff = stol(argv[++i]);
 	} else if (arg == "--lowercase") {
 	    lowercase = true;
+	} else if (arg == "--rare") {
+	    rare_cutoff = stol(argv[++i]);
 	} else if (arg == "--train") {
 	    train = true;
 	} else if (arg == "--unsup") {
@@ -105,10 +105,10 @@ int main (int argc, char* argv[]) {
 	     << "path to a data file" << endl;
 	cout << "--pred [-]:        \t"
 	     << "path to a prediction file" << endl;
-	cout << "--rare [" << rare_cutoff << "]:       \t"
-	     << "word types occurring <= this are considered rare" << endl;
 	cout << "--lowercase:          \t"
 	     << "lowercase all observation strings?" << endl;
+	cout << "--rare [" << rare_cutoff << "]:       \t"
+	     << "word types occurring <= this are considered rare" << endl;
 	cout << "--train:          \t"
 	     << "train a model?" << endl;
 	cout << "--unsup [" << unsupervised_learning_method << "]:     \t"
@@ -154,8 +154,8 @@ int main (int argc, char* argv[]) {
     }
 
     HMM hmm;
-    hmm.set_rare_cutoff(rare_cutoff);
     hmm.set_lowercase(lowercase);
+    hmm.set_rare_cutoff(rare_cutoff);
     hmm.set_unsupervised_learning_method(unsupervised_learning_method);
     hmm.set_max_num_em_iterations(max_num_em_iterations);
     hmm.set_max_num_fw_iterations(max_num_fw_iterations);

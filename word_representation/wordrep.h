@@ -41,6 +41,9 @@ public:
     // Clusters cached word vectors.
     void ClusterWordVectors();
 
+    // Sets the flag for lowercasing all word strings.
+    void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
+
     // Sets the rare word cutoff value.
     void set_rare_cutoff(size_t rare_cutoff) { rare_cutoff_ = rare_cutoff; }
 
@@ -145,6 +148,9 @@ private:
 
     // Path to the output directory.
     string output_directory_;
+
+    // Lowercase all word strings?
+    bool lowercase_ = false;
 
     // If a word type appears <= this number, treat it as a rare symbol.
     size_t rare_cutoff_ = 1;
