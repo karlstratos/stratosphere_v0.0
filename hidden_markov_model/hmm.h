@@ -229,7 +229,13 @@ private:
     // - For each state with a cluster, assign nearly all its emission
     //   probabilities to the observations in the cluster.
     // - Otherwise, assign uniformly.
-    void InitializeParametersFromClusters(const string &cluster_path);
+    // Also estimates the transition and prior parameters from unlabeled data.
+    void InitializeParametersFromClusters(const string &cluster_path,
+					  const string &unlabeled_data_path);
+
+    void InitializeParametersFromClusters(const string &cluster_path) {
+	InitializeParametersFromClusters(cluster_path, "");
+    }
 
     // Check if parameters form proper distributions.
     void CheckProperDistribution();

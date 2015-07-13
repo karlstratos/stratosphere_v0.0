@@ -234,7 +234,7 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
 
     if (unsupervised_learning_method_ == "cluster") {
 	ASSERT(!cluster_path_.empty(), "Need a cluster file");
-	InitializeParametersFromClusters(cluster_path_);
+	InitializeParametersFromClusters(cluster_path_, data_path);
     } else if (unsupervised_learning_method_ == "bw") {
 	RunBaumWelch(data_path);
     } else if (unsupervised_learning_method_ == "anchor") {
@@ -1152,12 +1152,6 @@ void HMM::RunBaumWelch(const string &data_path) {
 		for (State state = 0; state < NumStates(); ++state) {
 		    emission_count[state][observation] +=
 			exp(al[i][state] + be[i][state] - log_probability);
-		    if (std::isnan(emission_count[state][observation])) {
-			cout << al[i][state] << endl;
-			cout << be[i][state] << endl;
-			cout << log_probability << endl;
-			exit(0);
-		    }
 		    if (i > 0) {
 			// Accumulate transition probabilities.
 			for (State previous_state = 0;
@@ -1327,11 +1321,13 @@ void HMM::InitializeParametersRandomly() {
     CheckProperDistribution();
 }
 
-void HMM::InitializeParametersFromClusters(const string &cluster_path) {
+void HMM::InitializeParametersFromClusters(const string &cluster_path,
+					   const string &unlabeled_data_path) {
     ASSERT(NumObservations() > 0 && NumStates() > 0, "Must have dictionaries");
 
     // Read clusters.
-    unordered_map<string, unordered_map<string, bool> > observation_clusters;
+    unordered_map<string, unordered_map<string, bool> > cluster_to_observations;
+    unordered_map<string, string> observation_to_cluster;
     ifstream cluster_file(cluster_path, ios::in);
     ASSERT(cluster_file.is_open(), "Cannot open " << cluster_path);
     while (cluster_file.good()) {
@@ -1340,31 +1336,45 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path) {
 	if (tokens.size() == 0) { continue; }
 
 	// Assume each line has the form: <cluster> <observation> <junk>
-	observation_clusters[tokens[0]][tokens[1]] = true;
+	cluster_to_observations[tokens[0]][tokens[1]] = true;
+	observation_to_cluster[tokens[1]] = tokens[0];
     }
 
-    // Map hidden states to clusters.
-    vector<string> cluster_strings;  // 7 -> "cluster30"
-    for (const auto &cluster_pair : observation_clusters) {
-	cluster_strings.push_back(cluster_pair.first);
+    // Establish a mapping between clusters and hidden states.
+    unordered_map<string, State> cluster_dictionary;
+    unordered_map<State, string> cluster_dictionary_inverse;
+    for (const auto &cluster_pair : cluster_to_observations) {
+	string cluster_string = cluster_pair.first;
+
+	// Note that if there are more clusters than hidden states, some
+	// clusters will be mapped to some meaningless numbers.
+	cluster_dictionary[cluster_string] = cluster_dictionary.size();
+	cluster_dictionary_inverse[cluster_dictionary_inverse.size()] =
+	    cluster_string;
     }
-    double near_zero = 1e-15;
+    double near_zero = 1e-15;  // Some tiny probability.
 
     // Assign emission parameters.
     emission_.resize(NumStates());
     for (State state = 0; state < NumStates(); ++state) {
 	emission_[state].resize(NumObservations());
-	double state_normalizer = 0.0;
-	unordered_map<string, bool> active;  // Active observation strings.
-	if (state < cluster_strings.size()) {
-	    active = observation_clusters[cluster_strings[state]];
+
+	// See if we have a cluster associated with this state: if so, identify
+	// observation strings "active" in that cluster.
+	unordered_map<string, bool> active;
+	if (cluster_dictionary_inverse.find(state) !=
+	    cluster_dictionary_inverse.end()) {
+	    active = cluster_to_observations[cluster_dictionary_inverse[state]];
 	}
+
+	double state_normalizer = 0.0;
 	for (Observation observation = 0; observation < NumObservations();
 	     ++observation) {
 	    string observation_string =
 		observation_dictionary_inverse_[observation];
 
-	    // Check if the observation is active in this state.
+	    // For a particular state, distribute (most of) the probability mass
+	    // over active observations uniformly.
 	    double value = (active.find(observation_string) != active.end()) ?
 		1.0 / active.size() : near_zero;
 	    emission_[state][observation] = value;
@@ -1377,32 +1387,112 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path) {
 	}
     }
 
-    // Assign transition parameters uniformly.
+    vector<vector<size_t> > transition_count;
+    vector<size_t> prior_count;
+    if (!unlabeled_data_path.empty()) {
+	// If given unlabeled data, approximate state transition counts with
+	// cluster transition counts.
+	transition_count.resize(NumStates());
+	for (State state = 0; state < NumStates(); ++state) {
+	    transition_count[state].resize(NumStates() + 1, 0);  // +stop
+	}
+	prior_count.resize(NumStates(), 0);
+
+	// First, compute observation transition counts.
+	Corpus corpus(unlabeled_data_path, verbose_);
+	corpus.set_lowercase(lowercase_);
+	unordered_map<Observation, unordered_map<Observation, size_t> >
+	    observation_bigram_count;
+	unordered_map<Observation, size_t> initial_observation_count;
+	unordered_map<Observation, size_t> final_observation_count;
+	corpus.CountTransitions(observation_dictionary_,
+				&observation_bigram_count,
+				&initial_observation_count,
+				&final_observation_count);
+
+	// Then translate them to state transition counts via cluster mapping.
+	for (const auto &observation1_pair : observation_bigram_count) {
+	    string observation1_string =
+		observation_dictionary_inverse_[observation1_pair.first];
+	    for (const auto &observation2_pair : observation1_pair.second) {
+		string observation2_string =
+		    observation_dictionary_inverse_[observation2_pair.first];
+		if (observation_to_cluster.find(observation1_string) !=
+		    observation_to_cluster.end() &&
+		    observation_to_cluster.find(observation2_string) !=
+		    observation_to_cluster.end()) {  // Must have clusters.
+		    string cluster1_string =
+			observation_to_cluster[observation1_string];
+		    string cluster2_string =
+			observation_to_cluster[observation2_string];
+		    State state1 = cluster_dictionary[cluster1_string];
+		    State state2 = cluster_dictionary[cluster2_string];
+		    transition_count[state1][state2] +=  // Aggregate!
+			observation2_pair.second;
+		}
+	    }
+	}
+
+	// Likewise for initial states...
+	for (const auto &observation_pair : initial_observation_count) {
+	    string initial_observation_string =
+		observation_dictionary_inverse_[observation_pair.first];
+	    if (observation_to_cluster.find(initial_observation_string) !=
+		observation_to_cluster.end()) {  // Must have a cluster.
+		string initial_cluster_string =
+		    observation_to_cluster[initial_observation_string];
+		State initial_state =
+		    cluster_dictionary[initial_cluster_string];
+		prior_count[initial_state] +=  // Aggregate!
+		    observation_pair.second;
+	    }
+	}
+
+	// ... and final states.
+	for (const auto &observation_pair : final_observation_count) {
+	    string final_observation_string =
+		observation_dictionary_inverse_[observation_pair.first];
+	    if (observation_to_cluster.find(final_observation_string) !=
+		observation_to_cluster.end()) {  // Must have a cluster.
+		string final_cluster_string =
+		    observation_to_cluster[final_observation_string];
+		State final_state = cluster_dictionary[final_cluster_string];
+		transition_count[final_state][StoppingState()] +=  // Aggregate!
+		    observation_pair.second;
+	    }
+	}
+    }
+
+    // Assign transition parameters.
     transition_.resize(NumStates());
     for (State state1 = 0; state1 < NumStates(); ++state1) {
 	transition_[state1].resize(NumStates() + 1);  // +stop
 	double state1_normalizer = 0.0;
 	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
-	    double value = near_zero;
+	    double value = (transition_count.size() > 0) ?
+		transition_count[state1][state2] : near_zero;
 	    transition_[state1][state2] = value;
 	    state1_normalizer += value;
 	}
 	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
-	    transition_[state1][state2] =
-		log(transition_[state1][state2]) - log(state1_normalizer);
+	    transition_[state1][state2] = (state1_normalizer > 0) ?
+		log(transition_[state1][state2]) - log(state1_normalizer) :
+		- log(NumStates() + 1);
 	}
     }
 
-    // Assign prior parameters uniformly.
+    // Assign prior parameters.
     prior_.resize(NumStates());
     double prior_normalizer = 0.0;
     for (State state = 0; state < NumStates(); ++state) {
-	double value = near_zero;
+	double value = (prior_count.size() > 0) ?
+	    prior_count[state] : near_zero;
 	prior_[state] = value;
 	prior_normalizer += value;
     }
     for (State state = 0; state < NumStates(); ++state) {
-	prior_[state] = log(prior_[state]) - log(prior_normalizer);
+	prior_[state] = (prior_normalizer > 0) ?
+	    log(prior_[state]) - log(prior_normalizer) : -log(NumStates());
     }
 
     CheckProperDistribution();
