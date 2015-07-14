@@ -91,10 +91,11 @@ private:
 			     &word_vectors);
 
     // Returns a string signature of parameters.
-    //    version=0: {rare_cutoff_}
-    //    version=1: 0 + {sentence_per_line_, window_size_, context_defintion_,
+    //    version=0: {lowercase_}
+    //    version=1: 0 + {rare_cutoff_}
+    //    version=2: 1 + {sentence_per_line_, window_size_, context_defintion_,
     //                    hash_size_}
-    //    version=2: 1 + {dim_, transformation_method_, add_smooth_,
+    //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, scaling_method_}
     string Signature(size_t version);
 
@@ -106,44 +107,45 @@ private:
 
     // Returns the path to the log file.
     string LogPath() {
-	return output_directory_ + "/log_" + Signature(2) + ".txt";
+	return output_directory_ + "/log_" + Signature(3) + ".txt";
     }
 
     // Returns the path to the sorted word types file.
     string SortedWordTypesPath() {
-	return output_directory_ + "/sorted_word_types.txt";
+	return output_directory_ + "/sorted_word_types_" + Signature(0) +
+	    ".txt";
     }
 
     // Returns the path to the word dictionary file.
     string WordDictionaryPath() {
-	return output_directory_ + "/word_dictionary_" + Signature(0) + ".bin";
+	return output_directory_ + "/word_dictionary_" + Signature(1) + ".bin";
     }
 
     // Returns the path to the context dictionary file.
     string ContextDictionaryPath() {
-	return output_directory_ + "/context_dictionary_" + Signature(1) +
+	return output_directory_ + "/context_dictionary_" + Signature(2) +
 	    ".bin";
     }
 
     // Returns the path to the word-context count file.
     string ContextWordCountPath() {
-	return output_directory_ + "/context_word_count_" + Signature(1) +
+	return output_directory_ + "/context_word_count_" + Signature(2) +
 	    ".bin";
     }
 
     // Returns the path to the singular values.
     string SingularValuesPath() {
-	return output_directory_ + "/singular_values_" + Signature(2) + ".txt";
+	return output_directory_ + "/singular_values_" + Signature(3) + ".txt";
     }
 
     // Returns the path to the word vectors.
     string WordVectorsPath() {
-	return output_directory_ + "/word_vectors_" + Signature(2) + ".txt";
+	return output_directory_ + "/word_vectors_" + Signature(3) + ".txt";
     }
 
     // Returns the path to the clusterered word vectors.
     string ClustersPath() {
-	return output_directory_ + "/clusters_" + Signature(2);
+	return output_directory_ + "/clusters_" + Signature(3);
     }
 
     // Path to the output directory.

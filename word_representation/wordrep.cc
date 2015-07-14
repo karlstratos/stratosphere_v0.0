@@ -286,21 +286,20 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
 }
 
 string WordRep::Signature(size_t version) {
-    ASSERT(version <= 2, "Unrecognized signature version: " << version);
+    ASSERT(version <= 3, "Unrecognized signature version: " << version);
 
-    // Version 0
-    string signature = "";
-    if (lowercase_) { signature += "lowercased_"; }
-    signature += "rare" + to_string(rare_cutoff_);
+    string signature = (lowercase_) ? "lowercased" : "caseintact";  // Version 0
 
-    if (version >= 1) {
+    if (version >= 1) { signature += "_rare" + to_string(rare_cutoff_); }
+
+    if (version >= 2) {
 	if (sentence_per_line_) { signature += "_sentences"; }
 	signature += "_window" + to_string(window_size_);
 	signature += "_" + context_definition_;
 	signature += "_hash" + to_string(hash_size_);
     }
 
-    if (version >= 2) {
+    if (version >= 3) {
 	signature += "_dim" + to_string(dim_);
 	signature += "_" + transformation_method_;
 	signature += "_add" +
