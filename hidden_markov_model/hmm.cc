@@ -547,7 +547,7 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
     if (extension_types.size() == 0) { return; }  // No extension.
 
     // Go through the co-occurrence matrix to aggregate squared observation
-    // counts.
+    // counts: these are used to scale the l2 norm of the extended feature.
     vector<double> observation_squared_l2_norm(observation_dictionary_.size());
     for (const auto &context_pair : *context_observation_count) {
 	for (const auto &observation_pair : context_pair.second) {
@@ -572,14 +572,50 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 		}
 		Context new_context = (*context_dictionary)[basic_word_shape];
 		new_contexts[observation].push_back(new_context);
+	    } else if (extension_type.substr(0, 4) == "pref") {
+		string prefix_size_string = extension_type.substr(4);
+		size_t prefix_size = stol(prefix_size_string);
+		if (observation_string.size() < prefix_size) { continue; }
+		string prefix = "<pref" + prefix_size_string + ">=" +
+		    observation_string.substr(0, prefix_size);
+		if (context_dictionary->find(prefix) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[prefix] = context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[prefix];
+		new_contexts[observation].push_back(new_context);
+	    } else if (extension_type.substr(0, 4) == "suff") {
+		string suffix_size_string = extension_type.substr(4);
+		size_t suffix_size = stol(suffix_size_string);
+		if (observation_string.size() < suffix_size) { continue; }
+		string suffix = "<suff" + suffix_size_string + ">=" +
+		    observation_string.substr(observation_string.size() -
+					      suffix_size);
+		if (context_dictionary->find(suffix) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[suffix] = context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[suffix];
+		new_contexts[observation].push_back(new_context);
+	    } else {
+		ASSERT(false, "Unknown extension type: " << extension_type);
 	    }
 	}
     }
 
-    // For each observation "row", append new vector v to the original vector u,
-    // such that: weight * ||u|| = ||v|| (using l2 norm).
     for (Observation observation = 0; observation < NumObservations();
 	 ++observation) {
+	// For each observation row in the observation-context matrix, append a
+	// new feature vector v that looks like
+	//              v = (0, 0, C, 0, 0, ..., C, 0, 0)
+	// The norm of v is scaled against the existing feature vector u, such
+	// that:
+	//             (extension_weight_) * ||u|| = ||v||
+	//                                         = sqrt(v.nonzeros * C^2)
+	//
+	// where v.nonzeros is the number of nonzero features in v. Solve for C
+	// to obtain:
+	//             C = sqrt(extension_weight_^2 * ||u||^2 / v.nonzeros)
 	for (Context new_context : new_contexts[observation]) {
 	    (*context_observation_count)[new_context][observation] =
 		sqrt(pow(extension_weight_, 2) *
