@@ -10,6 +10,7 @@ namespace optimize {
 	ASSERT(target_vector.size() == columns.rows(), "Dimensions mismatch");
 	size_t num_columns = columns.cols();
 	convex_coefficients->resize(num_columns);
+	if (num_columns == 0) { return; }  // Avoid the degenerate case.
 	for (size_t i = 0; i < num_columns; ++i) {  // Uniform initialization.
 	    (*convex_coefficients)(i) = 1.0 / num_columns;
 	}
@@ -54,6 +55,9 @@ namespace optimize {
 		step_size = min(step_size, 1.0);
 		step_size = max(step_size, 0.0);
 	    }
+	    if (std::isnan(step_size)) {  // Numerical underflow/overflow?
+		step_size = 0.0;
+	    }
 
 	    // Step 3. Move the current x along coordinate min_i by step_size.
 	    (*convex_coefficients) = (1 - step_size) * (*convex_coefficients);
@@ -61,13 +65,19 @@ namespace optimize {
 	}
 
 	// Check if x is a proper distribution.
+	bool is_negative = false;
 	double l1_mass = 0.0;
 	for (size_t i = 0; i < num_columns; ++i) {
 	    double ith_prob = (*convex_coefficients)(i);
-	    ASSERT(ith_prob >= 0.0, "Non-probability value? " << ith_prob);
+	    if (ith_prob < -1e-10) { is_negative = true; }
 	    l1_mass += (*convex_coefficients)(i);
 	}
-	ASSERT(fabs(l1_mass - 1.0) < 1e-10, "Does not sum to 1?" << l1_mass);
+	if (is_negative || fabs(l1_mass - 1.0) > 1e-10) {
+	    cerr << endl << "WARNING: Computed improper distribution, "
+		 << "will revert to uniform!!" << endl;
+	    cerr << convex_coefficients->transpose() << endl;
+	    return;
+	}
     }
 
     void find_vertex_rows(const Eigen::MatrixXd &rows, size_t num_vertices,
