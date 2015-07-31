@@ -90,17 +90,19 @@ void WordRep::InduceWordVectors() {
 	       "   Transformation method: %s\n"
 	       "   Additive smoothing: %.2f\n"
 	       "   Power smoothing: %.2f\n"
+	       "   Context power smoothing: %.2f\n"
 	       "   Scaling method: %s",
 	       matrix->rows, matrix->cols, matrix->vals, dim_,
 	       transformation_method_.c_str(), add_smooth_, power_smooth_,
-	       scaling_method_.c_str()));
+	       context_power_smooth_, scaling_method_.c_str()));
     time_t begin_time = time(NULL);
     Eigen::MatrixXd left_singular_vectors;
     Eigen::MatrixXd right_singular_vectors;
     Eigen::VectorXd singular_values;
     corpus::decompose(matrix, dim_, transformation_method_, add_smooth_,
-		      power_smooth_, scaling_method_, &left_singular_vectors,
-		      &right_singular_vectors, &singular_values);
+		      power_smooth_, context_power_smooth_, scaling_method_,
+		      &left_singular_vectors, &right_singular_vectors,
+		      &singular_values);
     string duration = util_string::difftime_string(time(NULL), begin_time);
     Report(util_string::buffer_string("[" + duration + "]", 80, '-',
 				      "right"));
@@ -258,27 +260,29 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
 		   "%s   %.2f   (%d/%d evaluated)",
 		   file_name.c_str(), accuracy[i], num_handled[i],
 		   num_instances[i]));
-	vector<pair<string, double> > v;
-	size_t max_type_name_length = 0;
-	for (const auto &type_pair : per_type_accuracy[i]) {
-	    v.emplace_back(type_pair.first, type_pair.second);
-	    max_type_name_length = max(type_pair.first.size(),
-				       max_type_name_length);
+	if (report_details_) {
+	    vector<pair<string, double> > v;
+	    size_t max_type_name_length = 0;
+	    for (const auto &type_pair : per_type_accuracy[i]) {
+		v.emplace_back(type_pair.first, type_pair.second);
+		max_type_name_length = max(type_pair.first.size(),
+					   max_type_name_length);
+	    }
+	    sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+		 size_t, greater<size_t> >());
+	    Report(util_string::buffer_string("_____", 80, ' ', "right"));
+	    for (const auto &sorted_pair : v) {
+		string type_name = util_string::buffer_string(
+		    sorted_pair.first, max_type_name_length + 5, ' ',
+		    "center");
+		string line = util_string::buffer_string(
+		    util_string::printf_format("%s %.2f", type_name.c_str(),
+					       sorted_pair.second),
+		    80, ' ', "right");
+		Report(line);
+	    }
+	    Report(util_string::buffer_string("-----", 80, ' ', "right"));
 	}
-	sort(v.begin(), v.end(),
-	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
-	Report(util_string::buffer_string("_____", 80, ' ', "right"));
-	for (const auto &sorted_pair : v) {
-	    string type_name = util_string::buffer_string(
-		sorted_pair.first, max_type_name_length + 5, ' ',
-		"center");
-	    string line = util_string::buffer_string(
-		util_string::printf_format("%s %.2f", type_name.c_str(),
-					   sorted_pair.second),
-		80, ' ', "right");
-	    Report(line);
-	}
-	Report(util_string::buffer_string("-----", 80, ' ', "right"));
     }
     duration = util_string::difftime_string(time(NULL), begin_time);
     Report(util_string::buffer_string("[" + duration + "]", 80, '-',
@@ -306,6 +310,9 @@ string WordRep::Signature(size_t version) {
 	    util_string::convert_to_alphanumeric_string(add_smooth_, 2);
 	signature += "_power" +
 	    util_string::convert_to_alphanumeric_string(power_smooth_, 2);
+	signature += "_cpower" +
+	    util_string::convert_to_alphanumeric_string(context_power_smooth_,
+							2);
 	signature += "_" + scaling_method_;
     }
 

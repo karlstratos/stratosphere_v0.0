@@ -82,6 +82,11 @@ public:
     // Sets the power smoothing value.
     void set_power_smooth(double power_smooth) { power_smooth_ = power_smooth; }
 
+    // Sets the context power smoothing value.
+    void set_context_power_smooth(double context_power_smooth) {
+	context_power_smooth_ = context_power_smooth;
+    }
+
     // Sets the flag for printing messages to stderr.
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
@@ -96,14 +101,11 @@ private:
     //    version=2: 1 + {sentence_per_line_, window_size_, context_defintion_,
     //                    hash_size_}
     //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
-    //                    power_smooth_, scaling_method_}
+    //                    power_smooth_, context_power_smooth_, scaling_method_}
     string Signature(size_t version);
 
     // Reports status in a log file and optionally the standard output.
     void Report(const string &report_string);
-
-    // Returns the path to the corpus information file.
-    string CorpusInfoPath() { return output_directory_ + "/corpus_info.txt"; }
 
     // Returns the path to the log file.
     string LogPath() {
@@ -145,8 +147,11 @@ private:
 
     // Returns the path to the clusterered word vectors.
     string ClustersPath() {
-	return output_directory_ + "/clusters_" + Signature(3);
+	return output_directory_ + "/clusters_" + Signature(3) + ".txt";
     }
+
+    // Report details to stderr.
+    const bool report_details_ = false;
 
     // Path to the output directory.
     string output_directory_;
@@ -180,6 +185,9 @@ private:
 
     // Power smoothing value.
     double power_smooth_ = 0.5;
+
+    // Context power smoothing value.
+    double context_power_smooth_ = 0.75;
 
     // Scaling method.
     string scaling_method_ = "cca";

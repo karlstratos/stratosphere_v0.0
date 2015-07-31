@@ -252,7 +252,7 @@ protected:
 
 // Checks the plain SVD.
 TEST_F(CorpusDecomposition, PlainSVD) {
-    string transformation_method = "none";
+    string transformation_method = "power";
     double add_smooth = 100.0;  // Shouldn't have any effect.
     double power_smooth = 1.0;
     string scaling_method = "none";

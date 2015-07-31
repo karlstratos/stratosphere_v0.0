@@ -17,8 +17,9 @@ int main (int argc, char* argv[]) {
     size_t hash_size = 0;  // 0 means no hashing.
     size_t dim = 500;
     string transformation_method = "power";
-    double add_smooth = 10.0;
+    double add_smooth = 0.0;
     double power_smooth = 0.5;
+    double context_power_smooth = 0.75;
     string scaling_method = "cca";
     bool verbose = true;
 
@@ -52,6 +53,8 @@ int main (int argc, char* argv[]) {
 	    add_smooth = stod(argv[++i]);
 	} else if (arg == "--power") {
 	    power_smooth = stod(argv[++i]);
+	} else if (arg == "--cpower") {
+	    context_power_smooth = stod(argv[++i]);
 	} else if (arg == "--scale") {
 	    scaling_method = argv[++i];
 	} else if (arg == "--quiet" || arg == "-q") {
@@ -87,11 +90,13 @@ int main (int argc, char* argv[]) {
 	cout << "--dim [" << dim << "]:        \t"
 	     << "dimension of word vectors" << endl;
 	cout << "--transform [" << transformation_method << "]: \t"
-	     << "data transform: none, log, power"  << endl;
+	     << "data transform: power, log"  << endl;
 	cout << "--add [" << add_smooth << "]:          \t"
 	     << "additive smoothing" << endl;
 	cout << "--power [" << power_smooth << "]:    \t"
 	     << "power smoothing" << endl;
+	cout << "--cpower [" << context_power_smooth << "]:    \t"
+	     << "context power smoothing" << endl;
 	cout << "--scale [" << scaling_method << "]:    \t"
 	     << "data scaling: none, ppmi, reg, cca" << endl;
 	cout << "--quiet, -q:          \t"
@@ -113,6 +118,7 @@ int main (int argc, char* argv[]) {
     wordrep.set_transformation_method(transformation_method);
     wordrep.set_add_smooth(add_smooth);
     wordrep.set_power_smooth(power_smooth);
+    wordrep.set_context_power_smooth(context_power_smooth);
     wordrep.set_scaling_method(scaling_method);
     wordrep.set_verbose(verbose);
 

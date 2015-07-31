@@ -29,12 +29,21 @@ namespace corpus {
     // word-context co-occurrence matrix. Some useful examples:
     //                             Transform          Add       Power     Scale
     //     -------------------------------------------------------------------
-    //     SVD/LSA        {none, log, power}            0    {0.5, 1}      none
-    //     PPMI-SVD                     none            0           1      ppmi
-    //     (Ridge) Regression           none          200           1       reg
+    //     SVD/LSA              {power, log}            0    {0.5, 1}      none
+    //     PPMI-SVD                    power            0           1      ppmi
+    //     (Ridge) Regression          power          200           1       reg
     //     Regression + sqrt           power            0         0.5       reg
-    //     (Regularized) CCA            none          200           1       cca
+    //     (Regularized) CCA           power          200           1       cca
     //     CCA + sqrt                  power            0         0.5       cca
+    void decompose(SMat matrix, size_t desired_rank,
+		   const string &transformation_method, double add_smooth,
+		   double power_smooth, double context_power_smooth,
+		   const string &scaling_method,
+		   Eigen::MatrixXd *left_singular_vectors,
+		   Eigen::MatrixXd *right_singular_vectors,
+		   Eigen::VectorXd *singular_values);
+
+    // No power smoothing for context distributions.
     void decompose(SMat matrix, size_t desired_rank,
 		   const string &transformation_method, double add_smooth,
 		   double power_smooth, const string &scaling_method,

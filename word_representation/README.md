@@ -1,0 +1,1 @@
+./wordrep --corpus ~/Desktop/linear-algebra/data/gigaword_eng_v4/gigaword_10000sents --output /tmp/temp --rare 5 --sentences --window 5 --context bag --dim 50 --transform power --add 0.0 --power 0.5 --cpower 0.75 --scale cca -f

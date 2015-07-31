@@ -8,7 +8,8 @@
 namespace corpus {
     void decompose(SMat matrix, size_t desired_rank,
 		   const string &transformation_method, double add_smooth,
-		   double power_smooth, const string &scaling_method,
+		   double power_smooth,  double context_power_smooth,
+		   const string &scaling_method,
 		   Eigen::MatrixXd *left_singular_vectors,
 		   Eigen::MatrixXd *right_singular_vectors,
 		   Eigen::VectorXd *singular_values) {
@@ -44,9 +45,11 @@ namespace corpus {
 	}
 	double context_normalizer = 0.0;  // sum_c {transformed #(c)}
 	for (Context c = 0; c < num_context_types; ++c) {
-	    num_context_samples[c] = transform(num_context_samples[c],
-					       add_smooth, power_smooth,
-					       transformation_method);
+	    // [*] Optionally do power smoothing for context distributions.
+	    num_context_samples[c] =
+		transform(num_context_samples[c], add_smooth,
+			  power_smooth * context_power_smooth,  // [*]
+			  transformation_method);
 	    context_normalizer += num_context_samples[c];
 	}
 
@@ -92,16 +95,27 @@ namespace corpus {
 			       singular_values, &actual_rank);
     }
 
+    void decompose(SMat matrix, size_t desired_rank,
+		   const string &transformation_method, double add_smooth,
+		   double power_smooth, const string &scaling_method,
+		   Eigen::MatrixXd *left_singular_vectors,
+		   Eigen::MatrixXd *right_singular_vectors,
+		   Eigen::VectorXd *singular_values) {
+	decompose(matrix, desired_rank, transformation_method, add_smooth,
+		  power_smooth, 1.0, scaling_method, left_singular_vectors,
+		  right_singular_vectors, singular_values);
+    }
+
+
     double transform(double count_value, double add_smooth,
 		     double power_smooth, string transformation_method) {
 	double transformed_value = count_value + add_smooth;
-	if (transformation_method == "none") {  // Do nothing.
+	if (transformation_method == "power") {
+	    // Power transform (no transform if power is 1).
+	    transformed_value = pow(transformed_value, power_smooth);
 	} else if (transformation_method == "log") {
 	    // Log transform (add 1 to account for zero-valued entries).
 	    transformed_value = log(1 + transformed_value);
-	} else if (transformation_method == "power") {
-	    // Power transform.
-	    transformed_value = pow(transformed_value, power_smooth);
 	} else {
 	    ASSERT(false, "Unknown transformation: " << transformation_method);
 	}
