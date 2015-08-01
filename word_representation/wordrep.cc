@@ -29,6 +29,7 @@ void WordRep::ResetOutputDirectory() {
 void WordRep::ExtractStatistics(const string &corpus_file) {
     Corpus corpus(corpus_file, verbose_);
     corpus.set_lowercase(lowercase_);
+    corpus.set_cooccur_weight_method(cooccur_weight_method_);
 
     // Get the word dictionary.
     unordered_map<string, Word> word_dictionary;
@@ -62,6 +63,13 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
 	Report(util_string::buffer_string(
 		   "[EXTRACTING WORD-CONTEXT CO-OCCURRENCE COUNTS]", 80, '-',
 		   "right"));
+	Report(util_string::printf_format(
+		   "   Window size: %ld\n"
+		   "   Context definition: %s\n"
+		   "   Co-occurrence weight method: %s\n"
+		   "   Hash size: %ld",
+		   window_size_, context_definition_.c_str(),
+		   cooccur_weight_method_.c_str(), hash_size_));
 	time_t begin_time = time(NULL);
 	size_t num_nonzeros;
 	corpus.WriteContexts(word_dictionary, sentence_per_line_,
@@ -300,6 +308,7 @@ string WordRep::Signature(size_t version) {
 	if (sentence_per_line_) { signature += "_sentences"; }
 	signature += "_window" + to_string(window_size_);
 	signature += "_" + context_definition_;
+	signature += "_" + cooccur_weight_method_;
 	signature += "_hash" + to_string(hash_size_);
     }
 

@@ -60,6 +60,14 @@ public:
 	context_definition_ = context_definition;
     }
 
+    // Sets the co-occurrence weight method.
+    void set_cooccur_weight_method(string cooccur_weight_method) {
+	cooccur_weight_method_ = cooccur_weight_method;
+    }
+
+    // Sets the number of hash bins for context types.
+    void set_hash_size(size_t hash_size) { hash_size_ = hash_size; }
+
     // Sets the target dimension of word vectors.
     void set_dim(size_t dim) { dim_ = dim; }
 
@@ -67,14 +75,6 @@ public:
     void set_transformation_method(string transformation_method) {
 	transformation_method_ = transformation_method;
     }
-
-    // Sets the scaling method.
-    void set_scaling_method(string scaling_method) {
-	scaling_method_ = scaling_method;
-    }
-
-    // Sets the number of hash bins for context types.
-    void set_hash_size(size_t hash_size) { hash_size_ = hash_size; }
 
     // Sets the additive smoothing value.
     void set_add_smooth(double add_smooth) { add_smooth_ = add_smooth; }
@@ -85,6 +85,11 @@ public:
     // Sets the context power smoothing value.
     void set_context_power_smooth(double context_power_smooth) {
 	context_power_smooth_ = context_power_smooth;
+    }
+
+    // Sets the scaling method.
+    void set_scaling_method(string scaling_method) {
+	scaling_method_ = scaling_method;
     }
 
     // Sets the flag for printing messages to stderr.
@@ -99,7 +104,7 @@ private:
     //    version=0: {lowercase_}
     //    version=1: 0 + {rare_cutoff_}
     //    version=2: 1 + {sentence_per_line_, window_size_, context_defintion_,
-    //                    hash_size_}
+    //                    cooccur_weight_method, hash_size_}
     //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, context_power_smooth_, scaling_method_}
     string Signature(size_t version);
@@ -114,40 +119,37 @@ private:
 
     // Returns the path to the sorted word types file.
     string SortedWordTypesPath() {
-	return output_directory_ + "/sorted_word_types_" + Signature(0) +
-	    ".txt";
+	return output_directory_ + "/wcount_" + Signature(0) + ".txt";
     }
 
     // Returns the path to the word dictionary file.
     string WordDictionaryPath() {
-	return output_directory_ + "/word_dictionary_" + Signature(1) + ".bin";
+	return output_directory_ + "/wdict_" + Signature(1) + ".bin";
     }
 
     // Returns the path to the context dictionary file.
     string ContextDictionaryPath() {
-	return output_directory_ + "/context_dictionary_" + Signature(2) +
-	    ".bin";
+	return output_directory_ + "/cdict_" + Signature(2) + ".bin";
     }
 
     // Returns the path to the word-context count file.
     string ContextWordCountPath() {
-	return output_directory_ + "/context_word_count_" + Signature(2) +
-	    ".bin";
+	return output_directory_ + "/cooccur_" + Signature(2) + ".bin";
     }
 
     // Returns the path to the singular values.
     string SingularValuesPath() {
-	return output_directory_ + "/singular_values_" + Signature(3) + ".txt";
+	return output_directory_ + "/sigma_" + Signature(3) + ".txt";
     }
 
     // Returns the path to the word vectors.
     string WordVectorsPath() {
-	return output_directory_ + "/word_vectors_" + Signature(3) + ".txt";
+	return output_directory_ + "/vector_" + Signature(3) + ".txt";
     }
 
     // Returns the path to the clusterered word vectors.
     string ClustersPath() {
-	return output_directory_ + "/clusters_" + Signature(3) + ".txt";
+	return output_directory_ + "/cluster_" + Signature(3) + ".txt";
     }
 
     // Report details to stderr.
@@ -170,6 +172,9 @@ private:
 
     // Context definition.
     string context_definition_ = "bag";
+
+    // Co-occurrence weight method.
+    string cooccur_weight_method_ = "unif";
 
     // Number of hash bins for context types (0 means no hashing).
     size_t hash_size_ = 0;

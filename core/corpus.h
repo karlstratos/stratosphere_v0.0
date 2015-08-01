@@ -150,6 +150,11 @@ public:
 	max_vocabulary_size_ = max_vocabulary_size;
     }
 
+    // Sets the co-occurrence weight method.
+    void set_cooccur_weight_method(string cooccur_weight_method) {
+	cooccur_weight_method_ = cooccur_weight_method;
+    }
+
     // Sets the flag for printing messages to stderr.
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
@@ -178,6 +183,9 @@ private:
     // Maximum vocabulary size allowed.
     size_t max_vocabulary_size_ = 1000000000;  // 1 billion
 
+    // Co-occurrence weight method.
+    string cooccur_weight_method_ = "unif";
+
     // Print messages to stderr?
     bool verbose_ = true;
 };
@@ -203,12 +211,14 @@ class Window {
 public:
     // Initializes a window.
     Window(size_t window_size, const string &context_definition,
+	   string cooccur_weight_method,
 	   const unordered_map<string, Word> &word_dictionary,
 	   const string &rare_symbol, const string &buffer_symbol,
 	   size_t hash_size, unordered_map<string, Context> *context_dictionary,
 	   unordered_map<Context, unordered_map<Word, double> >
 	   *context_word_count) :
 	window_size_(window_size), context_definition_(context_definition),
+	cooccur_weight_method_(cooccur_weight_method),
 	word_dictionary_(word_dictionary), rare_symbol_(rare_symbol),
 	buffer_symbol_(buffer_symbol), hash_size_(hash_size),
 	context_dictionary_(context_dictionary),
@@ -240,6 +250,9 @@ private:
     // Strings for marking position-sensitive contexts.
     vector<string> position_markers_;
 
+    // Co-occurrence weights.
+    vector<double> cooccur_weights_;
+
     // Hash function for hashing context strings.
     hash<string> context_hash_;
 
@@ -248,6 +261,9 @@ private:
 
     // Context definition.
     string context_definition_;
+
+    // Co-occurrence weight method.
+    string cooccur_weight_method_ = "unif";
 
     // Address of the word dictionary.
     const unordered_map<string, Word> &word_dictionary_;

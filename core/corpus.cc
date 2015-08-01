@@ -334,9 +334,9 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 			   unordered_map<string, Context> *context_dictionary,
 			   unordered_map<Context, unordered_map<Word, double> >
 			   *context_word_count) {
-    Window window(window_size, context_definition, word_dictionary,
-		  corpus::kRareString, corpus::kBufferString, hash_size,
-		  context_dictionary, context_word_count);
+    Window window(window_size, context_definition, cooccur_weight_method_,
+		  word_dictionary, corpus::kRareString, corpus::kBufferString,
+		  hash_size, context_dictionary, context_word_count);
 
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
@@ -478,11 +478,21 @@ void Window::PrepareWindow() {
     }
 
     // Initialize the string markers for position-sensitive contexts.
+    // Also initialize co-occurrence weights.
     position_markers_.resize(window_size_);
+    cooccur_weights_.resize(window_size_);
     for (size_t i = 0; i < window_size_; ++i) {
 	if (i != center_index_) {
-	    position_markers_[i] =
-		"c(" + to_string((int(i)) - (int(center_index_))) + ")=";
+	    int relative_position = int(i) - int(center_index_);
+	    position_markers_[i] = "c(" + to_string(relative_position) + ")=";
+	    if (cooccur_weight_method_ == "unif") {
+		cooccur_weights_[i] = 1.0;
+	    } else if (cooccur_weight_method_ == "inv") {
+		cooccur_weights_[i] = 1.0 / fabs(relative_position);
+	    } else {
+		ASSERT(false, "Unknown cooccurrence weight method: "
+		       << cooccur_weight_method_);
+	    }
 	}
     }
 }
@@ -494,11 +504,11 @@ void Window::ProcessFull() {
 	if (i == center_index_) { continue; }
 	if (context_definition_ == "bag") {  // Bag-of-words contexts
 	    Context bag_context = AddContextString(queue_[i]);
-	    (*context_word_count_)[bag_context][word] += 1;
+	    (*context_word_count_)[bag_context][word] += cooccur_weights_[i];
 	} else if (context_definition_ == "list") {  // List-of-words contexts
 	    Context list_context = AddContextString(position_markers_[i] +
 						    queue_[i]);
-	    (*context_word_count_)[list_context][word] += 1;
+	    (*context_word_count_)[list_context][word] += cooccur_weights_[i];
 	} else {
 	    ASSERT(false, "Unknown context definition: " <<
 		   context_definition_);
