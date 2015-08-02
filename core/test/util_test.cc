@@ -12,11 +12,14 @@
 TEST(PrintfFormatString, CheckBehavior) {
     string test_string = "TEST_STRING";
     float test_float = 3.14159;
+    float test_float_carry = 3.1489;
     size_t test_long = 999999999999999;
     string string_string =
 	util_string::printf_format("String: %s", test_string.c_str());
     string float_string =
 	util_string::printf_format("Float: %.2f", test_float);
+    string float_carry_string =
+	util_string::printf_format("Float carry: %.2f", test_float_carry);
     string science_string =
 	util_string::printf_format("Science: %.2e", test_float);
     string long_string =
@@ -25,6 +28,9 @@ TEST(PrintfFormatString, CheckBehavior) {
 	util_string::printf_format("Percent: 100%%");
     EXPECT_EQ("String: TEST_STRING", string_string);
     EXPECT_EQ("Float: 3.14", float_string);
+    cout << test_float_carry << endl;
+    cout << float_carry_string << endl;
+    EXPECT_EQ("Float carry: 3.15", float_carry_string);
     EXPECT_EQ("Science: 3.14e+00", science_string);
     EXPECT_EQ("Long: 999999999999999", long_string);
     EXPECT_EQ("Percent: 100%", percent_string);
