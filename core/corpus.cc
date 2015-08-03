@@ -4,6 +4,7 @@
 
 #include <iomanip>
 #include <limits>
+#include <random>
 
 namespace corpus {
     void decompose(SMat matrix, size_t desired_rank,
@@ -338,6 +339,17 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 		  word_dictionary, corpus::kRareString, corpus::kBufferString,
 		  hash_size, context_dictionary, context_word_count);
 
+    // Preparation for random subsampling.
+    random_device device;
+    default_random_engine engine(device());
+    uniform_real_distribution<double> uniform(0.0, 1.0);  // Uniform.
+    double total_word_count = 0.0;  // For normalization.
+    if (word_count_.size() > 0) {
+	for (const auto &word_pair : word_count_) {
+	    total_word_count += word_pair.second;
+	}
+    }
+
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
     for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
@@ -360,6 +372,18 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 		if (Skip(word_string)) { continue; }
 		if (lowercase_) {
 		    word_string = util_string::lowercase(word_string);
+		}
+		if (subsampling_threshold_ > 0.0 && word_count_.size() > 0) {
+		    double word_probability = double(word_count_[word_string])
+			/ total_word_count;
+		    if (word_probability > subsampling_threshold_) {
+			double random_probability = uniform(engine);
+			double discard_probability =
+			    1 - sqrt(subsampling_threshold_ / word_probability);
+			if (discard_probability > random_probability) {
+			    continue;  // Randomly skip frequent words.
+			}
+		    }
 		}
 		window.Add(word_string);
 	    }
@@ -428,6 +452,17 @@ void Corpus::CountTransitions(
 	    }
 	}
 	if (verbose_) { cerr << endl; }
+    }
+}
+
+void Corpus::LoadWordCounts(const string &word_count_path) {
+    word_count_.clear();
+    ifstream file(word_count_path, ios::in);
+    ASSERT(file.is_open(), "Cannot open file: " << word_count_path);
+    while (file.good()) {
+	vector<string> tokens;
+	util_file::read_line(&file, &tokens);
+	if (tokens.size() > 0) { word_count_[tokens[0]] = stol(tokens[1]); }
     }
 }
 

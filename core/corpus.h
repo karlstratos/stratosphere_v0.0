@@ -142,12 +142,20 @@ public:
 			  *bigram_count, unordered_map<Word, size_t>
 			  *start_count, unordered_map<Word, size_t> *end_count);
 
+    // Load word counts from a text file with lines: <word_string> <word_count>.
+    void LoadWordCounts(const string &word_count_path);
+
     // Sets the flag for lowercasing all strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
 
     // Sets the maximum vocabulary size.
     void set_max_vocabulary_size(size_t max_vocabulary_size) {
 	max_vocabulary_size_ = max_vocabulary_size;
+    }
+
+    // Sets the subsampling threshold.
+    void set_subsampling_threshold(double subsampling_threshold) {
+	subsampling_threshold_ = subsampling_threshold;
     }
 
     // Sets the co-occurrence weight method.
@@ -182,6 +190,12 @@ private:
 
     // Maximum vocabulary size allowed.
     size_t max_vocabulary_size_ = 1000000000;  // 1 billion
+
+    // Internal word counts (only loaded when necessary).
+    unordered_map<string, size_t> word_count_;
+
+    // Subsampling threshold.
+    double subsampling_threshold_ = 0.0;
 
     // Co-occurrence weight method.
     string cooccur_weight_method_ = "unif";

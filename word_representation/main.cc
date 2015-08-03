@@ -15,6 +15,7 @@ int main (int argc, char* argv[]) {
     size_t window_size = 11;
     string context_definition = "bag";
     size_t hash_size = 0;  // 0 means no hashing.
+    double subsampling_threshold = 0.0;  // 0 means no subsampling.
     string cooccur_weight_method = "unif";
     size_t dim = 500;
     string transformation_method = "power";
@@ -46,6 +47,8 @@ int main (int argc, char* argv[]) {
 	    context_definition = argv[++i];
 	} else if (arg == "--hash") {
 	    hash_size = stol(argv[++i]);
+	} else if (arg == "--subsample") {
+	    subsampling_threshold = stod(argv[++i]);
 	} else if (arg == "--cooccur") {
 	    cooccur_weight_method = argv[++i];
 	} else if (arg == "--dim") {
@@ -90,6 +93,8 @@ int main (int argc, char* argv[]) {
 	     << "context definition: bag, list"  << endl;
 	cout << "--hash [" << hash_size << "]:          \t"
 	     << "number of hash bins for context (0 means no hashing)" << endl;
+	cout << "--subsample [" << subsampling_threshold << "]: \t"
+	     << "subsampling threshold (0 means no subsampling)"  << endl;
 	cout << "--cooccur [" << cooccur_weight_method << "]: \t"
 	     << "co-occurrence weight method: unif, inv"  << endl;
 	cout << "--dim [" << dim << "]:        \t"
@@ -119,6 +124,7 @@ int main (int argc, char* argv[]) {
     wordrep.set_window_size(window_size);
     wordrep.set_context_definition(context_definition);
     wordrep.set_hash_size(hash_size);
+    wordrep.set_subsampling_threshold(subsampling_threshold);
     wordrep.set_cooccur_weight_method(cooccur_weight_method);
     wordrep.set_dim(dim);
     wordrep.set_transformation_method(transformation_method);

@@ -60,6 +60,11 @@ public:
 	context_definition_ = context_definition;
     }
 
+    // Sets the subsampling threshold.
+    void set_subsampling_threshold(double subsampling_threshold) {
+	subsampling_threshold_ = subsampling_threshold;
+    }
+
     // Sets the co-occurrence weight method.
     void set_cooccur_weight_method(string cooccur_weight_method) {
 	cooccur_weight_method_ = cooccur_weight_method;
@@ -104,7 +109,8 @@ private:
     //    version=0: {lowercase_}
     //    version=1: 0 + {rare_cutoff_}
     //    version=2: 1 + {sentence_per_line_, window_size_, context_defintion_,
-    //                    cooccur_weight_method, hash_size_}
+    //                    subsampling_threshold_, cooccur_weight_method,
+    //                    hash_size_}
     //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, context_power_smooth_, scaling_method_}
     string Signature(size_t version);
@@ -172,6 +178,9 @@ private:
 
     // Context definition.
     string context_definition_ = "bag";
+
+    // Subsampling threshold.
+    double subsampling_threshold_ = 0.0;
 
     // Co-occurrence weight method.
     string cooccur_weight_method_ = "unif";
