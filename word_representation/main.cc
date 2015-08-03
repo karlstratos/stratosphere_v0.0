@@ -47,7 +47,7 @@ int main (int argc, char* argv[]) {
 	    context_definition = argv[++i];
 	} else if (arg == "--hash") {
 	    hash_size = stol(argv[++i]);
-	} else if (arg == "--subsample") {
+	} else if (arg == "--sub") {
 	    subsampling_threshold = stod(argv[++i]);
 	} else if (arg == "--cooccur") {
 	    cooccur_weight_method = argv[++i];
@@ -93,7 +93,7 @@ int main (int argc, char* argv[]) {
 	     << "context definition: bag, list"  << endl;
 	cout << "--hash [" << hash_size << "]:          \t"
 	     << "number of hash bins for context (0 means no hashing)" << endl;
-	cout << "--subsample [" << subsampling_threshold << "]: \t"
+	cout << "--sub [" << subsampling_threshold << "]:      \t"
 	     << "subsampling threshold (0 means no subsampling)"  << endl;
 	cout << "--cooccur [" << cooccur_weight_method << "]: \t"
 	     << "co-occurrence weight method: unif, inv"  << endl;
