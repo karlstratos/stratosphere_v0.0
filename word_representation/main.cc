@@ -12,11 +12,11 @@ int main (int argc, char* argv[]) {
     bool lowercase = false;
     size_t rare_cutoff = 10;
     bool sentence_per_line = false;
-    size_t window_size = 11;
+    size_t window_size = 5;
     string context_definition = "bag";
     size_t hash_size = 0;  // 0 means no hashing.
-    double subsampling_threshold = 0.0;  // 0 means no subsampling.
-    string cooccur_weight_method = "unif";
+    double subsampling_threshold = 1e-5;  // 0 means no subsampling.
+    string cooccur_weight_method = "inv";
     size_t dim = 500;
     string transformation_method = "power";
     double add_smooth = 0.0;
