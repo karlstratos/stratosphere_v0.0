@@ -15,6 +15,11 @@ void WordRep::SetOutputDirectory(const string &output_directory) {
     output_directory_ = output_directory;
 
     // Prepare the output directory.
+    if (util_file::exists(output_directory_) &&
+	util_file::get_file_type(output_directory_) == "file") {
+	ASSERT(system(("rm -f " + output_directory_).c_str()) == 0,
+	       "Cannot remove file: " << output_directory_);
+    }
     ASSERT(system(("mkdir -p " + output_directory_).c_str()) == 0,
 	   "Cannot create directory: " << output_directory_);
 }
@@ -68,11 +73,13 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
 		   "[EXTRACTING WORD-CONTEXT CO-OCCURRENCE COUNTS]", 80, '-',
 		   "right"));
 	Report(util_string::printf_format(
+		   "   Sentence-per-line: %s\n"
 		   "   Window size: %ld\n"
 		   "   Context definition: %s\n"
 		   "   Subsampling threshold: %.2e\n"
 		   "   Co-occurrence weight method: %s\n"
 		   "   Hash size: %ld",
+		   sentence_per_line_ ? "true" : "false",
 		   window_size_, context_definition_.c_str(),
 		   subsampling_threshold_, cooccur_weight_method_.c_str(),
 		   hash_size_));
