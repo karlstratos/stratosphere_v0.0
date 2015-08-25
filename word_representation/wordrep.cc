@@ -40,9 +40,9 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
     // Get the word dictionary.
     unordered_map<string, Word> word_dictionary;
     if (!util_file::exists(WordDictionaryPath())) {
-	size_t num_words;
-	size_t num_word_types;
-	size_t vocabulary_size;
+	size_t num_words = 0;
+	size_t num_word_types = 0;
+	size_t vocabulary_size = 0;
 
 	if (!util_file::exists(SortedWordTypesPath())) {
 	    // No word list found, must read in the corpus.
