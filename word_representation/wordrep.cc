@@ -39,26 +39,51 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
 
     // Get the word dictionary.
     unordered_map<string, Word> word_dictionary;
-    if (!util_file::exists(SortedWordTypesPath()) ||
-	!util_file::exists(WordDictionaryPath())) {
-	Report(util_string::buffer_string("[EXTRACTING WORD COUNTS]", 80, '-',
-					  "right"));
-	time_t begin_time = time(NULL);
+    if (!util_file::exists(WordDictionaryPath())) {
 	size_t num_words;
 	size_t num_word_types;
 	size_t vocabulary_size;
-	corpus.WriteWords(rare_cutoff_, SortedWordTypesPath(),
-			  WordDictionaryPath(), &num_words, &num_word_types,
-			  &vocabulary_size);
-	string duration = util_string::difftime_string(time(NULL), begin_time);
+
+	if (!util_file::exists(SortedWordTypesPath())) {
+	    // No word list found, must read in the corpus.
+	    Report(util_string::buffer_string("[EXTRACTING WORD COUNTS]", 80,
+					      '-', "right"));
+	    time_t begin_time = time(NULL);
+	    corpus.WriteWords(rare_cutoff_, SortedWordTypesPath(),
+			      WordDictionaryPath(), &num_words, &num_word_types,
+			      &vocabulary_size);
+	    string duration = util_string::difftime_string(time(NULL),
+							   begin_time);
+	    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
+					      "right"));
+	} else {
+	    // Already have a word list, build a dictionary from it.
+	    unordered_map<string, size_t> word_count;
+	    ifstream file(SortedWordTypesPath(), ios::in);
+	    ASSERT(file.is_open(), "Cannot open file: "
+		   << SortedWordTypesPath());
+	    while (file.good()) {
+		vector<string> tokens;
+		util_file::read_line(&file, &tokens);
+		if (tokens.size() > 0) {
+		    word_count[tokens[0]] = stol(tokens[1]);
+		    num_words += stol(tokens[1]);
+		}
+	    }
+	    num_word_types = word_count.size();
+
+	    unordered_map<string, Word> word_dictionary_temp;
+	    corpus.BuildWordDictionary(word_count, rare_cutoff_,
+				       &word_dictionary_temp);
+	    vocabulary_size = word_dictionary_temp.size();
+	    util_file::binary_write(word_dictionary_temp, WordDictionaryPath());
+	}
 	Report("   Corpus: " + util_file::get_file_name(corpus_file));
 	Report(util_string::printf_format(
 		   "   Number of words: %ld\n"
 		   "   Number of word types: %ld\n"
 		   "   Vocabulary size: %d (with frequency cutoff > %ld)",
 		   num_words, num_word_types, vocabulary_size, rare_cutoff_));
-	Report(util_string::buffer_string("[" + duration + "]", 80, '-',
-					  "right"));
     }
     util_file::binary_read(WordDictionaryPath(), &word_dictionary);
 
