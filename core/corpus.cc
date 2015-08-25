@@ -349,6 +349,12 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 	    total_word_count += word_pair.second;
 	}
     }
+    double rare_probability = 0.0;
+    if (word_count_.size() > 0 &&
+	word_count_.find(corpus::kRareString) != word_count_.end()) {
+	rare_probability = double(word_count_[corpus::kRareString])
+	    / total_word_count;
+    }
 
     vector<string> file_list;
     util_file::list_files(corpus_path_, &file_list);
@@ -374,8 +380,10 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 		    word_string = util_string::lowercase(word_string);
 		}
 		if (subsampling_threshold_ > 0.0 && word_count_.size() > 0) {
-		    double word_probability = double(word_count_[word_string])
-			/ total_word_count;
+		    double word_probability = (word_count_.find(word_string) !=
+					       word_count_.end()) ?
+			double(word_count_[word_string]) / total_word_count :
+			rare_probability;
 		    if (word_probability > subsampling_threshold_) {
 			double random_probability = uniform(engine);
 			double discard_probability =
@@ -455,14 +463,21 @@ void Corpus::CountTransitions(
     }
 }
 
-void Corpus::LoadWordCounts(const string &word_count_path) {
+void Corpus::LoadWordCounts(const string &word_count_path, size_t rare_cutoff) {
     word_count_.clear();
     ifstream file(word_count_path, ios::in);
     ASSERT(file.is_open(), "Cannot open file: " << word_count_path);
     while (file.good()) {
 	vector<string> tokens;
 	util_file::read_line(&file, &tokens);
-	if (tokens.size() > 0) { word_count_[tokens[0]] = stol(tokens[1]); }
+	if (tokens.size() > 0) {
+	    size_t count = stol(tokens[1]);
+	    if (count > rare_cutoff) {
+		word_count_[tokens[0]] = count;
+	    } else {
+		word_count_[corpus::kRareString] += count;
+	    }
+	}
     }
 }
 

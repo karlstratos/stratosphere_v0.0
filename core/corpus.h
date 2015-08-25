@@ -143,7 +143,7 @@ public:
 			  *start_count, unordered_map<Word, size_t> *end_count);
 
     // Load word counts from a text file with lines: <word_string> <word_count>.
-    void LoadWordCounts(const string &word_count_path);
+    void LoadWordCounts(const string &word_count_path, size_t rare_cutoff);
 
     // Sets the flag for lowercasing all strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }

@@ -91,7 +91,7 @@ void WordRep::ExtractStatistics(const string &corpus_file) {
     if (!util_file::exists(ContextDictionaryPath()) ||
 	!util_file::exists(ContextWordCountPath())) {
 	if (subsampling_threshold_ > 0.0) {  // Prepare for random subsampling.
-	    corpus.LoadWordCounts(SortedWordTypesPath());
+	    corpus.LoadWordCounts(SortedWordTypesPath(), rare_cutoff_);
 	}
 	Report("\n");
 	Report(util_string::buffer_string(
