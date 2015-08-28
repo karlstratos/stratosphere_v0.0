@@ -4,6 +4,8 @@
 
 #include "gtest/gtest.h"
 
+#include <limits.h>
+
 #include "../trees.h"
 
 // Test class for checking TreeReader.
