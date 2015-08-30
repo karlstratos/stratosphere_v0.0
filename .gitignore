@@ -1,5 +1,6 @@
 # Non-public data
 data/sequence_labeling
+data/parsing
 
 # "._" files
 ._*
