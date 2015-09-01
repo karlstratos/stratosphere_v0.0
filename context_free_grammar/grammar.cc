@@ -40,7 +40,7 @@ void Grammar::Train(TreeSet *trees) {
     log_ << "   " << NumUnaryRuleTypes() << " unary rule types" << endl;
     log_ << "   " << NumRootNonterminalTypes() << " root nonterminal types"
 	 << endl << flush;
-    Write(model_directory_ + "/model");
+    Save(model_directory_ + "/model");
 
     log_ << endl << "Training time: "
 	 << util_string::difftime_string(time(NULL), begin_time) << endl;
@@ -107,33 +107,41 @@ TreeSet *Grammar::Parse(TreeSet *trees, bool silent) {
     return predicted_trees;
 }
 
-void Grammar::Write(const string &file_path) {
-    ofstream file;
-    file.open(file_path);
-    file << "BINARIZATION_METHOD " << binarization_method_ << endl;
-    file << "VERTICAL_MARKOVIZATION_ORDER " << vertical_markovization_order_
-	 << endl;
-    file << "HORIZONTAL_MARKOVIZATION_ORDER " << horizontal_markovization_order_
-	 << endl;
-    file << "NUM_INTERMINAL_TYPES " << NumInterminalTypes() << endl;
-    file << "NUM_PRETERMINAL_TYPES " << NumPreterminalTypes() << endl;
-    file << "NUM_TERMINAL_TYPES " << NumTerminalTypes() << endl;
-    file << "NUM_BINARY_RULE_TYPES " << NumBinaryRuleTypes() << endl;
-    file << "NUM_UNARY_RULE_TYPES " << NumUnaryRuleTypes() << endl;
-    file << "NUM_ROOT_NONTERMINAL_TYPES " << NumRootNonterminalTypes() << endl;
+void Grammar::Save(const string &model_path) {
+    ofstream model_file(model_path, ios::out | ios::binary);
+    util_file::binary_write_string(binarization_method_, model_file);
+    util_file::binary_write_primitive(vertical_markovization_order_,
+				      model_file);
+    util_file::binary_write_primitive(horizontal_markovization_order_,
+				      model_file);
+    size_t num_interminal_types = NumInterminalTypes();
+    size_t num_preterminal_types = NumPreterminalTypes();
+    size_t num_terminal_types = NumTerminalTypes();
+    size_t num_binary_rule_types = NumBinaryRuleTypes();
+    size_t num_unary_rule_types = NumUnaryRuleTypes();
+    size_t num_root_nonterminal_types = NumRootNonterminalTypes();
+    util_file::binary_write_primitive(num_interminal_types, model_file);
+    util_file::binary_write_primitive(num_preterminal_types, model_file);
+    util_file::binary_write_primitive(num_terminal_types, model_file);
+    util_file::binary_write_primitive(num_binary_rule_types, model_file);
+    util_file::binary_write_primitive(num_unary_rule_types, model_file);
+    util_file::binary_write_primitive(num_root_nonterminal_types, model_file);
 
     for (Nonterminal a = 0; a < NumNonterminalTypes(); ++a) {
 	string a_string = nonterminal_num2str_[a];
-	file << a_string << " " << a << endl;
+	util_file::binary_write_string(a_string, model_file);
+	util_file::binary_write_primitive(a, model_file);
     }
 
     for (Nonterminal x = 0; x < NumTerminalTypes(); ++x) {
 	string x_string = terminal_num2str_[x];
-	file << x_string << " " << x << endl;
+	util_file::binary_write_string(x_string, model_file);
+	util_file::binary_write_primitive(x, model_file);
     }
 
     for (const auto &interminal_pair : interminal_) {
-	file << interminal_pair.first << endl;
+	Nonterminal interminal = interminal_pair.first;
+	util_file::binary_write_primitive(interminal, model_file);
     }
 
     for (const auto &a_pair : lprob_binary_) {
@@ -143,7 +151,10 @@ void Grammar::Write(const string &file_path) {
 	    for (const auto &c_pair : lprob_binary_[a][b]) {
 		Nonterminal c = c_pair.first;
 		double lprob_abc = c_pair.second;
-		file << a << " " << b << " " << c << " " << lprob_abc << endl;
+		util_file::binary_write_primitive(a, model_file);
+		util_file::binary_write_primitive(b, model_file);
+		util_file::binary_write_primitive(c, model_file);
+		util_file::binary_write_primitive(lprob_abc, model_file);
 	    }
 	}
     }
@@ -153,110 +164,110 @@ void Grammar::Write(const string &file_path) {
 	for (const auto &x_pair : lprob_unary_[a]) {
 	    Terminal x = x_pair.first;
 	    double lprob_ax = x_pair.second;
-	    file << a << " " << x << " " << lprob_ax << endl;
+	    util_file::binary_write_primitive(a, model_file);
+	    util_file::binary_write_primitive(x, model_file);
+	    util_file::binary_write_primitive(lprob_ax, model_file);
 	}
     }
 
     for (const auto &a_pair : lprob_root_) {
 	Nonterminal a = a_pair.first;
 	double lprob_root = a_pair.second;
-	file << a << " " << lprob_root << endl;
+	util_file::binary_write_primitive(a, model_file);
+	util_file::binary_write_primitive(lprob_root, model_file);
     }
 
-    file.close();
+    model_file.close();
 }
 
 void Grammar::Load() {
-    ifstream file;
-    string file_path = model_directory_ + "/model";
-    file.open(file_path, ios::in);
-    ASSERT(file.is_open(), "Cannot open file: " << file_path);
+    //Clear();
+    string model_path = model_directory_ + "/model";
+    ifstream model_file(model_path, ios::in | ios::binary);
 
-    vector<string> tokens;
-    util_file::read_line(&file, &tokens);
-    binarization_method_ = tokens[1];
+    util_file::binary_read_string(model_file, &binarization_method_);
+    util_file::binary_read_primitive(model_file,
+				     &vertical_markovization_order_);
+    util_file::binary_read_primitive(model_file,
+				     &horizontal_markovization_order_);
+    size_t num_interminal_types;
+    size_t num_preterminal_types;
+    size_t num_terminal_types;
+    size_t num_binary_rule_types;
+    size_t num_unary_rule_types;
+    size_t num_root_nonterminal_types;
+    util_file::binary_read_primitive(model_file, &num_interminal_types);
+    util_file::binary_read_primitive(model_file, &num_preterminal_types);
+    util_file::binary_read_primitive(model_file, &num_terminal_types);
+    size_t num_nonterminal_types = num_interminal_types + num_preterminal_types;
+    util_file::binary_read_primitive(model_file, &num_binary_rule_types);
+    util_file::binary_read_primitive(model_file, &num_unary_rule_types);
+    util_file::binary_read_primitive(model_file, &num_root_nonterminal_types);
 
-    util_file::read_line(&file, &tokens);
-    vertical_markovization_order_ = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    horizontal_markovization_order_ = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    int num_interminal_types = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    int num_preterminal_types = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    int num_terminal_types = stoi(tokens[1]);
-    int num_nonterminal_types = num_interminal_types + num_preterminal_types;
-
-    util_file::read_line(&file, &tokens);
-    int num_binary_rule_types = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    int num_unary_rule_types = stoi(tokens[1]);
-
-    util_file::read_line(&file, &tokens);
-    int num_root_nonterminal_types = stoi(tokens[1]);
-
-    for (int i = 0; i < num_nonterminal_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	string a_string = tokens[0];
-	Nonterminal a = stoi(tokens[1]);
+    for (size_t i = 0; i < num_nonterminal_types; ++i) {
+	string a_string;
+	Nonterminal a;
+	util_file::binary_read_string(model_file, &a_string);
+	util_file::binary_read_primitive(model_file, &a);
 	nonterminal_num2str_[a] = a_string;
 	nonterminal_str2num_[a_string] = a;
     }
 
-    for (int i = 0; i < num_terminal_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	string x_string = tokens[0];
-	Terminal x = stoi(tokens[1]);
+    for (size_t i = 0; i < num_terminal_types; ++i) {
+	string x_string;
+	Terminal x;
+	util_file::binary_read_string(model_file, &x_string);
+	util_file::binary_read_primitive(model_file, &x);
 	terminal_num2str_[x] = x_string;
 	terminal_str2num_[x_string] = x;
     }
 
-    for (int i = 0; i < num_interminal_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	Nonterminal a = stoi(tokens[0]);
-	interminal_[a] = true;
+    for (size_t i = 0; i < num_interminal_types; ++i) {
+	Nonterminal interminal;
+	util_file::binary_read_primitive(model_file, &interminal);
+	interminal_[interminal] = true;
     }
 
-    for (int a = 0; a < num_nonterminal_types; ++a) {
+    for (Nonterminal a = 0; a < num_nonterminal_types; ++a) {
 	if (interminal_.find(a) == interminal_.end()) {
 	    preterminal_[a] = true;
 	}
     }
 
-    for (int i = 0; i < num_binary_rule_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	Nonterminal a = stoi(tokens[0]);
-	Nonterminal b = stoi(tokens[1]);
-	Nonterminal c = stoi(tokens[2]);
-	double lprob_abc = stod(tokens[3]);
+    for (size_t i = 0; i < num_binary_rule_types; ++i) {
+	Nonterminal a;
+	Nonterminal b;
+	Nonterminal c;
+	double lprob_abc;
+	util_file::binary_read_primitive(model_file, &a);
+	util_file::binary_read_primitive(model_file, &b);
+	util_file::binary_read_primitive(model_file, &c);
+	util_file::binary_read_primitive(model_file, &lprob_abc);
 	lprob_binary_[a][b][c] = lprob_abc;
 	binary_rhs_[a].push_back(make_tuple(b, c, lprob_abc));
 	left_parent_sibling_[b].push_back(make_tuple(a, c, lprob_abc));
 	right_parent_sibling_[c].push_back(make_tuple(a, b, lprob_abc));
     }
 
-    for (int i = 0; i < num_unary_rule_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	Nonterminal a = stoi(tokens[0]);
-	Nonterminal x = stoi(tokens[1]);
-	double lprob_ax = stod(tokens[2]);
+    for (size_t i = 0; i < num_unary_rule_types; ++i) {
+	Nonterminal a;
+	Nonterminal x;
+	double lprob_ax;
+	util_file::binary_read_primitive(model_file, &a);
+	util_file::binary_read_primitive(model_file, &x);
+	util_file::binary_read_primitive(model_file, &lprob_ax);
 	lprob_unary_[a][x] = lprob_ax;
     }
 
-    for (int i = 0; i < num_root_nonterminal_types; ++i) {
-	util_file::read_line(&file, &tokens);
-	Nonterminal a = stoi(tokens[0]);
-	double lprob_root = stod(tokens[1]);
+    for (size_t i = 0; i < num_root_nonterminal_types; ++i) {
+	Nonterminal a;
+	double lprob_root;
+	util_file::binary_read_primitive(model_file, &a);
+	util_file::binary_read_primitive(model_file, &lprob_root);
 	lprob_root_[a] = lprob_root;
     }
 
-    file.close();
+    model_file.close();
     AssertProperDistributions();
 }
 

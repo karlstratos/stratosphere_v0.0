@@ -36,8 +36,8 @@ public:
     // Parses the terminal sequences in the given trees.
     TreeSet *Parse(TreeSet *trees, bool silent);
 
-    // Writes the grammar to a file.
-    void Write(const string &file_path);
+    // Saves the grammar to a file.
+    void Save(const string &model_path);
 
     // Load the grammar (from: model_directory_ + "model").
     void Load();
