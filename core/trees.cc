@@ -668,6 +668,18 @@ Node *TreeSet::Tree(size_t i) {
     return trees_[i];
 }
 
+void TreeSet::NumSymbolTypes(size_t *num_interminal_types,
+			     size_t *num_preterminal_types,
+			     size_t *num_terminal_types) {
+    unordered_map<string, size_t> interminal_count;
+    unordered_map<string, size_t> preterminal_count;
+    unordered_map<string, size_t> terminal_count;
+    CountTypes(&interminal_count, &preterminal_count, &terminal_count);
+    *num_interminal_types = interminal_count.size();
+    *num_preterminal_types = preterminal_count.size();
+    *num_terminal_types = terminal_count.size();
+}
+
 size_t TreeSet::NumInterminalTypes() {
     unordered_map<string, size_t> interminal_count;  // Only use this.
     unordered_map<string, size_t> preterminal_count;

@@ -19,9 +19,15 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TARGETS = grammar
+TARGETS = grammar process_trees
 
 all: $(TARGETS)
+
+process_trees: process_trees.o $(CORE)/util.o $(CORE)/trees.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+process_trees.o: process_trees.cc
+	$(CC) $(CFLAGS) -c $< -o $@
 
 grammar: main.o grammar.o $(CORE)/util.o $(CORE)/trees.o
 	$(CC) $(CFLAGS) $^ -o $@

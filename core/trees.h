@@ -29,12 +29,12 @@ public:
 	nonterminal_string_(nonterminal_string),
 	terminal_string_(terminal_string) { }
 
-    // Creates a node with nonterminal and terminal IDs.
+    // Creates a node with nonterminal and terminal numbers.
     Node(Nonterminal nonterminal_number, Terminal terminal_number) :
 	nonterminal_number_(nonterminal_number),
 	terminal_number_(terminal_number) { }
 
-    // Creates a tree node with nonterminal terminal strings/IDs.
+    // Creates a tree node with nonterminal terminal strings/numbers.
     Node(const string &nonterminal_string, const string &terminal_string,
 	 Nonterminal nonterminal_number, Terminal terminal_number) :
 	nonterminal_string_(nonterminal_string),
@@ -44,8 +44,8 @@ public:
 
     ~Node() { }
 
-    // Deletes the node and all its descendent nodes. This must be called once
-    // a new node object is no longer needed to avoid a memory leak.
+    // Deletes the node and all its descendent nodes. To avoid memory leaks,
+    // this must be called once a node object is no longer needed.
     void DeleteSelfAndDescendents() { DeleteSelfAndDescendents(this); }
 
     // Returns true if this node is a root.
@@ -262,6 +262,11 @@ public:
 
     // Returns the i-th tree.
     Node *Tree(size_t i);
+
+    // Gives the number of various symbol types.
+    void NumSymbolTypes(size_t *num_interminal_types,
+			size_t *num_preterminal_types,
+			size_t *num_terminal_types);
 
     // Returns the number of interminal types.
     size_t NumInterminalTypes();

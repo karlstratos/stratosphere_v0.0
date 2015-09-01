@@ -5,7 +5,7 @@ train-dev-test portions:
 
 To convert a raw treebank to standard format, type variations of:
 
-`./grammar --raw ../data/parsing/penn-wsj/standard-split/penn-wsj-raw.train --trees /tmp/penn-wsj.train`
+`./process_trees --raw ../data/parsing/penn-wsj/standard-split/penn-wsj-raw.train --trees /tmp/penn-wsj.train`
 
 To train a model, type variations of:
 

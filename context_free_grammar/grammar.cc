@@ -7,58 +7,76 @@
 #include <math.h>
 #include <stack>
 
+void Grammar::Clear() {
+    nonterminal_dictionary_.clear();
+    nonterminal_dictionary_inverse_.clear();
+    terminal_dictionary_.clear();
+    terminal_dictionary_inverse_.clear();
+    interminal_.clear();
+    preterminal_.clear();
+    lprob_binary_.clear();
+    lprob_unary_.clear();
+    lprob_root_.clear();
+    binary_rhs_.clear();
+    left_parent_sibling_.clear();
+    right_parent_sibling_.clear();
+}
+
+void Grammar::Train(const string &treebank_path) {
+    TreeSet trees(treebank_path);
+    Train(&trees);
+}
+
 void Grammar::Train(TreeSet *trees) {
-    // Prepare the output directory for the model.
-    ASSERT(system(("mkdir -p " + model_directory_).c_str()) == 0,
-	   "Cannot create directory: " << model_directory_);
-    ASSERT(system(("rm -f " + model_directory_ + "/*").c_str()) == 0,
-	   "Cannot remove the content in: " << model_directory_);
-    log_.open(model_directory_ + "/log", ios::out);
-    log_ << fixed << setprecision(2);
+    size_t num_interminal_types_original;
+    size_t num_preterminal_types_original;
+    size_t num_terminal_types_original;
+    trees->NumSymbolTypes(&num_interminal_types_original,
+			  &num_preterminal_types_original,
+			  &num_terminal_types_original);
 
-    time_t begin_time = time(NULL);  // Start the training timer.
-
-    // Transform the training trees to Chomsky normal form.
-    trees->ProcessToChomskyNormalForm(binarization_method_,
-				      vertical_markovization_order_,
-				      horizontal_markovization_order_);
-
-    // Estimate PCFG parameters from the transformed trees.
+    if (verbose_) {
+	cerr << "[CNF transform]" << endl;
+	cerr << "   " << binarization_method_ << " binarization" << endl;
+	cerr << "   Vertical Markovization order: "
+	     << vertical_markovization_order_ << endl;
+	cerr << "   Horizontal Markovization order: "
+	     << horizontal_markovization_order_ << endl;
+	trees->ProcessToChomskyNormalForm(binarization_method_,
+					  vertical_markovization_order_,
+					  horizontal_markovization_order_);
+    }
     EstimatePCFG(trees);
 
-    log_ << "Number of training trees: " << trees->NumTrees() << endl;
-    log_ << "Binarization method: " << binarization_method_ << endl;
-    log_ << "Vertical Markovization order: "
-	 << vertical_markovization_order_ << endl;
-    log_ << "Horizontal Markovization order: "
-	 << horizontal_markovization_order_ << endl;
-    log_ << endl << "[Treebank statistics]" << endl;
-    log_ << "   " << NumInterminalTypes() << " interminal types" << endl;
-    log_ << "   " << NumPreterminalTypes() << " preterminal types" << endl;
-    log_ << "   " << NumTerminalTypes() << " terminal types" << endl;
-    log_ << "   " << NumBinaryRuleTypes() << " binary rule types" << endl;
-    log_ << "   " << NumUnaryRuleTypes() << " unary rule types" << endl;
-    log_ << "   " << NumRootNonterminalTypes() << " root nonterminal types"
-	 << endl << flush;
-    Save(model_directory_ + "/model");
-
-    log_ << endl << "Training time: "
-	 << util_string::difftime_string(time(NULL), begin_time) << endl;
-    log_.close();
+    if (verbose_) {
+	cerr << endl << "[Treebank statistics]" << endl;
+	cerr << "   " << trees->NumTrees() << " trees" << endl;
+	cerr << "   " << NumInterminalTypes() << " interminal types"
+	     << " (original " << num_interminal_types_original << ")" << endl;
+	cerr << "   " << NumPreterminalTypes() << " preterminal types"
+	     << " (original " << num_preterminal_types_original << ")" << endl;
+	cerr << "   " << NumTerminalTypes() << " terminal types" << endl;
+	cerr << "   " << NumBinaryRuleTypes() << " binary rule types" << endl;
+	cerr << "   " << NumUnaryRuleTypes() << " unary rule types" << endl;
+	cerr << "   " << NumRootNonterminalTypes() << " root nonterminal types"
+	     << endl << flush;
+    }
 }
 
-Node *Grammar::Parse(const vector<string> &terminal_strings) {
-    TerminalSequence terminal_sequence(terminal_strings);
-    AssignNumericIdentities(&terminal_sequence);
-    Node *predicted_tree = Parse(&terminal_sequence);
-    AssignStringIdentities(predicted_tree);
-    return predicted_tree;
+void Grammar::Evaluate(const string &treebank_path,
+		       const string prediction_path) {
+    TreeSet trees(treebank_path);
+    TreeSet *predicted_trees = Parse(&trees);
+    if (!prediction_path.empty()) {
+	predicted_trees->Write(prediction_path);
+    }
+    delete predicted_trees;
 }
 
-TreeSet *Grammar::Parse(TreeSet *trees, bool silent) {
+TreeSet *Grammar::Parse(TreeSet *trees) {
     time_t begin_time = time(NULL);
-    int num_parsed = 0;
-    int sum_lengths = 0;
+    size_t num_parsed = 0;
+    size_t sum_lengths = 0;
 
     // The same CNF transformation used in training is necessary if we decide to
     // use gold tags (e.g., TOP+NP+NNP).
@@ -68,7 +86,7 @@ TreeSet *Grammar::Parse(TreeSet *trees, bool silent) {
 
     TreeSet *predicted_trees = new TreeSet();
     TerminalSequences terminal_sequences(trees);
-    for (int i = 0; i < terminal_sequences.NumSequences(); ++i) {
+    for (size_t i = 0; i < terminal_sequences.NumSequences(); ++i) {
 	TerminalSequence *terminal_sequence = terminal_sequences.Sequence(i);
 	AssignNumericIdentities(terminal_sequence);
 	Node *predicted_tree = Parse(terminal_sequence);
@@ -81,11 +99,11 @@ TreeSet *Grammar::Parse(TreeSet *trees, bool silent) {
     }
     predicted_trees->RecoverFromChomskyNormalForm();
 
-    if (!silent) {
+    if (verbose_) {
 	double parsing_time = difftime(time(NULL), begin_time);
 	double avg_time = parsing_time / num_parsed;
 	double avg_length = ((double) sum_lengths) / num_parsed;
-	int num_skipped = terminal_sequences.NumSequences() - num_parsed;
+	size_t num_skipped = terminal_sequences.NumSequences() - num_parsed;
 	cerr << fixed << setprecision(2);
 
 	cerr << "Parsing time: "
@@ -105,6 +123,14 @@ TreeSet *Grammar::Parse(TreeSet *trees, bool silent) {
     }
 
     return predicted_trees;
+}
+
+Node *Grammar::Parse(const vector<string> &terminal_strings) {
+    TerminalSequence terminal_sequence(terminal_strings);
+    AssignNumericIdentities(&terminal_sequence);
+    Node *predicted_tree = Parse(&terminal_sequence);
+    AssignStringIdentities(predicted_tree);
+    return predicted_tree;
 }
 
 void Grammar::Save(const string &model_path) {
@@ -128,13 +154,13 @@ void Grammar::Save(const string &model_path) {
     util_file::binary_write_primitive(num_root_nonterminal_types, model_file);
 
     for (Nonterminal a = 0; a < NumNonterminalTypes(); ++a) {
-	string a_string = nonterminal_num2str_[a];
+	string a_string = nonterminal_dictionary_inverse_[a];
 	util_file::binary_write_string(a_string, model_file);
 	util_file::binary_write_primitive(a, model_file);
     }
 
     for (Nonterminal x = 0; x < NumTerminalTypes(); ++x) {
-	string x_string = terminal_num2str_[x];
+	string x_string = terminal_dictionary_inverse_[x];
 	util_file::binary_write_string(x_string, model_file);
 	util_file::binary_write_primitive(x, model_file);
     }
@@ -180,10 +206,10 @@ void Grammar::Save(const string &model_path) {
     model_file.close();
 }
 
-void Grammar::Load() {
-    //Clear();
-    string model_path = model_directory_ + "/model";
+void Grammar::Load(const string &model_path) {
+    Clear();
     ifstream model_file(model_path, ios::in | ios::binary);
+    ASSERT(model_file.is_open(), "Can't load the model: " << model_path);
 
     util_file::binary_read_string(model_file, &binarization_method_);
     util_file::binary_read_primitive(model_file,
@@ -209,8 +235,8 @@ void Grammar::Load() {
 	Nonterminal a;
 	util_file::binary_read_string(model_file, &a_string);
 	util_file::binary_read_primitive(model_file, &a);
-	nonterminal_num2str_[a] = a_string;
-	nonterminal_str2num_[a_string] = a;
+	nonterminal_dictionary_inverse_[a] = a_string;
+	nonterminal_dictionary_[a_string] = a;
     }
 
     for (size_t i = 0; i < num_terminal_types; ++i) {
@@ -218,8 +244,8 @@ void Grammar::Load() {
 	Terminal x;
 	util_file::binary_read_string(model_file, &x_string);
 	util_file::binary_read_primitive(model_file, &x);
-	terminal_num2str_[x] = x_string;
-	terminal_str2num_[x_string] = x;
+	terminal_dictionary_inverse_[x] = x_string;
+	terminal_dictionary_[x_string] = x;
     }
 
     for (size_t i = 0; i < num_interminal_types; ++i) {
@@ -309,7 +335,7 @@ double Grammar::ComputePCFGTreeProbability(Node *tree) {
 		ASSERT(false, "Computing probability of a tree not in CNF!");
 	    }
 
-	    for (int i = 0; i < node->NumChildren(); ++i) {
+	    for (size_t i = 0; i < node->NumChildren(); ++i) {
 		dfs_stack.push(node->Child(i));
 	    }
 	}
@@ -328,8 +354,8 @@ void Grammar::ComputeMarginalsPCFG(const vector<string> &terminal_strings,
     ComputeMarginalsPCFG(&terminal_sequence, marginal);
 }
 
-int Grammar::NumBinaryRuleTypes() {
-    int num_binary_rule_types = 0;
+size_t Grammar::NumBinaryRuleTypes() {
+    size_t num_binary_rule_types = 0;
     for (const auto & a_pair : lprob_binary_) {
 	for (const auto & b_pair : a_pair.second) {
 	    num_binary_rule_types += b_pair.second.size();
@@ -338,8 +364,8 @@ int Grammar::NumBinaryRuleTypes() {
     return num_binary_rule_types;
 }
 
-int Grammar::NumUnaryRuleTypes() {
-    int num_unary_rule_types = 0;
+size_t Grammar::NumUnaryRuleTypes() {
+    size_t num_unary_rule_types = 0;
     for (const auto & a_pair : lprob_unary_) {
 	num_unary_rule_types += a_pair.second.size();
     }
@@ -358,7 +384,7 @@ Node *Grammar::Parse(TerminalSequence *terminals) {
 }
 
 Node *Grammar::ParsePCFGCKY(TerminalSequence *terminals) {
-    int sequence_length = terminals->Length();
+    size_t sequence_length = terminals->Length();
 
     // chart[i][j][a] = highest probability of any tree rooted at a spanning the
     // sequence from position i to position j.
@@ -366,10 +392,10 @@ Node *Grammar::ParsePCFGCKY(TerminalSequence *terminals) {
 
     // bp[i][j][a] = (b, c, k) corresponding to chart[i][j][a].
     Backpointer bp(sequence_length);
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	chart[i].resize(sequence_length);
 	bp[i].resize(sequence_length);
-	for (int j = 0; j < sequence_length; ++j) {
+	for (size_t j = 0; j < sequence_length; ++j) {
 	    chart[i][j].resize(NumNonterminalTypes(),
 			       -numeric_limits<double>::infinity());
 	    bp[i][j].resize(NumNonterminalTypes());
@@ -377,7 +403,7 @@ Node *Grammar::ParsePCFGCKY(TerminalSequence *terminals) {
     }
 
     // Base: chart[i][i][a] = p(a -> x_i | a).
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	Terminal x = terminals->TerminalNumber(i);
 	if (use_gold_tags_ && terminals->PreterminalNumber(i) >= 0) {
 	    // If we are using the gold tag and the gold tag is known to the
@@ -402,15 +428,15 @@ Node *Grammar::ParsePCFGCKY(TerminalSequence *terminals) {
     }
 
     // Main body.
-    for (int span_length = 1; span_length < sequence_length; ++span_length) {
-	for (int i = 0; i < sequence_length - span_length; ++i) {
-	    int j = i + span_length;
+    for (size_t span_length = 1; span_length < sequence_length; ++span_length) {
+	for (size_t i = 0; i < sequence_length - span_length; ++i) {
+	    size_t j = i + span_length;
 	    for (const auto &interminal_pair : interminal_) {
 		Nonterminal a = interminal_pair.first;
 		double max_lprob = -numeric_limits<double>::infinity();
 		Nonterminal best_b = -1;
 		Nonterminal best_c = -1;
-		int best_split_point = -1;
+		size_t best_split_point = -1;
 
 		vector<tuple<Nonterminal, Nonterminal, double> > *bcs =
 		    &binary_rhs_[a];
@@ -420,7 +446,7 @@ Node *Grammar::ParsePCFGCKY(TerminalSequence *terminals) {
 		    Nonterminal b = get<0>(*bc_tuple);
 		    Nonterminal c = get<1>(*bc_tuple);
 		    double lprob_abc = get<2>(*bc_tuple);
-		    for (int split_point = i; split_point < j;
+		    for (size_t split_point = i; split_point < j;
 			 ++split_point) {
 			double particular_lprob = lprob_abc +
 			    chart[i][split_point][b] +
@@ -471,14 +497,14 @@ void Grammar::ComputeMarginalsPCFG(TerminalSequence *terminals,
     ComputeInsideProbabilitiesPCFG(terminals, &inside);
 
     Chart outside;
-    int sequence_length = terminals->Length();
+    size_t sequence_length = terminals->Length();
     ComputeOutsideProbabilitiesPCFG(sequence_length, inside, &outside);
 
     (*marginal).clear();
     (*marginal).resize(sequence_length);
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	(*marginal)[i].resize(sequence_length);
-	for (int j = 0; j < sequence_length; ++j) {
+	for (size_t j = 0; j < sequence_length; ++j) {
 	    (*marginal)[i][j].resize(NumNonterminalTypes(),
 				     -numeric_limits<double>::infinity());
 	    for (Nonterminal a = 0; a < NumNonterminalTypes(); ++a) {
@@ -490,19 +516,19 @@ void Grammar::ComputeMarginalsPCFG(TerminalSequence *terminals,
 
 void Grammar::ComputeInsideProbabilitiesPCFG(TerminalSequence *terminals,
 					     Chart *inside) {
-    int sequence_length = terminals->Length();
+    size_t sequence_length = terminals->Length();
     inside->clear();
     inside->resize(sequence_length);
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	(*inside)[i].resize(sequence_length);
-	for (int j = 0; j < sequence_length; ++j) {
+	for (size_t j = 0; j < sequence_length; ++j) {
 	    (*inside)[i][j].resize(NumNonterminalTypes(),
 				   -numeric_limits<double>::infinity());
 	}
     }
 
     // Base: inside[i][i][a] = p(a -> x_i | a).
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	Terminal x = terminals->TerminalNumber(i);
 	if (use_gold_tags_ && terminals->PreterminalNumber(i) >= 0) {
 	    // If we are using the gold tag and the gold tag is known to the
@@ -527,9 +553,9 @@ void Grammar::ComputeInsideProbabilitiesPCFG(TerminalSequence *terminals,
     }
 
     // Main body.
-    for (int span_length = 1; span_length < sequence_length; ++span_length) {
-	for (int i = 0; i < sequence_length - span_length; ++i) {
-	    int j = i + span_length;
+    for (size_t span_length = 1; span_length < sequence_length; ++span_length) {
+	for (size_t i = 0; i < sequence_length - span_length; ++i) {
+	    size_t j = i + span_length;
 	    for (const auto &interminal_pair : interminal_) {
 		Nonterminal a = interminal_pair.first;
 		double inside_lprob = -numeric_limits<double>::infinity();
@@ -542,7 +568,7 @@ void Grammar::ComputeInsideProbabilitiesPCFG(TerminalSequence *terminals,
 		    Nonterminal b = get<0>(*bc_tuple);
 		    Nonterminal c = get<1>(*bc_tuple);
 		    double lprob_abc = get<2>(*bc_tuple);
-		    for (int split_point = i; split_point < j;
+		    for (size_t split_point = i; split_point < j;
 			 ++split_point) {
 			double particular_lprob = lprob_abc +
 			    (*inside)[i][split_point][b] +
@@ -557,14 +583,14 @@ void Grammar::ComputeInsideProbabilitiesPCFG(TerminalSequence *terminals,
     }
 }
 
-void Grammar::ComputeOutsideProbabilitiesPCFG(int sequence_length,
+void Grammar::ComputeOutsideProbabilitiesPCFG(size_t sequence_length,
 					      const Chart &inside,
 					      Chart *outside) {
     outside->clear();
     outside->resize(sequence_length);
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	(*outside)[i].resize(sequence_length);
-	for (int j = 0; j < sequence_length; ++j) {
+	for (size_t j = 0; j < sequence_length; ++j) {
 	    (*outside)[i][j].resize(NumNonterminalTypes(),
 				    -numeric_limits<double>::infinity());
 	}
@@ -581,8 +607,8 @@ void Grammar::ComputeOutsideProbabilitiesPCFG(int sequence_length,
     for (int span_length = sequence_length - 2; span_length >= 0;
 	 --span_length) {
 	// Span length starts from (length - 2). The base covers (length - 1)
-	for (int i = 0; i < sequence_length - span_length; ++i) {
-	    int j = i + span_length;
+	for (size_t i = 0; i < sequence_length - span_length; ++i) {
+	    size_t j = i + span_length;
 
 	    // Below, we only consider relevant nonterminals for span (i, j) and
 	    // leave others with probability 0. This is technically wrong since
@@ -614,7 +640,7 @@ void Grammar::ComputeOutsideProbabilitiesPCFG(int sequence_length,
 }
 
 double Grammar::ComputeOutsideProbabilityPCFG(
-    Nonterminal a, int i, int j, int sequence_length,
+    Nonterminal a, size_t i, size_t j, size_t sequence_length,
     const Chart &inside, const Chart &outside) {
     double outside_lprob = -numeric_limits<double>::infinity();
 
@@ -633,7 +659,7 @@ double Grammar::ComputeOutsideProbabilityPCFG(
 	Nonterminal b = get<0>(*bc_tuple);
 	Nonterminal c = get<1>(*bc_tuple);
 	double lprob_bac = get<2>(*bc_tuple);
-	for (int split_point = j + 1; split_point < sequence_length;
+	for (size_t split_point = j + 1; split_point < sequence_length;
 	     ++split_point) {
 	    double outside_lprob_left = lprob_bac +
 		inside[j+1][split_point][c] + outside[i][split_point][b];
@@ -656,7 +682,7 @@ double Grammar::ComputeOutsideProbabilityPCFG(
 	Nonterminal b = get<0>(*bc_tuple);
 	Nonterminal c = get<1>(*bc_tuple);
 	double lprob_bca = get<2>(*bc_tuple);
-	for (int split_point = 0; split_point < i; ++split_point) {
+	for (size_t split_point = 0; split_point < i; ++split_point) {
 	    double outside_lprob_right = lprob_bca +
 		inside[split_point][i-1][c] + outside[split_point][j][b];
 	    outside_lprob = util_math::sum_logs(outside_lprob,
@@ -668,7 +694,7 @@ double Grammar::ComputeOutsideProbabilityPCFG(
 
 Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
 				      const Chart &marginal) {
-    int sequence_length = terminals->Length();
+    size_t sequence_length = terminals->Length();
 
     // chart[i][j][a] = highest score of a tree rooted at a spanning terminals
     // from position i to position j.
@@ -676,10 +702,10 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
 
     // bp[i][j][a] = backpointer corresponding to chart[i][j][a].
     Backpointer bp(sequence_length);
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	chart[i].resize(sequence_length);
 	bp[i].resize(sequence_length);
-	for (int j = 0; j < sequence_length; ++j) {
+	for (size_t j = 0; j < sequence_length; ++j) {
 	    chart[i][j].resize(NumNonterminalTypes(),
 			       -numeric_limits<double>::infinity());
 	    bp[i][j].resize(NumNonterminalTypes());
@@ -687,7 +713,7 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
     }
 
     // Base case.
-    for (int i = 0; i < sequence_length; ++i) {
+    for (size_t i = 0; i < sequence_length; ++i) {
 	for (const auto &preterminal_pair : preterminal_) {
 	    Nonterminal a = preterminal_pair.first;
 	    chart[i][i][a] = marginal[i][i][a];
@@ -695,15 +721,15 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
     }
 
     // Main body.
-    for (int span_length = 1; span_length < sequence_length; ++span_length) {
-	for (int i = 0; i < sequence_length - span_length; ++i) {
-	    int j = i + span_length;
+    for (size_t span_length = 1; span_length < sequence_length; ++span_length) {
+	for (size_t i = 0; i < sequence_length - span_length; ++i) {
+	    size_t j = i + span_length;
 	    for (const auto &interminal_pair : interminal_) {
 		Nonterminal a = interminal_pair.first;
 		double max_total_score = -numeric_limits<double>::infinity();
 		Nonterminal best_b = -1;
 		Nonterminal best_c = -1;
-		int best_split_point = -1;
+		size_t best_split_point = -1;
 		double node_score = marginal[i][j][a];
 
 		vector<tuple<Nonterminal, Nonterminal, double> > *bcs =
@@ -713,7 +739,7 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
 			&bcs->at(idx);
 		    Nonterminal b = get<0>(*bc_tuple);
 		    Nonterminal c = get<1>(*bc_tuple);
-		    for (int split_point = i; split_point < j;
+		    for (size_t split_point = i; split_point < j;
 			 ++split_point) {
 			double total_score = node_score +
 			    chart[i][split_point][b] +
@@ -734,7 +760,7 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
 
     double best_root_score = -numeric_limits<double>::infinity();
     Nonterminal best_root = -1;
-    for (const auto &nonterminal_pair : nonterminal_num2str_) {
+    for (const auto &nonterminal_pair : nonterminal_dictionary_inverse_) {
 	Nonterminal a = nonterminal_pair.first;
 	if (chart[0][sequence_length - 1][a] > best_root_score) {
 	    best_root_score = chart[0][sequence_length - 1][a];
@@ -751,7 +777,7 @@ Node *Grammar::RecoverMaxMarginalTree(TerminalSequence *terminals,
 
 Node *Grammar::RecoverFromBackpointer(
     const Backpointer &bp, TerminalSequence *terminals,
-    int start_position, int end_position, Nonterminal a) {
+    size_t start_position, size_t end_position, Nonterminal a) {
     if (start_position == end_position) {
 	Terminal x = terminals->TerminalNumber(start_position);
 	string x_string = terminals->TerminalString(start_position);
@@ -762,7 +788,7 @@ Node *Grammar::RecoverFromBackpointer(
     } else {
 	Nonterminal b = get<0>(bp[start_position][end_position][a]);
 	Nonterminal c = get<1>(bp[start_position][end_position][a]);
-	int split_point = get<2>(bp[start_position][end_position][a]);
+	size_t split_point = get<2>(bp[start_position][end_position][a]);
 	Node *node_a = new Node(a, -1);
 	Node *node_b = RecoverFromBackpointer(bp, terminals, start_position,
 					      split_point, b);
@@ -776,21 +802,22 @@ Node *Grammar::RecoverFromBackpointer(
 }
 
 void Grammar::EstimatePCFG(TreeSet *trees) {
+    Clear();
     // Collect rule and nonterminal statistics.
-    unordered_map<Nonterminal, int> count_nonterminal;
-    unordered_map<Terminal, int> count_terminal;
+    unordered_map<Nonterminal, size_t> count_nonterminal;
+    unordered_map<Terminal, size_t> count_terminal;
     unordered_map<Nonterminal,
 		  unordered_map<Nonterminal,
-				unordered_map<Nonterminal, int> > >
+				unordered_map<Nonterminal, size_t> > >
 	count_binary;
-    unordered_map<Nonterminal, unordered_map<Terminal, int> > count_unary;
-    unordered_map<Nonterminal, int> count_root;
+    unordered_map<Nonterminal, unordered_map<Terminal, size_t> > count_unary;
+    unordered_map<Nonterminal, size_t> count_root;
 
-    for (int i = 0; i < trees->NumTrees(); ++i) {
+    for (size_t i = 0; i < trees->NumTrees(); ++i) {
 	Node *tree = trees->Tree(i);
 	string root_string = tree->nonterminal_string();
 	AddNonterminalIfUnknown(root_string);
-	Nonterminal root = nonterminal_str2num_[root_string];
+	Nonterminal root = nonterminal_dictionary_[root_string];
 	++count_root[root];  // root nonterminal
 
 	stack<Node *> dfs_stack;  // Depth-first search (DFS)
@@ -822,18 +849,18 @@ void Grammar::EstimatePCFG(TreeSet *trees) {
 		ASSERT(false, "Derivation not in CNF!");
 	    }
 
-	    for (int j = 0; j < node->NumChildren(); ++j) {
+	    for (size_t j = 0; j < node->NumChildren(); ++j) {
 		dfs_stack.push(node->Child(j));
 	    }
 	}
     }
 
     // Check every nonterminal is either an interminal or a preterminal.
-    for (const auto &a_pair : nonterminal_num2str_) {
+    for (const auto &a_pair : nonterminal_dictionary_inverse_) {
 	Nonterminal a = a_pair.first;
 	string a_string = a_pair.second;
-	bool a_is_interminal = interminal_.find(a) != interminal_.end();
-	bool a_is_preterminal = preterminal_.find(a) != preterminal_.end();
+	bool a_is_interminal = (interminal_.find(a) != interminal_.end());
+	bool a_is_preterminal = (preterminal_.find(a) != preterminal_.end());
 	ASSERT(a_is_interminal != a_is_preterminal,
 	       "Found a nonterminal used as in/preterminal: " << a_string);
     }
@@ -841,12 +868,12 @@ void Grammar::EstimatePCFG(TreeSet *trees) {
     // Estimate binary rule probababilities from counts.
     for (const auto &a_pair : count_binary) {
 	Nonterminal a = a_pair.first;
-	int count_a = count_nonterminal[a];
+	size_t count_a = count_nonterminal[a];
 	for (const auto &b_pair : a_pair.second) {
 	    Nonterminal b = b_pair.first;
 	    for (const auto &c_pair : b_pair.second) {
 		Nonterminal c = c_pair.first;
-		int count_abc = c_pair.second;
+		size_t count_abc = c_pair.second;
 		double prob = log(count_abc) - log(count_a);
 		lprob_binary_[a][b][c] = prob;
 		binary_rhs_[a].push_back(make_tuple(b, c, prob));
@@ -859,16 +886,16 @@ void Grammar::EstimatePCFG(TreeSet *trees) {
     // Estimate unary rule probabilities from counts.
     for (const auto &a_pair : count_unary) {
 	Nonterminal a = a_pair.first;
-	int count_a = count_nonterminal[a];
+	size_t count_a = count_nonterminal[a];
 	for (const auto &x_pair : a_pair.second) {
 	    Terminal x = x_pair.first;
-	    int count_ax = x_pair.second;
+	    size_t count_ax = x_pair.second;
 	    lprob_unary_[a][x] = log(count_ax) - log(count_a);
 	}
     }
 
     // Estimate root nonterminal probabilities from counts.
-    int num_root_occurrences = 0;
+    size_t num_root_occurrences = 0;
     for (const auto &a_pair : count_root) {
 	num_root_occurrences += a_pair.second;
     }
@@ -881,22 +908,23 @@ void Grammar::EstimatePCFG(TreeSet *trees) {
 
 Nonterminal Grammar::AddNonterminalIfUnknown(const string &a_string) {
     ASSERT(!a_string.empty(), "Trying to add an empty string for nonterminal!");
-    if (nonterminal_str2num_.find(a_string) == nonterminal_str2num_.end()) {
-	Nonterminal nonterminal_type = nonterminal_str2num_.size();
-	nonterminal_str2num_[a_string] = nonterminal_type;
-	nonterminal_num2str_[nonterminal_type] = a_string;
+    if (nonterminal_dictionary_.find(a_string) ==
+	nonterminal_dictionary_.end()) {
+	Nonterminal nonterminal_type = nonterminal_dictionary_.size();
+	nonterminal_dictionary_[a_string] = nonterminal_type;
+	nonterminal_dictionary_inverse_[nonterminal_type] = a_string;
     }
-    return nonterminal_str2num_[a_string];
+    return nonterminal_dictionary_[a_string];
 }
 
 Terminal Grammar::AddTerminalIfUnknown(const string &x_string) {
     ASSERT(!x_string.empty(), "Trying to add an empty string for terminal!");
-    if (terminal_str2num_.find(x_string) == terminal_str2num_.end()) {
-	Terminal terminal_type = terminal_str2num_.size();
-	terminal_str2num_[x_string] = terminal_type;
-	terminal_num2str_[terminal_type] = x_string;
+    if (terminal_dictionary_.find(x_string) == terminal_dictionary_.end()) {
+	Terminal terminal_type = terminal_dictionary_.size();
+	terminal_dictionary_[x_string] = terminal_type;
+	terminal_dictionary_inverse_[terminal_type] = x_string;
     }
-    return terminal_str2num_[x_string];
+    return terminal_dictionary_[x_string];
 }
 
 void Grammar::AssertProperDistributions() {
@@ -911,7 +939,7 @@ void Grammar::AssertProperDistributions() {
 	}
 	ASSERT(fabs(1.0 - mass) < 1e-5,
 	       "Improper binary rule distribution for interminal string "
-	       << nonterminal_num2str_[a] << ": " << mass);
+	       << nonterminal_dictionary_inverse_[a] << ": " << mass);
     }
 
     // Assert proper unary rule distributions.
@@ -923,7 +951,7 @@ void Grammar::AssertProperDistributions() {
 	}
 	ASSERT(fabs(1.0 - mass) < 1e-5,
 	       "Improper unary rule distribution for preterminal string "
-	       << nonterminal_num2str_[a] << ": " << mass);
+	       << nonterminal_dictionary_inverse_[a] << ": " << mass);
     }
 
     // Assert a proper root nonterminal distribution.
@@ -938,13 +966,14 @@ void Grammar::AssertProperDistributions() {
 void Grammar::AssignNumericIdentities(Node *tree) {
     if (tree->IsEmpty()) { return; }
     string a_string = tree->nonterminal_string();
-    ASSERT(nonterminal_str2num_.find(a_string) != nonterminal_str2num_.end(),
+    ASSERT(nonterminal_dictionary_.find(a_string) !=
+	   nonterminal_dictionary_.end(),
 	   "Assigning numeric ID to an unknown nonterminal: " << a_string);
-    tree->set_nonterminal_number(nonterminal_str2num_[a_string]);
+    tree->set_nonterminal_number(nonterminal_dictionary_[a_string]);
     if (tree->IsPreterminal()) {
 	string x_string = tree->terminal_string();
-	if (terminal_str2num_.find(x_string) != terminal_str2num_.end()) {
-	    tree->set_terminal_number(terminal_str2num_[x_string]);
+	if (terminal_dictionary_.find(x_string) != terminal_dictionary_.end()) {
+	    tree->set_terminal_number(terminal_dictionary_[x_string]);
 	} else {
 	    // Use -1 for an unknown terminal string.
 	    tree->set_terminal_number(-1);
@@ -958,9 +987,10 @@ void Grammar::AssignNumericIdentities(Node *tree) {
 void Grammar::AssignStringIdentities(Node *tree) {
     if (tree->IsEmpty()) { return; }
     Nonterminal a = tree->nonterminal_number();
-    ASSERT(nonterminal_num2str_.find(a) != nonterminal_num2str_.end(),
+    ASSERT(nonterminal_dictionary_inverse_.find(a) !=
+	   nonterminal_dictionary_inverse_.end(),
 	   "Assigning string ID to an unknown nonterminal: " << a);
-    tree->set_nonterminal_string(nonterminal_num2str_[a]);
+    tree->set_nonterminal_string(nonterminal_dictionary_inverse_[a]);
     if (tree->IsPreterminal()) {
 	ASSERT(!tree->terminal_string().empty(), "Terminal nodes must have "
 	       "string IDs at all time!");
@@ -974,21 +1004,21 @@ void Grammar::AssignNumericIdentities(TerminalSequence *terminals) {
     vector<Terminal> terminal_numbers;
     vector<Nonterminal> preterminal_numbers;
 
-    for (int i = 0; i < terminals->Length(); ++i) {
+    for (size_t i = 0; i < terminals->Length(); ++i) {
 	string terminal_string = terminals->TerminalString(i);
-	if (terminal_str2num_.find(terminal_string) !=
-	    terminal_str2num_.end()) {
-	    terminal_numbers.push_back(terminal_str2num_[terminal_string]);
+	if (terminal_dictionary_.find(terminal_string) !=
+	    terminal_dictionary_.end()) {
+	    terminal_numbers.push_back(terminal_dictionary_[terminal_string]);
 	} else {
 	    // Use -1 for an unknown terminal string.
 	    terminal_numbers.push_back(-1);
 	}
 
 	string preterminal_string = terminals->PreterminalString(i);
-	if (nonterminal_str2num_.find(preterminal_string) !=
-	    nonterminal_str2num_.end()) {
+	if (nonterminal_dictionary_.find(preterminal_string) !=
+	    nonterminal_dictionary_.end()) {
 	    preterminal_numbers.push_back(
-		nonterminal_str2num_[preterminal_string]);
+		nonterminal_dictionary_[preterminal_string]);
 	} else {
 	    // Use -1 for an unknown preterminal string.
 	    preterminal_numbers.push_back(-1);

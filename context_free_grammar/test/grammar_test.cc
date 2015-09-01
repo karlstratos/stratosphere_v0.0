@@ -28,19 +28,19 @@ protected:
 	// A -> A B    0.3333
 	//   -> B A    0.3333
 	//   -> B B    0.3333
-	grammar_equal_.set_model_directory("/tmp/grammar_equal_");
+	grammar_equal_.set_verbose(false);
 	grammar_equal_.Train(&treeset_equal);
 
 	// A -> A B    0.4
 	//   -> B A    0.2
 	//   -> B B    0.4
-	grammar_AB_.set_model_directory("/tmp/grammar_AB_");
+	grammar_AB_.set_verbose(false);
 	grammar_AB_.Train(&treeset_AB);
 
 	// A -> A B    0.2
 	//   -> B A    0.4
 	//   -> B B    0.4
-	grammar_BA_.set_model_directory("/tmp/grammar_BA_");
+	grammar_BA_.set_verbose(false);
 	grammar_BA_.Train(&treeset_BA);
     }
 
@@ -48,10 +48,6 @@ protected:
 	tree_equal_->DeleteSelfAndDescendents();
 	tree_AB_->DeleteSelfAndDescendents();
 	tree_BA_->DeleteSelfAndDescendents();
-	ASSERT(system("rm -rf /tmp/grammar_equal_") == 0 &&
-	       system("rm -rf /tmp/grammar_AB_") == 0 &&
-	       system("rm -rf /tmp/grammar_BA_") == 0,
-	       "Cannot remove test directories in /tmp/");
     }
 
     TreeReader tree_reader_;
@@ -132,8 +128,8 @@ TEST_F(ProbabilityTest, TestMarginalsPCFG) {
 
     Chart marginal;
     grammar_equal_.ComputeMarginalsPCFG(terminal_strings, &marginal);
-    Nonterminal A = grammar_equal_.nonterminal_str2num("A");
-    Nonterminal B = grammar_equal_.nonterminal_str2num("B");
+    Nonterminal A = grammar_equal_.nonterminal_dictionary("A");
+    Nonterminal B = grammar_equal_.nonterminal_dictionary("B");
 
     // Under grammar_equal_, all possible 4 derivations are equally likely:
     // 1. (A (A (A (B b) (B b)) (B b)) (B b))   wp 0.0370

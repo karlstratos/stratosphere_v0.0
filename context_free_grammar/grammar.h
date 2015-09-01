@@ -17,7 +17,7 @@
 using namespace std;
 
 typedef vector<vector<vector<double> > > Chart;
-typedef vector<vector<vector<tuple<Nonterminal, Nonterminal, int> > > >
+typedef vector<vector<vector<tuple<Nonterminal, Nonterminal, size_t> > > >
 Backpointer;
 
 class Grammar {
@@ -27,41 +27,46 @@ public:
 
     ~Grammar() { }
 
+    // Clears the model.
+    void Clear();
+
+    // Trains the grammar from a treebank file.
+    void Train(const string &treebank_path);
+
     // Trains the grammar on the given trees.
     void Train(TreeSet *trees);
+
+    // Evalutes parsing on a treebank file.
+    void Evaluate(const string &treebank_path, const string prediction_path);
+
+    // Parses the terminal sequences in the given trees.
+    TreeSet *Parse(TreeSet *trees);
 
     // Parses the given sequence of strings.
     Node *Parse(const vector<string> &terminal_strings);
 
-    // Parses the terminal sequences in the given trees.
-    TreeSet *Parse(TreeSet *trees, bool silent);
-
     // Saves the grammar to a file.
     void Save(const string &model_path);
 
-    // Load the grammar (from: model_directory_ + "model").
-    void Load();
+    // Load the grammar from a file.
+    void Load(const string &model_path);
 
     // Returns the numeric ID of the given nonterminal string.
-    Nonterminal nonterminal_str2num(const string &a_string) {
-	return (nonterminal_str2num_.find(a_string) !=
-		nonterminal_str2num_.end()) ? nonterminal_str2num_[a_string]
-	    : -1;
+    Nonterminal nonterminal_dictionary(const string &a_string) {
+	return (nonterminal_dictionary_.find(a_string) !=
+		nonterminal_dictionary_.end()) ?
+	    nonterminal_dictionary_[a_string] : -1;
     }
 
     // Returns the numeric ID of the given terminal string.
-    Terminal terminal_str2num(const string &x_string) {
-	return (terminal_str2num_.find(x_string) !=
-		terminal_str2num_.end()) ? terminal_str2num_[x_string] : -1;
+    Terminal terminal_dictionary(const string &x_string) {
+	return (terminal_dictionary_.find(x_string) !=
+		terminal_dictionary_.end()) ?
+	    terminal_dictionary_[x_string] : -1;
     }
 
     // Returns the special string used to represent an unknown terminal string.
     string unknown_terminal() { return kUnknownTerminal_; }
-
-    // Sets the path to the parser model directory.
-    void set_model_directory(string model_directory) {
-	model_directory_ = model_directory;
-    }
 
     // Sets the binarization method.
     void set_binarization_method(string binarization_method) {
@@ -70,13 +75,13 @@ public:
 
     // Sets the order of vertical Markovization.
     void set_vertical_markovization_order(
-	int vertical_markovization_order) {
+	size_t vertical_markovization_order) {
 	vertical_markovization_order_ = vertical_markovization_order;
     }
 
     // Sets the order of horizontal Markovization.
     void set_horizontal_markovization_order(
-	int horizontal_markovization_order) {
+	size_t horizontal_markovization_order) {
 	horizontal_markovization_order_ = horizontal_markovization_order;
     }
 
@@ -86,7 +91,7 @@ public:
     }
 
     // Sets the maximum length of a sentence to parse.
-    void set_max_sentence_length(int max_sentence_length) {
+    void set_max_sentence_length(size_t max_sentence_length) {
 	max_sentence_length_ = max_sentence_length;
     }
 
@@ -94,6 +99,9 @@ public:
     void set_decoding_method(string decoding_method) {
 	decoding_method_ = decoding_method;
     }
+
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
 
     // Computes the probability of the given tree under PCFG.
     double ComputePCFGTreeProbability(Node *tree);
@@ -103,25 +111,25 @@ public:
 			      Chart *marginal);
 
     // Returns the number of nonterminal types.
-    int NumNonterminalTypes() { return nonterminal_num2str_.size(); }
+    size_t NumNonterminalTypes() { return nonterminal_dictionary_.size(); }
 
     // Returns the number of interminal types.
-    int NumInterminalTypes() { return interminal_.size(); }
+    size_t NumInterminalTypes() { return interminal_.size(); }
 
     // Returns the number of preterminal types.
-    int NumPreterminalTypes() { return preterminal_.size(); }
+    size_t NumPreterminalTypes() { return preterminal_.size(); }
 
     // Returns the number of terminal types.
-    int NumTerminalTypes() { return terminal_num2str_.size(); }
+    size_t NumTerminalTypes() { return terminal_dictionary_.size(); }
 
     // Returns the number of binary rule types.
-    int NumBinaryRuleTypes();
+    size_t NumBinaryRuleTypes();
 
     // Returns the number of unary rule types.
-    int NumUnaryRuleTypes();
+    size_t NumUnaryRuleTypes();
 
     // Returns the number of nonterminal types that can be roots.
-    int NumRootNonterminalTypes() { return lprob_root_.size(); }
+    size_t NumRootNonterminalTypes() { return lprob_root_.size(); }
 
 private:
     // Parses the given terminal sequence.
@@ -142,12 +150,12 @@ private:
 					Chart *inside);
 
     // Computes outside probabilities for the given terminal sequence.
-    void ComputeOutsideProbabilitiesPCFG(int sequence_length,
+    void ComputeOutsideProbabilitiesPCFG(size_t sequence_length,
 					 const Chart &inside, Chart *outside);
 
     // Computes outside probability of subtree a -*-> x_i...x_j.
     double ComputeOutsideProbabilityPCFG(
-	Nonterminal a, int i, int j, int sequence_length,
+	Nonterminal a, size_t i, size_t j, size_t sequence_length,
 	const Chart &inside, const Chart &outside);
 
     // Recovers the tree that maximizes the sum of marginals.
@@ -157,7 +165,7 @@ private:
     // Recovers the tree recorded in the backpointer from the start point.
     Node *RecoverFromBackpointer(
 	const Backpointer &bp, TerminalSequence *terminals,
-	int start_position, int end_position, Nonterminal a);
+	size_t start_position, size_t end_position, Nonterminal a);
 
     // Estimate PCFG parameters from the given trees.
     void EstimatePCFG(TreeSet *trees);
@@ -181,16 +189,16 @@ private:
     void AssignNumericIdentities(TerminalSequence *terminals);
 
     // Maps a nonterminal string to an integer ID.
-    unordered_map<string, Nonterminal> nonterminal_str2num_;
+    unordered_map<string, Nonterminal> nonterminal_dictionary_;
 
     // Maps a nonterminal ID to its original string form.
-    unordered_map<Nonterminal, string> nonterminal_num2str_;
+    unordered_map<Nonterminal, string> nonterminal_dictionary_inverse_;
 
     // Maps a terminal string to an integer ID.
-    unordered_map<string, Terminal> terminal_str2num_;
+    unordered_map<string, Terminal> terminal_dictionary_;
 
     // Maps a terminal ID to its original string form.
-    unordered_map<Terminal, string> terminal_num2str_;
+    unordered_map<Terminal, string> terminal_dictionary_inverse_;
 
     // Keys of this map consist of interminal types.
     unordered_map<Nonterminal, bool> interminal_;
@@ -198,26 +206,20 @@ private:
     // Keys of this map consist of preterminal types.
     unordered_map<Nonterminal, bool> preterminal_;
 
-    // Path to the parser model directory.
-    string model_directory_;
-
-    // Path to the log file.
-    ofstream log_;
-
     // Binarization method.
     string binarization_method_ = "left";
 
     // Order of vertical Markovization.
-    int vertical_markovization_order_ = 0;
+    size_t vertical_markovization_order_ = 0;
 
     // Order of horizontal Markovization.
-    int horizontal_markovization_order_ = 0;
+    size_t horizontal_markovization_order_ = 0;
 
     // Use gold part-of-speech tags at test time?
     bool use_gold_tags_ = false;
 
     // Maximum length of a sentence to parse.
-    int max_sentence_length_ = 1000;
+    size_t max_sentence_length_ = 1000;
 
     // Decoding method.
     string decoding_method_;
@@ -252,6 +254,9 @@ private:
     unordered_map<Nonterminal,
 		  vector<tuple<Nonterminal, Nonterminal, double> > >
     right_parent_sibling_;
+
+    // Print messages to stderr?
+    bool verbose_ = true;
 };
 
 #endif  // CORE_GRAMMAR_H_

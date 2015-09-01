@@ -179,6 +179,7 @@ int main (int argc, char* argv[]) {
     hmm.set_decoding_method(decoding_method);
     hmm.set_log_path(log_path);
     hmm.set_verbose(verbose);
+
     if (train) {
 	if (num_states == 0) {  // Supervised learning
 	    hmm.TrainSupervised(data_path);
