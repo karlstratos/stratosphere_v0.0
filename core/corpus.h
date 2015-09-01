@@ -74,7 +74,7 @@ namespace corpus {
 				  bool normalize);
 }  // namespace corpus
 
-// A Corpus object is designged to extract useful statistics about text easily.
+// A Corpus object is designed to extract useful statistics about text easily.
 class Corpus {
 public:
     // Always initializes with a corpus.
