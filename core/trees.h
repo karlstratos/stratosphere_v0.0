@@ -13,20 +13,28 @@
 
 using namespace std;
 
-typedef int Nonterminal;
-typedef int Terminal;
+typedef int Nonterminal;  // -1 means not existent.
+typedef int Terminal;  // -1 means not existent.
 
 const string SPECIAL_ROOT_SYMBOL = "TOP";
 
 // A node is a recursive structure representing a nonterminal in a context-free
 // derivation. When a node has at least one child node, it is called an
-// interminal node. When a node has no children, it is called a preterminal
-// node.
+// interminal node (has no terminal). When a node has no children, it is called
+// a preterminal node (has a terminal):
 class Node {
 public:
-    // Creates a tree node with the given nonterminal and terminal information.
-    // If the node is not a terminal node, "" and -1 should be passed for the
-    // terminal string and number.
+    // Creates a node with nonterminal and terminal strings.
+    Node(const string &nonterminal_string, const string &terminal_string) :
+	nonterminal_string_(nonterminal_string),
+	terminal_string_(terminal_string) { }
+
+    // Creates a node with nonterminal and terminal IDs.
+    Node(Nonterminal nonterminal_number, Terminal terminal_number) :
+	nonterminal_number_(nonterminal_number),
+	terminal_number_(terminal_number) { }
+
+    // Creates a tree node with nonterminal terminal strings/IDs.
     Node(const string &nonterminal_string, const string &terminal_string,
 	 Nonterminal nonterminal_number, Terminal terminal_number) :
 	nonterminal_string_(nonterminal_string),
@@ -34,15 +42,11 @@ public:
 	nonterminal_number_(nonterminal_number),
 	terminal_number_(terminal_number) { }
 
-    Node(const string &nonterminal_string, const string &terminal_string) :
-	nonterminal_string_(nonterminal_string),
-	terminal_string_(terminal_string) { }
-
-    Node(Nonterminal nonterminal_number, Terminal terminal_number) :
-	nonterminal_number_(nonterminal_number),
-	terminal_number_(terminal_number) { }
-
     ~Node() { }
+
+    // Deletes the node and all its descendent nodes. This must be called once
+    // a new node object is no longer needed to avoid a memory leak.
+    void DeleteSelfAndDescendents() { DeleteSelfAndDescendents(this); }
 
     // Returns true if this node is a root.
     bool IsRoot() { return parent_ == nullptr; }
@@ -56,9 +60,6 @@ public:
     // Returns a copy of this node (applicable only for roots).
     Node *Copy();
 
-    // Deletes the node and all its descendent nodes.
-    void DeleteSelfAndDescendents() { DeleteSelfAndDescendents(this); }
-
     // Appends the given node to the children vector to the right.
     void AppendToChildren(Node *child);
 
@@ -69,10 +70,10 @@ public:
     void Preterminals(vector<string> *preterminal_strings);
 
     // Returns the number of children nodes.
-    int NumChildren() { return children_.size(); }
+    size_t NumChildren() { return children_.size(); }
 
     // Returns the i-th child node.
-    Node *Child(int i);
+    Node *Child(size_t i);
 
     // Returns the parent node.
     Node *parent() { return parent_; }
@@ -92,13 +93,13 @@ public:
     // Returns the numeric identity of the terminal string of this node.
     Terminal terminal_number() { return terminal_number_; }
 
-    // Returns the child index of this node.
+    // Returns the child index of this node (-1 if not a child).
     int child_index() { return child_index_; }
 
-    // Returns the position of the first leaf this node spans.
+    // Returns the position of the first leaf this node spans (-1 if no span).
     int span_begin() { return span_begin_; }
 
-    // Returns the position of the last leaf this node spans.
+    // Returns the position of the last leaf this node spans (-1 if no span).
     int span_end() { return span_end_; }
 
     // Sets the nonterminal string of this node.
@@ -143,8 +144,8 @@ public:
 
     // Binarizes the derivation (+ vertical/horizontal Markovization).
     void Binarize(string binarization_method,
-		  int vertical_markovization_order,
-		  int horizontal_markovization_order);
+		  size_t vertical_markovization_order,
+		  size_t horizontal_markovization_order);
 
     // Recovers the original derivation from binarization.
     void Debinarize();
@@ -161,8 +162,8 @@ public:
 
     // Processes the tree to Chomsky normal form.
     void ProcessToChomskyNormalForm(string binarization_method,
-				    int vertical_markovization_order,
-				    int horizontal_markovization_order);
+				    size_t vertical_markovization_order,
+				    size_t horizontal_markovization_order);
 
     // Recovers the original tree from Chomsky normal form transformation.
     void RecoverFromChomskyNormalForm();
@@ -179,7 +180,7 @@ private:
     void DeleteSelfAndDescendents(Node *node);
 
     // Deletes the i-th child node.
-    void DeleteChild(int i);
+    void DeleteChild(size_t i);
 
     // Delete all descendent nodes.
     void DeleteAllDescendents();
@@ -206,8 +207,7 @@ private:
     // Parent Node.
     Node *parent_ = nullptr;
 
-    // Index of this node in the children vector of its parent (stays -1 if it
-    // has no parent).
+    // Index of this node in the children vector (-1 if not a child).
     int child_index_ = -1;
 
     // Position of the first leaf this node spans (-1 if no span).
@@ -250,7 +250,7 @@ public:
     TreeSet *Copy();
 
     // Evalutes against the given gold trees.
-    void EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
+    void EvaluateAgainstGold(TreeSet *gold_trees, size_t *num_skipped,
 			     double *precision, double *recall,
 			     double *f1_score, double *tagging_accuracy);
 
@@ -258,19 +258,19 @@ public:
     void AddTree(Node *tree) { trees_.push_back(tree); }
 
     // Returns the number of trees.
-    int NumTrees() { return trees_.size(); }
+    size_t NumTrees() { return trees_.size(); }
 
     // Returns the i-th tree.
-    Node *Tree(int i);
+    Node *Tree(size_t i);
 
     // Returns the number of interminal types.
-    int NumInterminalTypes();
+    size_t NumInterminalTypes();
 
     // Returns the number of preterminal types.
-    int NumPreterminalTypes();
+    size_t NumPreterminalTypes();
 
     // Returns the number of terminal types.
-    int NumTerminalTypes();
+    size_t NumTerminalTypes();
 
     // Writes all tree strings to a file (tree per line).
     void Write(string file_path);
@@ -281,8 +281,8 @@ public:
 
     // Processes the tree set to Chomsky normal form.
     void ProcessToChomskyNormalForm(string binarization_method,
-				    int vertical_markovization_order,
-				    int horizontal_markovization_order);
+				    size_t vertical_markovization_order,
+				    size_t horizontal_markovization_order);
 
     // Recovers the original tree set from Chomsky normal form transformation.
     void RecoverFromChomskyNormalForm();
@@ -292,9 +292,9 @@ public:
 
 private:
     // Counts interminal/preterminal/observation types occurring in the trees.
-    void CountTypes(unordered_map<string, int> *interminal_count,
-		    unordered_map<string, int> *preterminal_count,
-		    unordered_map<string, int> *observation_count);
+    void CountTypes(unordered_map<string, size_t> *interminal_count,
+		    unordered_map<string, size_t> *preterminal_count,
+		    unordered_map<string, size_t> *observation_count);
 
     // Trees in this tree set.
     vector<Node *> trees_;
@@ -335,7 +335,7 @@ public:
     ~TerminalSequence() { }
 
     // Returns the length of the sequence.
-    int Length() { return terminal_strings_.size(); }
+    size_t Length() { return terminal_strings_.size(); }
 
     // Returns the string form of the sequence.
     string ToString();
@@ -352,16 +352,16 @@ public:
     }
 
     // Returns the i-th terminal string.
-    string TerminalString(int i) { return terminal_strings_[i]; }
+    string TerminalString(size_t i) { return terminal_strings_[i]; }
 
     // Returns the i-th terminal number.
-    Terminal TerminalNumber(int i) { return terminal_numbers_[i]; }
+    Terminal TerminalNumber(size_t i) { return terminal_numbers_[i]; }
 
     // Returns the i-th preterminal string.
-    string PreterminalString(int i) { return preterminal_strings_[i]; }
+    string PreterminalString(size_t i) { return preterminal_strings_[i]; }
 
     // Returns the i-th preterminal number.
-    Nonterminal PreterminalNumber(int i) { return preterminal_numbers_[i]; }
+    Nonterminal PreterminalNumber(size_t i) { return preterminal_numbers_[i]; }
 
 private:
     // Adjusts preterminal vectors to have the same length as terminal vectors.
@@ -397,10 +397,10 @@ public:
     }
 
     // Returns the number of terminal sequences in this set.
-    int NumSequences() { return terminal_sequences_.size(); }
+    size_t NumSequences() { return terminal_sequences_.size(); }
 
     // Returns the i-th terminal sequence.
-    TerminalSequence *Sequence(int i) { return terminal_sequences_[i]; }
+    TerminalSequence *Sequence(size_t i) { return terminal_sequences_[i]; }
 
 private:
     // Terminal sequences.

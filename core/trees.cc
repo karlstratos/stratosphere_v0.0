@@ -7,6 +7,13 @@
 
 #include "util.h"
 
+void Node::DeleteSelfAndDescendents(Node *node) {
+    for (Node *child : node->children_) {
+	DeleteSelfAndDescendents(child);
+    }
+    delete node;
+}
+
 bool Node::Compare(Node *node) {
     ASSERT(IsRoot() && node->IsRoot(),
 	   "Comparing non-root nodes is not permitted!");
@@ -66,9 +73,9 @@ void Node::Preterminals(vector<string> *preterminal_strings) {
     }
 }
 
-Node *Node::Child(int i) {
-    ASSERT(i >= 0 && i < NumChildren(),
-	   "Children index out of bound: " << i << " / " << NumChildren());
+Node *Node::Child(size_t i) {
+    ASSERT(i < NumChildren(), "Children index out of bound: " << i << " / "
+	   << NumChildren());
     return children_[i];
 }
 
@@ -82,7 +89,7 @@ string Node::ToString() {
 	}
     } else {
 	string children_string = "";
-	for (int i = 0; i < NumChildren(); ++i) {
+	for (size_t i = 0; i < NumChildren(); ++i) {
 	    children_string += Child(i)->ToString();
 	    if (i < NumChildren() - 1) children_string += " ";
 	}
@@ -182,8 +189,8 @@ void Node::AddRootNode() {
 }
 
 void Node::Binarize(string binarization_method,
-		    int vertical_markovization_order,
-		    int horizontal_markovization_order) {
+		    size_t vertical_markovization_order,
+		    size_t horizontal_markovization_order) {
     // Make sure the special strings are absent.
     ASSERT(!AppearsInDerivedNonterminalString(kGivenString_) &&
 	   !AppearsInDerivedNonterminalString(kUpString_) &&
@@ -204,9 +211,9 @@ void Node::Binarize(string binarization_method,
 
 	    // Only collect nonterminal strings up to Markovization.
 	    string decoration;
-	    int num_vertical_labels =min(vertical_markovization_order,
-					 int(markovized_strings.size()));
-	    for (int i = 0; i < num_vertical_labels; ++i) {
+	    size_t num_vertical_labels =min(vertical_markovization_order,
+					    size_t(markovized_strings.size()));
+	    for (size_t i = 0; i < num_vertical_labels; ++i) {
 		decoration += markovized_strings[i];
 		if (i < num_vertical_labels - 1) { decoration += kUpString_; }
 	    }
@@ -232,7 +239,7 @@ void Node::Binarize(string binarization_method,
 		//        A
 		//     / | \ \
 		//    B (C  D E)
-		for (int i = 1; i < node->NumChildren(); ++i) {
+		for (size_t i = 1; i < node->NumChildren(); ++i) {
 		    shifted_children.push_back(node->Child(i));
 		}
 		unshifted_child = node->Child(0);
@@ -240,7 +247,7 @@ void Node::Binarize(string binarization_method,
 		//         A
 		//      / /| \
 		//    (B C D) E
-		for (int i = 0; i < node->NumChildren() - 1; ++i) {
+		for (size_t i = 0; i < node->NumChildren() - 1; ++i) {
 		    shifted_children.push_back(node->Child(i));
 		}
 		unshifted_child = node->Child(node->NumChildren() - 1);
@@ -262,9 +269,12 @@ void Node::Binarize(string binarization_method,
 					     &markovized_strings);
 
 		// Only collect nonterminal strings up to Markovization.
-		for (int i = max(0, (int) markovized_strings.size() -
-				 horizontal_markovization_order + 1);
-		     i < (int) markovized_strings.size(); ++i) {
+		size_t start_index = (markovized_strings.size() + 1 >=
+				      horizontal_markovization_order) ?
+		    markovized_strings.size() + 1  // Put +1 room for incoming.
+		    - horizontal_markovization_order : 0;
+		for (size_t i = start_index; i < markovized_strings.size();
+		     ++i) {
 		    artificial_node_label +=
 			markovized_strings[i] + kChainString_;
 		}
@@ -347,7 +357,7 @@ void Node::Debinarize() {
 		    //   B    C
 
 		    vector<Node *> nonfirst_nodes;
-		    for (int i = 1; i < node->parent()->NumChildren(); ++i) {
+		    for (size_t i = 1; i < node->parent()->NumChildren(); ++i) {
 			nonfirst_nodes.push_back(node->parent()->Child(i));
 		    }
 		    node->parent()->children_.resize(0);
@@ -464,8 +474,8 @@ void Node::ProcessToStandardForm() {
 }
 
 void Node::ProcessToChomskyNormalForm(string binarization_method,
-				      int vertical_markovization_order,
-				      int horizontal_markovization_order) {
+				      size_t vertical_markovization_order,
+				      size_t horizontal_markovization_order) {
     Binarize(binarization_method, vertical_markovization_order,
 	     horizontal_markovization_order);
     CollapseUnaryProductions();
@@ -483,7 +493,7 @@ bool Node::Compare(Node *node1, Node *node2) {
     }
 
     // If they do, they must have the same number of children.
-    int num_children = node1->NumChildren();
+    size_t num_children = node1->NumChildren();
     if (node2->NumChildren() != num_children) { return false; }
 
     if (num_children == 0) {
@@ -491,7 +501,7 @@ bool Node::Compare(Node *node1, Node *node2) {
 	return (node1->terminal_string_ == node2->terminal_string_);
     } else {
 	// If they are both interminals, compare their children nodes.
-	for (int i = 0; i < num_children; ++i) {
+	for (size_t i = 0; i < num_children; ++i) {
 	    if (!Compare(node1->Child(i), node2->Child(i))) { return false; }
 	}
 	return true;
@@ -510,15 +520,8 @@ Node *Node::Copy(Node *node) {
     return new_node;
 }
 
-void Node::DeleteSelfAndDescendents(Node *node) {
-    for (Node *child : node->children_) {
-	DeleteSelfAndDescendents(child);
-    }
-    delete node;
-}
-
-void Node::DeleteChild(int i) {
-    ASSERT(i >= 0 && i < NumChildren(), "Children index out of bound!");
+void Node::DeleteChild(size_t i) {
+    ASSERT(i < NumChildren(), "Children index out of bound!");
     children_[i]->DeleteSelfAndDescendents();
     children_.erase(children_.begin() + i);
 }
@@ -556,7 +559,7 @@ TreeSet *TreeSet::Copy() {
     return copied_trees;
 }
 
-void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
+void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, size_t *num_skipped,
 				  double *precision, double *recall,
 				  double *f1_score, double *tagging_accuracy) {
     ASSERT(NumTrees() == gold_trees->NumTrees(), NumTrees() << " trees against "
@@ -578,7 +581,7 @@ void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
     double num_correct_tags = 0.0;
     *num_skipped = 0;
 
-    for (int tree_num = 0; tree_num < NumTrees(); ++tree_num) {
+    for (size_t tree_num = 0; tree_num < NumTrees(); ++tree_num) {
 	Node *pred_tree = Tree(tree_num);
 	if (pred_tree->IsEmpty()) {  // Empty predicted tree = skipped tree
 	    ++(*num_skipped);
@@ -594,7 +597,7 @@ void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
 	num_tags += pred_terminals.Length();
 
 	// Collect all nonterminal spans in the gold tree.
-	unordered_map<int, unordered_map<int, unordered_map<string, int> > >
+	unordered_map<int, unordered_map<int, unordered_map<string, size_t> > >
 	    gold_span_count;
 	stack<Node *> dfs_stack;  // Depth-first search (DFS)
 	dfs_stack.push(gold_tree);
@@ -609,7 +612,7 @@ void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
 		++gold_span_count[i][j][a_string];
 		if (node->IsInterminal()) { ++num_gold_brackets; }
 	    }
-	    for (int child_num = 0; child_num < node->NumChildren();
+	    for (size_t child_num = 0; child_num < node->NumChildren();
 		 ++child_num) {
 		dfs_stack.push(node->Child(child_num));
 	    }
@@ -647,7 +650,7 @@ void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
 		    --gold_span_count[i][j][a_string];
 		}
 	    }
-	    for (int child_num = 0; child_num < node->NumChildren();
+	    for (size_t child_num = 0; child_num < node->NumChildren();
 		 ++child_num) {
 		dfs_stack.push(node->Child(child_num));
 	    }
@@ -659,36 +662,38 @@ void TreeSet::EvaluateAgainstGold(TreeSet *gold_trees, int *num_skipped,
     *tagging_accuracy = num_correct_tags / num_tags * 100;
 }
 
-Node *TreeSet::Tree(int i) {
-    ASSERT(i >= 0 && i < NumTrees(),
-	   "Tree index out of bound: " << i << " / " << NumTrees());
+Node *TreeSet::Tree(size_t i) {
+    ASSERT(i < NumTrees(), "Tree index out of bound: " << i << " / "
+	   << NumTrees());
     return trees_[i];
 }
 
-int TreeSet::NumInterminalTypes() {
-    unordered_map<string, int> interminal_count, preterminal_count,
-	terminal_count;
+size_t TreeSet::NumInterminalTypes() {
+    unordered_map<string, size_t> interminal_count;  // Only use this.
+    unordered_map<string, size_t> preterminal_count;
+    unordered_map<string, size_t> terminal_count;
     CountTypes(&interminal_count, &preterminal_count, &terminal_count);
     return interminal_count.size();
 }
 
-int TreeSet::NumPreterminalTypes() {
-    unordered_map<string, int> interminal_count, preterminal_count,
-	terminal_count;
+size_t TreeSet::NumPreterminalTypes() {
+    unordered_map<string, size_t> interminal_count;
+    unordered_map<string, size_t> preterminal_count;  // Only use this.
+    unordered_map<string, size_t> terminal_count;
     CountTypes(&interminal_count, &preterminal_count, &terminal_count);
     return preterminal_count.size();
 }
 
-int TreeSet::NumTerminalTypes() {
-    unordered_map<string, int> interminal_count, preterminal_count,
-	terminal_count;
+size_t TreeSet::NumTerminalTypes() {
+    unordered_map<string, size_t> interminal_count;
+    unordered_map<string, size_t> preterminal_count;
+    unordered_map<string, size_t> terminal_count;  // Only use this.
     CountTypes(&interminal_count, &preterminal_count, &terminal_count);
     return terminal_count.size();
 }
 
 void TreeSet::Write(string file_path) {
-    ofstream file;
-    file.open(file_path);
+    ofstream file(file_path, ios::out);
     for (Node *tree : trees_) { file << tree->ToString() << endl; }
     file.close();
 }
@@ -697,9 +702,9 @@ void TreeSet::ProcessToStandardForm() {
     for (Node *tree : trees_) { tree->ProcessToStandardForm(); }
 }
 
-void TreeSet::ProcessToChomskyNormalForm(string binarization_method,
-					 int vertical_markovization_order,
-					 int horizontal_markovization_order) {
+void TreeSet::ProcessToChomskyNormalForm(
+    string binarization_method, size_t vertical_markovization_order,
+    size_t horizontal_markovization_order) {
     for (Node *tree : trees_) {
 	tree->ProcessToChomskyNormalForm(binarization_method,
 					 vertical_markovization_order,
@@ -713,8 +718,7 @@ void TreeSet::RecoverFromChomskyNormalForm() {
 
 void TreeSet::ReadTreesFromFile(const string &file_path) {
     ASSERT(trees_.empty(), "Trying to read trees into a non-empty tree set!");
-    ifstream file;
-    file.open(file_path.c_str());
+    ifstream file(file_path, ios::in);
     ASSERT(file.is_open(), "Cannot open tree data: " << file_path);
 
     TreeReader tree_reader;
@@ -729,13 +733,13 @@ void TreeSet::ReadTreesFromFile(const string &file_path) {
     file.close();
 }
 
-void TreeSet::CountTypes(unordered_map<string, int> *interminal_count,
-			 unordered_map<string, int> *preterminal_count,
-			 unordered_map<string, int> *terminal_count) {
+void TreeSet::CountTypes(unordered_map<string, size_t> *interminal_count,
+			 unordered_map<string, size_t> *preterminal_count,
+			 unordered_map<string, size_t> *terminal_count) {
     interminal_count->clear();
     preterminal_count->clear();
     terminal_count->clear();
-    for (int tree_index = 0; tree_index < NumTrees(); ++tree_index) {
+    for (size_t tree_index = 0; tree_index < NumTrees(); ++tree_index) {
 	stack<Node *> dfs_stack;  // Depth-first search (DFS)
 	Node *root = Tree(tree_index);
         dfs_stack.push(root);
@@ -750,7 +754,7 @@ void TreeSet::CountTypes(unordered_map<string, int> *interminal_count,
 		++(*terminal_count)[node->terminal_string()];
 	    }
 
-	    for (int i = 0; i < node->NumChildren(); ++i) {
+	    for (size_t i = 0; i < node->NumChildren(); ++i) {
 		dfs_stack.push(node->Child(i));
 	    }
 	}
@@ -774,13 +778,13 @@ Node *TreeReader::CreateTreeFromTreeString(const string &tree_string) {
 }
 
 Node *TreeReader::CreateTreeFromTokenSequence(const vector<string> &toks) {
-    int num_left_parentheses = 0;
-    int num_right_parentheses = 0;
+    size_t num_left_parentheses = 0;
+    size_t num_right_parentheses = 0;
     string error_message = "Invalid tree string: ";
     for (const string &tok : toks) { error_message += " " + tok; }
 
     stack<Node *> node_stack;
-    int leaf_num = 0;  // tracks the position of leaf nodes
+    size_t leaf_num = 0;  // tracks the position of leaf nodes
     for (size_t tok_index = 0; tok_index < toks.size(); ++tok_index) {
 	if (toks[tok_index] == "(") {
 	    // We have an opening parenthesis: begin a new subtree.
@@ -900,7 +904,7 @@ TerminalSequence::TerminalSequence(Node *tree) {
 
 string TerminalSequence::ToString() {
     string sequence_string;
-    for (int i = 0; i < Length(); ++i) {
+    for (size_t i = 0; i < Length(); ++i) {
 	sequence_string += TerminalString(i);
 	if (i < Length() - 1) sequence_string += " ";
     }
@@ -915,7 +919,7 @@ void TerminalSequence::AdjustPreterminalVectors() {
 }
 
 TerminalSequences::TerminalSequences(TreeSet *trees) {
-    for (int i = 0; i < trees->NumTrees(); ++i) {
+    for (size_t i = 0; i < trees->NumTrees(); ++i) {
 	Node *tree = trees->Tree(i);
 	TerminalSequence *terminal_sequence = new TerminalSequence(tree);
 	AddSequence(terminal_sequence);
