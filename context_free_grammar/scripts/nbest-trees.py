@@ -6,9 +6,11 @@ This module is used to extract n-best parses from trees. Note that we only use
 import argparse
 from bllipparser import RerankingParser
 from bllipparser.RerankingParser import Tree
+from bllipparser import tokenize
 
 def extract_nbest_from_trees(args):
     """Extracts n-best parses from each tree in a file."""
+    assert(args.len <= 399)  # Hard-coded length restriction.
     parser = RerankingParser.fetch_and_load(args.parser, verbose=False)
     parser.set_parser_options(nbest=args.n)
     with open(args.output_path, "w") as outfile:
@@ -16,16 +18,21 @@ def extract_nbest_from_trees(args):
             num_instances = 0
             num_instances_with_gold = 0
             avg_gold_rank = 0
+
             for line in infile:
                 if not line.strip(): continue
                 gold_tree = Tree.trees_from_string(line)[0]
                 gold_tree.label = args.label
                 gold_tree_string = str(gold_tree)
-                outfile.write(str(gold_tree) + "\n");
+                if len(gold_tree.tokens()) > args.len:
+                    # Somehow the gold tree sentence is longer than what we can
+                    # handle: skip!
+                    continue
+                num_instances += 1
+                outfile.write(gold_tree_string + "\n")
                 sentence = " ".join(gold_tree.tokens())
                 nbest = parser.parse(sentence, rerank=True)
                 num_trees = 1  # Already have the gold tree.
-                nbest_has_gold = False
                 for i, item in enumerate(nbest):
                     if num_trees >= args.n: break
                     tree = item.ptb_parse
@@ -36,14 +43,12 @@ def extract_nbest_from_trees(args):
                         num_trees += 1
                         outfile.write(tree_string + "\n")
                     else:
-                        nbest_has_gold = True
                         avg_gold_rank += i+1
+                        num_instances_with_gold += 1
 
                 outfile.write("\n")
-                num_instances += 1
-                if nbest_has_gold: num_instances_with_gold += 1
 
-            if not args.quiet:
+            if (not args.quiet) and num_instances:
                 print "{0} out of {1} ({2:.1f}%) had gold tree in " \
                     "{3}-best list".format(num_instances_with_gold,
                                            num_instances,
@@ -69,6 +74,9 @@ if __name__ == "__main__":
     argparser.add_argument("--label", type=str, default="TOP",
                            help="label for the top node of a tree "
                            "(default: %(default)s)")
+    argparser.add_argument("--len", type=int, default=399,
+                           help="max sentence length to parse "
+                           "(default: %(default)d)")
     argparser.add_argument("--quiet", action="store_true", help="no messages")
     parsed_args = argparser.parse_args()
     extract_nbest_from_trees(parsed_args)
