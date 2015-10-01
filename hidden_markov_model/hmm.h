@@ -166,6 +166,11 @@ public:
 	cluster_path_ = cluster_path;
     }
 
+    // Sets the path to anchors.
+    void set_anchor_path(string anchor_path) {
+	anchor_path_ = anchor_path;
+    }
+
     // Sets the flag for doing post-training local search.
     void set_post_training_local_search(bool post_training_local_search) {
 	post_training_local_search_ = post_training_local_search;
@@ -392,6 +397,9 @@ private:
 
     // Path to clusters.
     string cluster_path_;
+
+    // Path to anchors.
+    string anchor_path_;
 
     // Do post-training local search?
     bool post_training_local_search_ = true;

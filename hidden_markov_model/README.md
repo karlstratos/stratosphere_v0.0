@@ -1,3 +1,6 @@
+// Quick
+./hmm --model /tmp/anchor --data ../data/sequence_labeling/part_of_speech/universal_treebanks/en/unlabeled/en.dev --rare 5 --train --unsup anchor --states 12 --window 5 --context list --hull brown --add 10 --power 0.5 --cand 100 --dev ../data/sequence_labeling/part_of_speech/universal_treebanks/en/labeled/en-universal-tag.dev --check 1 --lives 3
+
 // Supervised
 ./hmm --model /tmp/sup_hmm --data ../data/sequence_labeling/part_of_speech/universal_treebanks/en/labeled/en-universal-tag.train --rare 5 --train --dev ../data/sequence_labeling/part_of_speech/universal_treebanks/en/labeled/en-universal-tag.dev
 

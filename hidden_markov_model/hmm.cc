@@ -632,6 +632,24 @@ void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
     // obtain the "flipped emission" p(State|Observation).
     Eigen::MatrixXd flipped_emission;
     anchor_observations_.clear();
+    if (!anchor_path_.empty()) {  // User-selected anchors are provided.
+	ifstream anchor_file(anchor_path_, ios::in);
+	ASSERT(anchor_file.is_open(), "Cannot open " << anchor_path_);
+	while (anchor_file.good()) {
+	    vector<string> tokens;
+	    util_file::read_line(&anchor_file, &tokens);
+	    if (tokens.size() == 0) { continue; }
+	    for (string token : tokens) {
+		ASSERT(observation_dictionary_.find(token) !=
+		       observation_dictionary_.end(), "Proposed anchor not in "
+		       "the dictionary: " << token);
+		Observation anchor = observation_dictionary_[token];
+		if (anchor_observations_.size() < NumStates()) {
+		    anchor_observations_.push_back(anchor);
+		}
+	    }
+	}
+    }
 
     // Restrict anchor candidates for anchors to frequent observation types.
     unordered_map<Observation, bool> anchor_candidates;
@@ -645,10 +663,19 @@ void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
     for (size_t i = 0; i < num_anchor_candidates_; ++i) {
 	anchor_candidates[sorted_observations[i].first] = true;
     }
-    optimize::anchor_factorization(convex_hull, NumStates(),
-				   max_num_fw_iterations_, 1e-10, verbose_,
-				   anchor_candidates, &flipped_emission,
-				   &anchor_observations_);
+
+    if (anchor_path_.empty()) {
+	optimize::anchor_factorization(convex_hull, NumStates(),
+				       max_num_fw_iterations_, 1e-10, verbose_,
+				       anchor_candidates, &anchor_observations_,
+				       &flipped_emission);
+    } else {
+	optimize::anchor_factorization(convex_hull, NumStates(),
+				       max_num_fw_iterations_, 1e-10, verbose_,
+				       anchor_candidates, anchor_observations_,
+				       &flipped_emission);
+    }
+
     if (verbose_) {
 	cerr << anchor_observations_.size() << " anchor observations (out of "
 	     << num_anchor_candidates_ << " candidates): " << endl;

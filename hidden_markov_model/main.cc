@@ -28,6 +28,7 @@ int main (int argc, char* argv[]) {
     size_t num_anchor_candidates = 100;
     string development_path;
     string cluster_path;
+    string anchor_path;
     bool post_training_local_search = false;
     string decoding_method = "mbr";
     bool verbose = true;
@@ -81,6 +82,8 @@ int main (int argc, char* argv[]) {
 	    development_path = argv[++i];
 	} else if (arg == "--cluster") {
 	    cluster_path = argv[++i];
+	} else if (arg == "--anchor") {
+	    anchor_path = argv[++i];
 	} else if (arg == "--postmortem" || arg == "-p") {
 	    post_training_local_search = true;
 	} else if (arg == "--decode") {
@@ -144,6 +147,8 @@ int main (int argc, char* argv[]) {
 	     << "path to a development data file" << endl;
 	cout << "--cluster [-]:   \t"
 	     << "path to clusters" << endl;
+	cout << "--anchor [-]:   \t"
+	     << "path to user-selected anchors" << endl;
 	cout << "--postmortem, -p:   \t"
 	     << "do post-training local search?" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
@@ -175,6 +180,7 @@ int main (int argc, char* argv[]) {
     hmm.set_num_anchor_candidates(num_anchor_candidates);
     hmm.set_development_path(development_path);
     hmm.set_cluster_path(cluster_path);
+    hmm.set_anchor_path(anchor_path);
     hmm.set_post_training_local_search(post_training_local_search);
     hmm.set_decoding_method(decoding_method);
     hmm.set_log_path(log_path);

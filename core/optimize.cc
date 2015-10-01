@@ -133,8 +133,8 @@ namespace optimize {
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
 			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, Eigen::MatrixXd *A,
-			      vector<size_t> *anchor_indices) {
+			      &anchor_candidates, vector<size_t>
+			      *anchor_indices, Eigen::MatrixXd *A) {
 	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
 
 	// Identify anchor rows by finding vertices of a convex hull.
@@ -164,13 +164,44 @@ namespace optimize {
 
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
-			      bool verbose, Eigen::MatrixXd *A) {
+			      bool verbose, const unordered_map<size_t, bool>
+			      &anchor_candidates, const vector<size_t>
+			      &anchor_indices, Eigen::MatrixXd *A) {
+	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
+
+	// No need to find anchor rows (given).
+
+	// Organize anchor rows as columns of a matrix.
+	Eigen::MatrixXd anchor_columns(M.cols(), rank);
+	for (size_t i = 0; i < rank; ++i) {
+	    size_t anchor_index = anchor_indices.at(i);
+	    anchor_columns.col(i) = M.row(anchor_index);
+	}
+
+	// Recover each row of A as the convex coefficients for expressing
+	// that row as a combination of anchor rows.
+	A->resize(M.rows(), rank);
+	for (size_t row = 0; row < A->rows(); ++row) {
+	    Eigen::VectorXd convex_anchor_combination = M.row(row);
+	    Eigen::VectorXd convex_coefficients;
+	    compute_convex_coefficients_squared_loss(
+		anchor_columns, convex_anchor_combination, max_num_updates,
+		stopping_threshold, verbose, &convex_coefficients);
+	    (*A).row(row) = convex_coefficients;
+	    if (verbose) { cerr << row + 1 << "/" << A->rows() << "    "; }
+	}
+	if (verbose) { cerr << endl; }
+    }
+
+    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
+			      size_t max_num_updates, double stopping_threshold,
+			      bool verbose, vector<size_t> *anchor_indices,
+			      Eigen::MatrixXd *A) {
 	unordered_map<size_t, bool> anchor_candidates;
 	for (size_t row = 0; row < M.rows(); ++row) {
 	    anchor_candidates[row] = true;  // Consider all rows for anchors.
 	}
-	vector<size_t> anchor_indices;
 	anchor_factorization(M, rank, max_num_updates, stopping_threshold,
-			     verbose, anchor_candidates, A, &anchor_indices);
+			     verbose, anchor_candidates, anchor_indices, A);
     }
 }  // namespace optimize

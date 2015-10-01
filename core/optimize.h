@@ -46,13 +46,21 @@ namespace optimize {
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
 			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, Eigen::MatrixXd *A,
-			      vector<size_t> *anchor_indices);
+			      &anchor_candidates, vector<size_t>
+			      *anchor_indices, Eigen::MatrixXd *A);
+
+    // Anchor factorization with anchor indices given.
+    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
+			      size_t max_num_updates, double stopping_threshold,
+			      bool verbose, const unordered_map<size_t, bool>
+			      &anchor_candidates, const vector<size_t>
+			      &anchor_indices, Eigen::MatrixXd *A);
 
     // Anchor factorization without anchor candidate restriction.
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
-			      bool verbose, Eigen::MatrixXd *A);
+			      bool verbose, vector<size_t> *anchor_indices,
+			      Eigen::MatrixXd *A);
 }  // namespace optimize
 
 #endif  // CORE_OPTIMIZE_H_

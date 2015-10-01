@@ -86,9 +86,11 @@ protected:
 
 // Checks if the anchor factorization algorithm correctly recovers the A matrix.
 TEST_F(AnchorFactorization, CorrectlyRecoverA) {
+    vector<size_t> anchor_indices;
     Eigen::MatrixXd recovered_A;
     optimize::anchor_factorization(M_, rank_, max_num_updates_,
-				   stopping_threshold_, verbose_, &recovered_A);
+				   stopping_threshold_, verbose_,
+				   &anchor_indices, &recovered_A);
     for (size_t row = 0; row < A_.rows(); ++row) {
 	for (size_t column = 0; column < A_.cols(); ++column) {
 	    EXPECT_NEAR(A_(row, column), recovered_A(row, column), tol_);
