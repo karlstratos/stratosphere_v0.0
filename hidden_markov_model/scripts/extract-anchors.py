@@ -54,7 +54,7 @@ def extract_anchors(args):
                 print ">>>>>>>>>>Skipping ", tag
 
     output_path = args.output_path if args.output_path else \
-        args.input_path + ".anchors"
+        args.input_path + ".anchors-min" + str(args.cutoff)
     with open(output_path, "w") as outfile:
         for anchor in final_anchor_list:
             outfile.write(anchor + "\n")
