@@ -137,6 +137,35 @@ TEST_F(EigenHelper, FindMatrixRange) {
     }
 }
 
+// Checks PCA.
+TEST_F(EigenHelper, ComputePCA) {
+    // The "line-in-plane" example.
+    Eigen::MatrixXd example(3, 2);
+    example(0,0) = -1.0;
+    example(0,1) = 1.0;
+    example(1,0) = 0.0;
+    example(1,1) = 1.0;
+    example(2,0) = 1.0;
+    example(2,1) = 1.0;
+
+    Eigen::MatrixXd rotated_sample_rows;
+    Eigen::MatrixXd rotation_matrix;
+    Eigen::VectorXd variances;
+    eigen_helper::compute_pca(example, &rotated_sample_rows,
+			      &rotation_matrix, &variances);
+
+    Eigen::MatrixXd eye = Eigen::MatrixXd::Identity(2, 2);
+    ASSERT_TRUE(eigen_helper::check_near(rotation_matrix, eye, tol_));
+    EXPECT_NEAR(rotated_sample_rows(0, 0), -1.0, tol_);
+    EXPECT_NEAR(rotated_sample_rows(0, 1), 0.0, tol_);
+    EXPECT_NEAR(rotated_sample_rows(1, 0), 0.0, tol_);
+    EXPECT_NEAR(rotated_sample_rows(1, 1), 0.0, tol_);
+    EXPECT_NEAR(rotated_sample_rows(2, 0), 1.0, tol_);
+    EXPECT_NEAR(rotated_sample_rows(2, 1), 0.0, tol_);
+    EXPECT_NEAR(variances(0), 1.0, tol_);
+    EXPECT_NEAR(variances(1), 0.0, tol_);
+}
+
 // Checks the matrix comparison function.
 TEST(Miscellaneous, CheckNearDenseMatrices) {
     double error_threshold = 1e-10;

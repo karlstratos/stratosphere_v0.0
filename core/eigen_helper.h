@@ -81,6 +81,13 @@ namespace eigen_helper {
     void find_range(const Eigen::MatrixXd &matrix,
 		    Eigen::MatrixXd *orthonormal_basis);
 
+    // Computes principal component analysis (PCA). The format of the input
+    // matrix is: rows = samples, columns = dimensions.
+    void compute_pca(const Eigen::MatrixXd &original_sample_rows,
+		     Eigen::MatrixXd *rotated_sample_rows,
+		     Eigen::MatrixXd *rotation_matrix,
+		     Eigen::VectorXd *variances);
+
     // Generates a random projection matrix.
     void generate_random_projection(size_t original_dimension,
 				    size_t reduced_dimension,

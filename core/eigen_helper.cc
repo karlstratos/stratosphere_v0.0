@@ -53,6 +53,34 @@ namespace eigen_helper {
 	}
     }
 
+    void compute_pca(const Eigen::MatrixXd &original_sample_rows,
+		     Eigen::MatrixXd *rotated_sample_rows,
+		     Eigen::MatrixXd *rotation_matrix,
+		     Eigen::VectorXd *variances) {
+	// Center each dimension (column).
+	Eigen::MatrixXd centered = original_sample_rows;
+	Eigen::VectorXd averages = centered.colwise().sum() / centered.rows();
+	for (size_t i = 0; i < centered.cols(); ++i) {
+	    Eigen::VectorXd average_column =
+		Eigen::VectorXd::Constant(centered.rows(), averages(i));
+	    centered.col(i) -= average_column;
+	}
+
+	// Perform SVD.
+	Eigen::JacobiSVD<Eigen::MatrixXd> svd(centered, Eigen::ComputeThinU |
+					      Eigen::ComputeThinV);
+
+	// Set values.
+	*rotated_sample_rows =
+	    svd.matrixU() * svd.singularValues().asDiagonal();
+	*rotation_matrix = svd.matrixV();
+	(*variances).resize(svd.singularValues().size());
+	for (size_t i = 0; i < svd.singularValues().size(); ++i) {
+	    (*variances)(i) =
+		pow(svd.singularValues()(i), 2) / (centered.rows() - 1);
+	}
+    }
+
     void generate_random_projection(size_t original_dimension,
 				    size_t reduced_dimension,
 				    Eigen::MatrixXd *projection_matrix) {
