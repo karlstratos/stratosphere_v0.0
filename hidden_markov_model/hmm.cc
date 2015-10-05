@@ -7,6 +7,7 @@
 #include <numeric>
 #include <random>
 
+#include "../core/cluster.h"
 #include "../core/eigen_helper.h"
 #include "../core/evaluate.h"
 #include "../core/features.h"
@@ -625,33 +626,37 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
     }
 }
 
-void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
-					const unordered_map<Observation, size_t>
-					&observation_count) {
-    // First, perform anchor factorization on the convex hull matrix to
-    // obtain the "flipped emission" p(State|Observation).
-    Eigen::MatrixXd flipped_emission;
+void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
+		      const unordered_map<Observation, size_t>
+		      &observation_count, size_t num_anchors) {
     anchor_observations_.clear();
+    if (verbose_) { cerr << "Obtaining " << num_anchors << " anchors "; }
 
-    // Restrict anchor candidates for anchors to frequent observation types.
-    unordered_map<Observation, bool> anchor_candidates;
-    vector<pair<Observation, size_t> > sorted_observations;
-    for (const auto &observation_pair : observation_count) {
-	sorted_observations.emplace_back(observation_pair.first,
-					 observation_pair.second);
-    }
-    sort(sorted_observations.begin(), sorted_observations.end(),
-         util_misc::sort_pairs_second<Observation, size_t, greater<size_t> >());
-    for (size_t i = 0; i < num_anchor_candidates_; ++i) {
-	anchor_candidates[sorted_observations[i].first] = true;
-    }
+    if (anchor_path_.empty()) {
+	size_t num_candidates = (num_anchor_candidates_ >= num_anchors) ?
+	    num_anchor_candidates_ : num_anchors;
+	if (verbose_) {
+	    cerr << "(" << num_candidates << " candidates): " << endl;
+	}
+	unordered_map<Observation, bool> anchor_candidates;
 
-    if (anchor_path_.empty()) {  // Unsupervised anchor induction.
-	optimize::anchor_factorization(convex_hull, NumStates(),
-				       max_num_fw_iterations_, 1e-10, verbose_,
-				       anchor_candidates, &anchor_observations_,
-				       &flipped_emission);
-    } else {  // Will use manually provided anchors.
+	// Will consider only frequent observation types for anchors.
+	vector<pair<Observation, size_t> > sorted_observations;
+	for (const auto &observation_pair : observation_count) {
+	    sorted_observations.emplace_back(observation_pair.first,
+					     observation_pair.second);
+	}
+	sort(sorted_observations.begin(), sorted_observations.end(),
+	     util_misc::sort_pairs_second<Observation, size_t,
+	     greater<size_t> >());
+	for (size_t i = 0; i < num_candidates; ++i) {
+	    anchor_candidates[sorted_observations[i].first] = true;
+	}
+	optimize::find_vertex_rows(convex_hull, num_anchors, anchor_candidates,
+				   &anchor_observations_);
+    } else {
+	if (verbose_) { cerr << "(provided by the user)" << endl; }
+
 	ifstream anchor_file(anchor_path_, ios::in);
 	ASSERT(anchor_file.is_open(), "Cannot open " << anchor_path_);
 	while (anchor_file.good()) {
@@ -663,32 +668,85 @@ void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
 		       observation_dictionary_.end(), "Proposed anchor not in "
 		       "the dictionary: " << token);
 		Observation anchor = observation_dictionary_[token];
-		if (anchor_observations_.size() < NumStates()) {
+		if (anchor_observations_.size() < num_anchors) {
 		    anchor_observations_.push_back(anchor);
 		}
 	    }
 	}
-	// Pass anchors to the factorization function.
-	optimize::anchor_factorization(convex_hull, NumStates(),
-				       max_num_fw_iterations_, 1e-10, verbose_,
-				       anchor_candidates, anchor_observations_,
-				       &flipped_emission);
+	ASSERT(anchor_observations_.size() == num_anchors, "Need "
+	       << num_anchors << ", given " << anchor_observations_.size());
     }
 
     if (verbose_) {
-	cerr << anchor_observations_.size() << " anchor observations ";
-	if (anchor_path_.empty()) {
-	    cerr << "(out of " << num_anchor_candidates_ << " candidates): "
-		 << endl;
-	} else {
-	    cerr << "(provided by the user)" << endl;
-	}
 	for (size_t i = 0; i < anchor_observations_.size(); ++i) {
 	    cerr << "   State " << i + 1 << ": \""
 		 << observation_dictionary_inverse_[anchor_observations_[i]]
 		 << "\"" << endl;
 	}
     }
+}
+
+// TODO: Start from here.
+void HMM::ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
+				 const unordered_map<Observation, size_t>
+				 &observation_count,
+				 Eigen::MatrixXd *flipped_emission) {
+    ASSERT(anchor_observations_.size() > 0, "Anchors need to be established");
+    Eigen::MatrixXd flipped_emission_oversampled;
+    optimize::extract_matrix(convex_hull, anchor_observations_.size(),
+			     max_num_fw_iterations_, 1e-10, verbose_,
+			     anchor_observations_,
+			     &flipped_emission_oversampled);
+
+    *flipped_emission = Eigen::MatrixXd::Zero(convex_hull.rows(), NumStates());
+    if (anchor_observations_.size() > NumStates()) {
+	vector<pair<Observation, size_t> > sorted_anchors;
+	for (const auto &anchor : anchor_observations_) {
+	    sorted_anchors.emplace_back(anchor, observation_count.at(anchor));
+	}
+	sort(sorted_anchors.begin(), sorted_anchors.end(),
+	     util_misc::sort_pairs_second<Observation, size_t,
+	     greater<size_t> >());
+	vector<Eigen::VectorXd> sorted_anchor_vectors;
+	for (size_t i = 0; i < sorted_anchors.size(); ++i) {
+	    /*
+	    cerr << observation_dictionary_inverse_[sorted_anchors[i].first]
+		 << " " << sorted_anchors[i].second << endl;
+	    */
+	    sorted_anchor_vectors.push_back(
+		convex_hull.row(sorted_anchors[i].first));
+	}
+
+	AgglomerativeClustering cluster;
+	cluster.ClusterOrderedVectors(sorted_anchor_vectors, NumStates());
+	for (const auto &bitstring_pair : *cluster.leaves()) {
+	    vector<size_t> indices = bitstring_pair.second;
+	    for (size_t index : indices) {
+		cerr << observation_dictionary_inverse_[
+		    sorted_anchors[index].first] << " ";
+	    }
+	    cerr << endl;
+	}
+
+	for (size_t i = 0; i < NumStates(); ++i) {  // Change
+	    (*flipped_emission).col(i) = flipped_emission_oversampled.col(i);
+	}
+    } else {
+	*flipped_emission = flipped_emission_oversampled;
+    }
+}
+
+void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
+					const unordered_map<Observation, size_t>
+					&observation_count) {
+    // Populate anchor_observations_.
+    ASSERT(oversample_ >= 1, "Bad oversampling parameter: " << oversample_);
+    size_t num_anchors = ceil(oversample_ * NumStates());  // Oversampling.
+    FindAnchors(convex_hull, observation_count, num_anchors);
+
+    // Given anchors, compute the "flipped emission" p(State|Observation).
+    Eigen::MatrixXd flipped_emission;
+    ComputeFlippedEmission(convex_hull, observation_count, &flipped_emission);
 
     // Next, recover the actual emission parameters from the flipped emission
     // parameters with the Bayes rule.

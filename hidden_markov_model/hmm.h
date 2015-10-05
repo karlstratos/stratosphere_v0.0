@@ -156,6 +156,9 @@ public:
 	extension_weight_ = extension_weight;
     }
 
+    // Sets the oversampling parameter.
+    void set_oversample(size_t oversample) { oversample_ = oversample; }
+
     // Sets the path to development data.
     void set_development_path(string development_path) {
 	development_path_ = development_path;
@@ -209,6 +212,17 @@ private:
     void ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 			    unordered_map<Context, unordered_map<Observation,
 			    double> > *context_observation_count);
+
+    // Populate anchor_observations_.
+    void FindAnchors(const Eigen::MatrixXd &convex_hull,
+		     const unordered_map<Observation, size_t>
+		     &observation_count, size_t num_anchors);
+
+    // Given anchors, compute the "flipped emission" p(State|Observation).
+    void ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
+				const unordered_map<Observation, size_t>
+				&observation_count,
+				Eigen::MatrixXd *flipped_emission);
 
     // Recover emission parameters by decomposing a convex hull of observation
     // vectors.
@@ -391,6 +405,9 @@ private:
 
     // Weight for new context features v: weight * ||u|| = ||v|| (l2 norm).
     double extension_weight_ = 1.0;
+
+    // Oversampling parameter.
+    size_t oversample_ = 1;
 
     // Path to development data.
     string development_path_;

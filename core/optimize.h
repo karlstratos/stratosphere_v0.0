@@ -22,6 +22,13 @@ namespace optimize {
 			  const unordered_map<size_t, bool> &vertex_candidates,
 			  vector<size_t> *vertex_indices);
 
+    // Given vertex rows, extract each row of A as convex coefficients
+    // (M=AB, see below).
+    void extract_matrix(const Eigen::MatrixXd &M, size_t rank,
+			size_t max_num_updates, double stopping_threshold,
+			bool verbose, const vector<size_t>
+			&vertex_indices, Eigen::MatrixXd *A);
+
     // Performs a special case of nonnegative matrix factorization (NMF) based
     // on the combinatorial method of Arora et al. (2012). Recovers A given
     // M=AB (d x d') where A (d x m) and B (m x d') are rank-m matrices.
@@ -52,8 +59,7 @@ namespace optimize {
     // Anchor factorization with anchor indices given.
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
-			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, const vector<size_t>
+			      bool verbose, const vector<size_t>
 			      &anchor_indices, Eigen::MatrixXd *A);
 
     // Anchor factorization without anchor candidate restriction.

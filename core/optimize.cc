@@ -130,31 +130,24 @@ namespace optimize {
 	sort(vertex_indices->begin(), vertex_indices->end());
     }
 
-    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
-			      size_t max_num_updates, double stopping_threshold,
-			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, vector<size_t>
-			      *anchor_indices, Eigen::MatrixXd *A) {
-	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
-
-	// Identify anchor rows by finding vertices of a convex hull.
-	find_vertex_rows(M, rank, anchor_candidates, anchor_indices);
-
-	// Organize anchor rows as columns of a matrix.
-	Eigen::MatrixXd anchor_columns(M.cols(), rank);
+    void extract_matrix(const Eigen::MatrixXd &M, size_t rank,
+			size_t max_num_updates, double stopping_threshold,
+			bool verbose, const vector<size_t>
+			&vertex_indices, Eigen::MatrixXd *A) {
+	// Organize vertex rows as columns of a matrix.
+	Eigen::MatrixXd vertex_columns(M.cols(), rank);
 	for (size_t i = 0; i < rank; ++i) {
-	    size_t anchor_index = (*anchor_indices)[i];
-	    anchor_columns.col(i) = M.row(anchor_index);
+	    vertex_columns.col(i) = M.row(vertex_indices.at(i));
 	}
 
 	// Recover each row of A as the convex coefficients for expressing
-	// that row as a combination of anchor rows.
+	// that row as a combination of vertex rows.
 	A->resize(M.rows(), rank);
 	for (size_t row = 0; row < A->rows(); ++row) {
-	    Eigen::VectorXd convex_anchor_combination = M.row(row);
+	    Eigen::VectorXd convex_combination = M.row(row);
 	    Eigen::VectorXd convex_coefficients;
 	    compute_convex_coefficients_squared_loss(
-		anchor_columns, convex_anchor_combination, max_num_updates,
+		vertex_columns, convex_combination, max_num_updates,
 		stopping_threshold, verbose, &convex_coefficients);
 	    (*A).row(row) = convex_coefficients;
 	    if (verbose) { cerr << row + 1 << "/" << A->rows() << "    "; }
@@ -165,32 +158,27 @@ namespace optimize {
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
 			      size_t max_num_updates, double stopping_threshold,
 			      bool verbose, const unordered_map<size_t, bool>
-			      &anchor_candidates, const vector<size_t>
+			      &anchor_candidates, vector<size_t>
+			      *anchor_indices, Eigen::MatrixXd *A) {
+	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
+
+	// Identify anchor rows by finding vertices of a convex hull.
+	find_vertex_rows(M, rank, anchor_candidates, anchor_indices);
+
+	// Use the identified anchor rows to extract the sub-component matrix.
+	extract_matrix(M, rank, max_num_updates, stopping_threshold,
+		       verbose, *anchor_indices, A);
+    }
+
+    void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,
+			      size_t max_num_updates, double stopping_threshold,
+			      bool verbose, const vector<size_t>
 			      &anchor_indices, Eigen::MatrixXd *A) {
 	ASSERT(rank <= M.rows() && rank <= M.cols(), "Rank > dimension");
 
-	// No need to find anchor rows (given).
-
-	// Organize anchor rows as columns of a matrix.
-	Eigen::MatrixXd anchor_columns(M.cols(), rank);
-	for (size_t i = 0; i < rank; ++i) {
-	    size_t anchor_index = anchor_indices.at(i);
-	    anchor_columns.col(i) = M.row(anchor_index);
-	}
-
-	// Recover each row of A as the convex coefficients for expressing
-	// that row as a combination of anchor rows.
-	A->resize(M.rows(), rank);
-	for (size_t row = 0; row < A->rows(); ++row) {
-	    Eigen::VectorXd convex_anchor_combination = M.row(row);
-	    Eigen::VectorXd convex_coefficients;
-	    compute_convex_coefficients_squared_loss(
-		anchor_columns, convex_anchor_combination, max_num_updates,
-		stopping_threshold, verbose, &convex_coefficients);
-	    (*A).row(row) = convex_coefficients;
-	    if (verbose) { cerr << row + 1 << "/" << A->rows() << "    "; }
-	}
-	if (verbose) { cerr << endl; }
+	// Use the given anchor rows to extract the sub-component matrix.
+	extract_matrix(M, rank, max_num_updates, stopping_threshold,
+		       verbose, anchor_indices, A);
     }
 
     void anchor_factorization(const Eigen::MatrixXd &M, size_t rank,

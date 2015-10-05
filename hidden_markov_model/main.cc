@@ -22,6 +22,7 @@ int main (int argc, char* argv[]) {
     string context_definition = "list";
     string context_extension = "";
     double extension_weight = 1.0;
+    size_t oversample = 1;
     string convex_hull_method = "svd";
     double add_smooth = 10.0;
     double power_smooth = 0.5;
@@ -70,6 +71,8 @@ int main (int argc, char* argv[]) {
 	    context_extension = argv[++i];
 	} else if (arg == "--extweight") {
 	    extension_weight = stod(argv[++i]);
+	} else if (arg == "--over") {
+	    oversample = stol(argv[++i]);
 	} else if (arg == "--hull") {
 	    convex_hull_method = argv[++i];
 	} else if (arg == "--add") {
@@ -135,6 +138,8 @@ int main (int argc, char* argv[]) {
 	     << "context extensions (separated by ,)"  << endl;
 	cout << "--extweight [" << extension_weight << "]:    \t"
 	     << "relative scaling for extended context features" << endl;
+	cout << "--over [" << oversample << "]:    \t"
+	     << "oversampling of anchors (this * num_states)" << endl;
 	cout << "--hull [" << convex_hull_method << "]:     \t"
 	     << "convex hull method: brown, svd, cca, rand"  << endl;
 	cout << "--add [" << add_smooth << "]:          \t"
@@ -174,6 +179,7 @@ int main (int argc, char* argv[]) {
     hmm.set_context_definition(context_definition);
     hmm.set_context_extension(context_extension);
     hmm.set_extension_weight(extension_weight);
+    hmm.set_oversample(oversample);
     hmm.set_convex_hull_method(convex_hull_method);
     hmm.set_add_smooth(add_smooth);
     hmm.set_power_smooth(power_smooth);
