@@ -686,52 +686,69 @@ void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
     }
 }
 
-// TODO: Start from here.
 void HMM::ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
 				 const unordered_map<Observation, size_t>
 				 &observation_count,
 				 Eigen::MatrixXd *flipped_emission) {
     ASSERT(anchor_observations_.size() > 0, "Anchors need to be established");
+
     Eigen::MatrixXd flipped_emission_oversampled;
     optimize::extract_matrix(convex_hull, anchor_observations_.size(),
 			     max_num_fw_iterations_, 1e-10, verbose_,
 			     anchor_observations_,
 			     &flipped_emission_oversampled);
 
-    *flipped_emission = Eigen::MatrixXd::Zero(convex_hull.rows(), NumStates());
-    if (anchor_observations_.size() > NumStates()) {
-	vector<pair<Observation, size_t> > sorted_anchors;
-	for (const auto &anchor : anchor_observations_) {
-	    sorted_anchors.emplace_back(anchor, observation_count.at(anchor));
+    if (anchor_observations_.size() > NumStates()) {  // Anchors oversampled.
+	*flipped_emission = Eigen::MatrixXd::Zero(convex_hull.rows(),
+						  NumStates());
+	unordered_map<Observation, size_t> anchor_state;
+	vector<pair<Observation, size_t> > anchor_count_sorted;
+	for (size_t i = 0; i < anchor_observations_.size(); ++i) {
+	    Observation anchor = anchor_observations_[i];
+	    anchor_state[anchor] = i;  // anchor observation -> column index
+	    anchor_count_sorted.emplace_back(anchor,
+					     observation_count.at(anchor));
 	}
-	sort(sorted_anchors.begin(), sorted_anchors.end(),
+	sort(anchor_count_sorted.begin(), anchor_count_sorted.end(),
 	     util_misc::sort_pairs_second<Observation, size_t,
 	     greater<size_t> >());
 	vector<Eigen::VectorXd> sorted_anchor_vectors;
-	for (size_t i = 0; i < sorted_anchors.size(); ++i) {
-	    /*
-	    cerr << observation_dictionary_inverse_[sorted_anchors[i].first]
-		 << " " << sorted_anchors[i].second << endl;
-	    */
+	for (size_t i = 0; i < anchor_count_sorted.size(); ++i) {
 	    sorted_anchor_vectors.push_back(
-		convex_hull.row(sorted_anchors[i].first));
+		convex_hull.row(anchor_count_sorted[i].first));
 	}
 
+	// Cluster anchors and merge them:
+	//    P(State1 OR State2|Observation) = P(State1|Observation) +
+	//                                      P(State2|Observation)
 	AgglomerativeClustering cluster;
 	cluster.ClusterOrderedVectors(sorted_anchor_vectors, NumStates());
+	size_t column_index = 0;
+	anchor_observations_.resize(NumStates());
 	for (const auto &bitstring_pair : *cluster.leaves()) {
-	    vector<size_t> indices = bitstring_pair.second;
-	    for (size_t index : indices) {
-		cerr << observation_dictionary_inverse_[
-		    sorted_anchors[index].first] << " ";
+	    Observation representative_anchor;
+	    size_t max_count = 0;
+	    if (verbose_) { cerr << "State " << column_index + 1 << ": "; }
+	    for (size_t index : bitstring_pair.second) {
+		Observation anchor = anchor_count_sorted[index].first;
+		(*flipped_emission).col(column_index)
+		    += flipped_emission_oversampled.col(anchor_state[anchor]);
+		if (anchor_count_sorted[index].second > max_count) {
+		    representative_anchor = anchor;
+		    max_count = anchor_count_sorted[index].second;
+		}
+		if (verbose_) {
+		    cerr << observation_dictionary_inverse_[anchor] << " ";
+		}
 	    }
-	    cerr << endl;
+	    anchor_observations_[column_index] = representative_anchor;
+	    ++column_index;
+	    if (verbose_) {
+		cerr << "   ===>   " << observation_dictionary_inverse_[
+		    representative_anchor] << endl;
+	    }
 	}
-
-	for (size_t i = 0; i < NumStates(); ++i) {  // Change
-	    (*flipped_emission).col(i) = flipped_emission_oversampled.col(i);
-	}
-    } else {
+    } else {  // No oversampling.
 	*flipped_emission = flipped_emission_oversampled;
     }
 }
@@ -831,7 +848,6 @@ void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
 		log_file << line;
 	    }
 	    log_file << endl;
-
 	}
 
 	// For each state (anchor observation), write most likely observations.
