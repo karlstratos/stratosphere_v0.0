@@ -138,7 +138,7 @@ int main (int argc, char* argv[]) {
 	     << "context extensions (separated by ,)"  << endl;
 	cout << "--extweight [" << extension_weight << "]:    \t"
 	     << "relative scaling for extended context features" << endl;
-	cout << "--over [" << oversample << "]:    \t"
+	cout << "--over [" << oversample << "]:         \t"
 	     << "oversampling of anchors (this * num_states)" << endl;
 	cout << "--hull [" << convex_hull_method << "]:     \t"
 	     << "convex hull method: brown, svd, cca, rand"  << endl;

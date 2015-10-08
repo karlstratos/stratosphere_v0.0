@@ -977,8 +977,33 @@ void HMM::RecoverPriorTransitionGivenEmission(
     double max_development_accuracy = 0.0;
     size_t no_improvement_count = 0;
 
+    // Compute initial accuracy on the development data, save the model.
+    if (!development_path_.empty()) {
+	vector<vector<string> > predictions;
+	for (size_t i = 0;
+	     i < development_observation_string_sequences.size(); ++i) {
+	    vector<string> prediction;
+	    Predict(development_observation_string_sequences[i], &prediction);
+	    predictions.push_back(prediction);
+	}
+	unordered_map<string, string> label_mapping;
+	double position_accuracy;
+	double sequence_accuracy;
+	eval_sequential::compute_accuracy_mapping_labels(
+	    development_state_string_sequences, predictions,
+	    &position_accuracy, &sequence_accuracy, &label_mapping);
+	if (verbose_) {
+	    cerr << "Original: ";
+	    cerr << util_file::get_file_name(development_path_) << ": "
+		 << util_string::printf_format("%.2f%% ", position_accuracy)
+		 << endl;
+	}
+	max_development_accuracy = position_accuracy;
+	Save(temp_model_path);
+    }
+
     // Start EM iterations.
-    double log_likelihood = -numeric_limits<double>::infinity();
+    double log_likelihood = -numeric_limits<double>::infinity();  // Convention.
     for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
 	 ++iteration_num) {
 	// Set up expected counts of state bigrams.

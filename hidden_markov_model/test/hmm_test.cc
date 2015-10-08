@@ -15,9 +15,22 @@ protected:
 	model_file_path_ = tmpnam(nullptr);
 	data_file_path_ = tmpnam(nullptr);
 	ofstream data_file(data_file_path_, ios::out);
-	data_file << "the__D dog__N saw__V the__D cat__N .__S" << endl;
-	data_file << "the__D dog__N barked__V .__S" << endl;
-	data_file << "the__D cat__N laughed__V !__S" << endl;
+	data_file << "the" + separater_ + "D ";
+	data_file << "dog" + separater_ + "N ";
+	data_file << "saw" + separater_ + "V ";
+	data_file << "the" + separater_ + "D ";
+	data_file << "cat" + separater_ + "N ";
+	data_file << "." + separater_ + "S" << endl;
+
+	data_file << "the" + separater_ + "D ";
+	data_file << "dog" + separater_ + "N ";
+	data_file << "barked" + separater_ + "V ";
+	data_file << "." + separater_ + "S" << endl;
+
+	data_file << "the" + separater_ + "D ";
+	data_file << "cat" + separater_ + "N ";
+	data_file << "laughed" + separater_ + "V ";
+	data_file << "!" + separater_ + "S" << endl;
 
 	// MLE parameter estimates.
 	rare0_emission_["D"]["the"] = 1.0;
@@ -44,6 +57,7 @@ protected:
 
     string data_file_path_;
     string model_file_path_;
+    const string separater_ = "__<label>__";
     double tol_ = 1e-10;
     unordered_map<string, unordered_map<string, double> > rare0_emission_;
     unordered_map<string, unordered_map<string, double> > transition_;
@@ -164,10 +178,11 @@ protected:
     double tol_ = 1e-10;
 };
 
-// Runs unsupervised training with 0 rare cutoff, 3 hidden states.
-TEST_F(UnlabeledDataExample, RunUnsupervisedTrainingRare0State3NoCheck) {
+// Runs unsupervised training (bw) with 0 rare cutoff, 3 hidden states.
+TEST_F(UnlabeledDataExample, RunUnsupervisedTrainingBWRare0State3NoCheck) {
     HMM hmm;
     hmm.set_rare_cutoff(0);
+    hmm.set_unsupervised_learning_method("bw");
     hmm.set_verbose(false);
     hmm.TrainUnsupervised(data_file_path_, 3);
 

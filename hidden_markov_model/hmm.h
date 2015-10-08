@@ -334,7 +334,7 @@ private:
 			  vector<State> *state_sequence);
 
     // Special string for separating observation/state in data files.
-    const string kObservationStateSeperator_ = "__";
+    const string kObservationStateSeperator_ = "__<label>__";
 
     // Maps an observation string to a unique index.
     unordered_map<string, Observation> observation_dictionary_;
