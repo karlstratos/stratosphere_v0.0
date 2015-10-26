@@ -10,7 +10,7 @@ int main (int argc, char* argv[]) {
     string data_path;
     string prediction_path;
     bool lowercase = false;
-    size_t rare_cutoff = 5;
+    size_t rare_cutoff = 0;
     bool train = false;
     string unsupervised_learning_method = "bw";
     size_t num_states = 0;

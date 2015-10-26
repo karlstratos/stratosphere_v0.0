@@ -217,6 +217,35 @@ void HMM::TrainSupervised(const string &data_path) {
 	prior_[state] = log(prior_count[state]) - log(prior_normalizer);
     }
     CheckProperDistribution();
+
+    if (verbose_) {  // Report performance and likelihood on the training data.
+	vector<vector<string> > observation_string_sequences;
+	vector<vector<string> > state_string_sequences;
+	ReadLines(data_path, true, &observation_string_sequences,
+		  &state_string_sequences);
+
+	// Make predictions.
+	vector<vector<string> > predictions;
+	for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	    vector<string> prediction;
+	    Predict(observation_string_sequences[i], &prediction);
+	    predictions.push_back(prediction);
+	}
+	unordered_map<string, string> label_mapping;
+	double position_accuracy;
+	double sequence_accuracy;
+	eval_sequential::compute_accuracy_mapping_labels(
+	    state_string_sequences, predictions, &position_accuracy,
+	    &sequence_accuracy, &label_mapping);
+	double likelihood = ComputeLogProbability(observation_string_sequences);
+	string line = util_string::printf_format(
+	    "---TRAINING---\n"
+	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%"
+	    "   likelihood: %.2f",
+	    decoding_method_.c_str(), position_accuracy, sequence_accuracy,
+	    likelihood);
+	cerr << line << endl;
+    }
 }
 
 void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
@@ -249,6 +278,21 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
     if (unsupervised_learning_method_ != "bw" && post_training_local_search_) {
 	RunBaumWelch(data_path);
     }
+
+    if (verbose_) {  // Report likelihood on the training data.
+	double likelihood = 0.0;
+	ifstream data_file(data_path, ios::in);
+	ASSERT(data_file.is_open(), "Cannot open " << data_path);
+	vector<string> observation_string_sequence;
+	vector<string> state_string_sequence;  // Unused.
+	while (ReadLine(false, &data_file, &observation_string_sequence,
+			&state_string_sequence)) {
+	    likelihood += ComputeLogProbability(observation_string_sequence);
+	}
+	string line = util_string::printf_format(
+	    "---TRAINING---\nlikelihood: %.2f", likelihood);
+	cerr << line << endl;
+    }
 }
 
 void HMM::Evaluate(const string &labeled_data_path,
@@ -274,10 +318,14 @@ void HMM::Evaluate(const string &labeled_data_path,
     eval_sequential::compute_accuracy_mapping_labels(
 	state_string_sequences, predictions, &position_accuracy,
 	&sequence_accuracy, &label_mapping);
+    double likelihood = ComputeLogProbability(observation_string_sequences);
     if (verbose_) {
 	string line = util_string::printf_format(
-	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%",
-	    decoding_method_.c_str(), position_accuracy, sequence_accuracy);
+	    "---EVALUATION---\n"
+	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%"
+	    "   likelihood: %.2f",
+	    decoding_method_.c_str(), position_accuracy, sequence_accuracy,
+	    likelihood);
 	cerr << line << endl;
     }
 
@@ -321,6 +369,16 @@ double HMM::ComputeLogProbability(
     ConvertObservationSequence(observation_string_sequence,
 			       &observation_sequence);
     return ComputeLogProbability(observation_sequence);
+}
+
+double HMM::ComputeLogProbability(
+    const vector<vector<string> > &observation_string_sequences) {
+    double log_probability = 0.0;
+    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	log_probability +=
+	    ComputeLogProbability(observation_string_sequences.at(i));
+    }
+    return log_probability;
 }
 
 void HMM::ReadLines(const string &file_path, bool labeled,
@@ -1339,6 +1397,18 @@ void HMM::RunBaumWelch(const string &data_path) {
 	    }
 	}
 
+	// Must always increase likelihood.
+	double likelihood_difference = new_log_likelihood - log_likelihood;
+	ASSERT(likelihood_difference > -1e-5, "Likelihood decreased by: "
+	       << likelihood_difference);
+	log_likelihood = new_log_likelihood;
+	if (verbose_) {
+	    string line = util_string::printf_format(
+		"Iteration %ld: %.2f (%.2f)   ", iteration_num + 1,
+		new_log_likelihood, likelihood_difference);
+	    cerr << line;  // Put a newline later.
+	}
+
 	// Update parameters from the expected counts.
 	for (State state = 0; state < NumStates(); ++state) {
 	    double state_normalizer = accumulate(emission_count[state].begin(),
@@ -1369,19 +1439,7 @@ void HMM::RunBaumWelch(const string &data_path) {
 	}
 	CheckProperDistribution();
 
-	// Must always increase likelihood.
-	double likelihood_difference = new_log_likelihood - log_likelihood;
-	ASSERT(likelihood_difference > -1e-5, "Likelihood decreased by: "
-	       << likelihood_difference);
-	log_likelihood = new_log_likelihood;
-
 	// Stopping critera: development accuracy, or likelihood.
-	if (verbose_) {
-	    string line = util_string::printf_format(
-		"Iteration %ld: %.2f (%.2f)   ", iteration_num + 1,
-		new_log_likelihood, likelihood_difference);
-	    cerr << line;  // Put a newline later.
-	}
 	if (!development_path_.empty()) {
 	    if ((iteration_num + 1) % development_interval_ != 0) {
 		if (verbose_) { cerr << endl; }

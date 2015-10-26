@@ -61,6 +61,10 @@ public:
     double ComputeLogProbability(
 	const vector<string> &observation_string_sequence);
 
+    // Computes the log probability of the observation string sequences.
+    double ComputeLogProbability(
+	const vector<vector<string> > &observation_string_sequences);
+
     // Reads lines from a data file.
     void ReadLines(const string &file_path, bool labeled,
 		   vector<vector<string> > *observation_string_sequences,
