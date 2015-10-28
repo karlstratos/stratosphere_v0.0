@@ -13,20 +13,20 @@ int main (int argc, char* argv[]) {
     size_t rare_cutoff = 0;
     bool train = false;
     string unsupervised_learning_method = "bw";
-    size_t num_states = 0;
+    size_t num_states = 0;  // Supervised if this remains 0.
     size_t max_num_em_iterations = 1000;
     size_t max_num_fw_iterations = 1000;
     size_t development_interval = 10;
     size_t max_num_no_improvement = 10;
-    size_t window_size = 5;
+    size_t window_size = 3;
     string context_definition = "list";
     string context_extension = "";
-    double extension_weight = 1.0;
+    double extension_weight = 0.01;
     size_t oversample = 1;
-    string convex_hull_method = "svd";
+    string convex_hull_method = "brown";
     double add_smooth = 10.0;
     double power_smooth = 0.5;
-    size_t num_anchor_candidates = 100;
+    size_t num_anchor_candidates = 300;
     string development_path;
     string cluster_path;
     string anchor_path;

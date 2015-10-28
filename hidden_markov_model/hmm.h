@@ -387,28 +387,28 @@ private:
     size_t max_num_no_improvement_ = 10;
 
     // Size of the sliding window (odd => symmetric, even => assymmetric).
-    size_t window_size_ = 5;
+    size_t window_size_ = 3;
 
     // Context definition.
     string context_definition_ = "list";
 
     // Convex hull method.
-    string convex_hull_method_ = "svd";
+    string convex_hull_method_ = "brown";
 
     // Context extension.
     string context_extension_ = "";
 
     // Additive smoothing value.
-    double add_smooth_ = 0.0;
+    double add_smooth_ = 10.0;
 
     // Power smoothing value.
     double power_smooth_ = 0.5;
 
     // Number of anchor candidates (most frequent observation types).
-    size_t num_anchor_candidates_ = 100;
+    size_t num_anchor_candidates_ = 300;
 
     // Weight for new context features v: weight * ||u|| = ||v|| (l2 norm).
-    double extension_weight_ = 1.0;
+    double extension_weight_ = 0.01;
 
     // Oversampling parameter.
     size_t oversample_ = 1;
@@ -423,7 +423,7 @@ private:
     string anchor_path_;
 
     // Do post-training local search?
-    bool post_training_local_search_ = true;
+    bool post_training_local_search_ = false;
 
     // Decoding method.
     string decoding_method_ = "mbr";
