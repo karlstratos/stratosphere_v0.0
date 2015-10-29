@@ -334,15 +334,25 @@ void HMM::Evaluate(const string &labeled_data_path,
 	ofstream file(prediction_path, ios::out);
 	ASSERT(file.is_open(), "Cannot open file: " << prediction_path);
 	for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	    for (size_t j = 0; j < observation_string_sequences[i].size();
-		 ++j) {
-		string state_string_predicted = (label_mapping.size() > 0) ?
-		    label_mapping[predictions[i][j]] : predictions[i][j];
+	    size_t length = observation_string_sequences[i].size();
+	    for (size_t j = 0; j < length; ++j) {
 		file << observation_string_sequences[i][j] << " ";
-		file << state_string_sequences[i][j] << " ";
-		file << state_string_predicted << endl;
 	    }
 	    file << endl;
+	    for (size_t j = 0; j < length; ++j) {
+		file << state_string_sequences[i][j] << " ";
+	    }
+	    file << endl;
+	    if (label_mapping.size() > 0) {
+		for (size_t j = 0; j < length; ++j) {
+		    file << label_mapping[predictions[i][j]] << " ";
+		}
+		file << endl;
+	    }
+	    for (size_t j = 0; j < length; ++j) {
+		file << predictions[i][j] << " ";
+	    }
+	    file << endl << endl;
 	}
     }
 }
@@ -818,6 +828,16 @@ void HMM::RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
     ASSERT(oversample_ >= 1, "Bad oversampling parameter: " << oversample_);
     size_t num_anchors = ceil(oversample_ * NumStates());  // Oversampling.
     FindAnchors(convex_hull, observation_count, num_anchors);
+
+    // We can now "christen" each state by its anchor word.
+    state_dictionary_.clear();
+    state_dictionary_inverse_.clear();
+    for (State state = 0; state < anchor_observations_.size(); ++state) {
+	string anchor_string = observation_dictionary_inverse_[
+	    anchor_observations_[state]];
+	state_dictionary_[anchor_string] = state;
+	state_dictionary_inverse_[state] = anchor_string;
+    }
 
     // Given anchors, compute the "flipped emission" p(State|Observation).
     Eigen::MatrixXd flipped_emission;
