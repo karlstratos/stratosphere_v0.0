@@ -35,76 +35,13 @@ int main (int argc, char* argv[]) {
     bool verbose = true;
     string log_path;
 
-    // Parse command line arguments.
+    // If appropriate, display default options and then close the program.
     bool display_options_and_quit = false;
     for (int i = 1; i < argc; ++i) {
 	string arg = (string) argv[i];
-	if (arg == "--model") {
-	    model_path = argv[++i];
-	} else if (arg == "--data") {
-	    data_path = argv[++i];
-	} else if (arg == "--pred") {
-	    prediction_path = argv[++i];
-	} else if (arg == "--lowercase") {
-	    lowercase = true;
-	} else if (arg == "--rare") {
-	    rare_cutoff = stol(argv[++i]);
-	} else if (arg == "--train") {
-	    train = true;
-	} else if (arg == "--unsup") {
-	    unsupervised_learning_method = argv[++i];
-	} else if (arg == "--states") {
-	    num_states = stol(argv[++i]);
-	} else if (arg == "--emiter") {
-	    max_num_em_iterations = stol(argv[++i]);
-	} else if (arg == "--fwiter") {
-	    max_num_fw_iterations = stol(argv[++i]);
-	} else if (arg == "--check") {
-	    development_interval = stol(argv[++i]);
-	} else if (arg == "--lives") {
-	    max_num_no_improvement = stol(argv[++i]);
-	} else if (arg == "--window") {
-	    window_size = stol(argv[++i]);
-	} else if (arg == "--context") {
-	    context_definition = argv[++i];
-	} else if (arg == "--extend") {
-	    context_extension = argv[++i];
-	} else if (arg == "--extweight") {
-	    extension_weight = stod(argv[++i]);
-	} else if (arg == "--over") {
-	    oversample = stol(argv[++i]);
-	} else if (arg == "--hull") {
-	    convex_hull_method = argv[++i];
-	} else if (arg == "--add") {
-	    add_smooth = stod(argv[++i]);
-	} else if (arg == "--power") {
-	    power_smooth = stod(argv[++i]);
-	} else if (arg == "--cand") {
-	    num_anchor_candidates = stol(argv[++i]);
-	} else if (arg == "--dev") {
-	    development_path = argv[++i];
-	} else if (arg == "--cluster") {
-	    cluster_path = argv[++i];
-	} else if (arg == "--anchor") {
-	    anchor_path = argv[++i];
-	} else if (arg == "--postmortem" || arg == "-p") {
-	    post_training_local_search = true;
-	} else if (arg == "--decode") {
-	    decoding_method = argv[++i];
-	} else if (arg == "--quiet" || arg == "-q") {
-	    verbose = false;
-	} else if (arg == "--log") {
-	    log_path = argv[++i];
-	} else if (arg == "--help" || arg == "-h"){
-	    display_options_and_quit = true;
-	} else {
-	    cerr << "Invalid argument \"" << arg << "\": run the command with "
-		 << "-h or --help to see possible arguments." << endl;
-	    exit(-1);
-	}
+	if (arg == "--help" || arg == "-h"){ display_options_and_quit = true; }
     }
-
-    if (display_options_and_quit || argc == 1) {
+    if (argc == 1 || display_options_and_quit) {
 	cout << "--model [-]:        \t"
 	     << "path to a model file" << endl;
 	cout << "--data [-]:        \t"
@@ -165,6 +102,72 @@ int main (int argc, char* argv[]) {
 	cout << "--help, -h:           \t"
 	     << "show options and quit?" << endl;
 	exit(0);
+    }
+
+    // Parse command line arguments.
+    for (int i = 1; i < argc; ++i) {
+	string arg = (string) argv[i];
+	if (arg == "--model") {
+	    model_path = argv[++i];
+	} else if (arg == "--data") {
+	    data_path = argv[++i];
+	} else if (arg == "--pred") {
+	    prediction_path = argv[++i];
+	} else if (arg == "--lowercase") {
+	    lowercase = true;
+	} else if (arg == "--rare") {
+	    rare_cutoff = stol(argv[++i]);
+	} else if (arg == "--train") {
+	    train = true;
+	} else if (arg == "--unsup") {
+	    unsupervised_learning_method = argv[++i];
+	} else if (arg == "--states") {
+	    num_states = stol(argv[++i]);
+	} else if (arg == "--emiter") {
+	    max_num_em_iterations = stol(argv[++i]);
+	} else if (arg == "--fwiter") {
+	    max_num_fw_iterations = stol(argv[++i]);
+	} else if (arg == "--check") {
+	    development_interval = stol(argv[++i]);
+	} else if (arg == "--lives") {
+	    max_num_no_improvement = stol(argv[++i]);
+	} else if (arg == "--window") {
+	    window_size = stol(argv[++i]);
+	} else if (arg == "--context") {
+	    context_definition = argv[++i];
+	} else if (arg == "--extend") {
+	    context_extension = argv[++i];
+	} else if (arg == "--extweight") {
+	    extension_weight = stod(argv[++i]);
+	} else if (arg == "--over") {
+	    oversample = stol(argv[++i]);
+	} else if (arg == "--hull") {
+	    convex_hull_method = argv[++i];
+	} else if (arg == "--add") {
+	    add_smooth = stod(argv[++i]);
+	} else if (arg == "--power") {
+	    power_smooth = stod(argv[++i]);
+	} else if (arg == "--cand") {
+	    num_anchor_candidates = stol(argv[++i]);
+	} else if (arg == "--dev") {
+	    development_path = argv[++i];
+	} else if (arg == "--cluster") {
+	    cluster_path = argv[++i];
+	} else if (arg == "--anchor") {
+	    anchor_path = argv[++i];
+	} else if (arg == "--postmortem" || arg == "-p") {
+	    post_training_local_search = true;
+	} else if (arg == "--decode") {
+	    decoding_method = argv[++i];
+	} else if (arg == "--quiet" || arg == "-q") {
+	    verbose = false;
+	} else if (arg == "--log") {
+	    log_path = argv[++i];
+	} else {
+	    cerr << "Invalid argument \"" << arg << "\": run the command with "
+		 << "-h or --help to see possible arguments." << endl;
+	    exit(-1);
+	}
     }
 
     HMM hmm;
