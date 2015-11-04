@@ -105,9 +105,17 @@ public:
 	unsupervised_learning_method_ = unsupervised_learning_method;
     }
 
-    // Sets the maximum number of EM iterations.
-    void set_max_num_em_iterations(size_t max_num_em_iterations) {
-	max_num_em_iterations_ = max_num_em_iterations;
+    // Sets the maximum number of EM iterations in the Baum-Welch algorithm.
+    void set_max_num_em_iterations_baumwelch(
+	size_t max_num_em_iterations_baumwelch) {
+	max_num_em_iterations_baumwelch_ = max_num_em_iterations_baumwelch;
+    }
+
+    // Sets the maximum number of EM iterations for estimating the transition
+    // parameters given emission parameters.
+    void set_max_num_em_iterations_transition(
+	size_t max_num_em_iterations_transition) {
+	max_num_em_iterations_transition_ = max_num_em_iterations_transition;
     }
 
     // Sets the maximum number of Frank-Wolfe iterations.
@@ -374,8 +382,12 @@ private:
     // Unsupervised learning method.
     string unsupervised_learning_method_ = "bw";
 
-    // Maximum number of EM iterations.
-    size_t max_num_em_iterations_ = 1000;
+    // Maximum number of EM iterations in the Baum-Welch algorithm.
+    size_t max_num_em_iterations_baumwelch_ = 1000;
+
+    // Maximum number of EM iterations for estimating the transition parameters
+    // given emission parameters.
+    size_t max_num_em_iterations_transition_ = 1;
 
     // Maximum number of Frank-Wolfe iterations.
     size_t max_num_fw_iterations_ = 1000;

@@ -14,7 +14,8 @@ int main (int argc, char* argv[]) {
     bool train = false;
     string unsupervised_learning_method = "bw";
     size_t num_states = 0;  // Supervised if this remains 0.
-    size_t max_num_em_iterations = 1000;
+    size_t max_num_em_iterations_baumwelch = 1000;
+    size_t max_num_em_iterations_transition = 1;
     size_t max_num_fw_iterations = 1000;
     size_t development_interval = 10;
     size_t max_num_no_improvement = 10;
@@ -58,8 +59,11 @@ int main (int argc, char* argv[]) {
 	     << "unsupervised learning method: cluster, bw, anchor"  << endl;
 	cout << "--states [" << num_states << "]:       \t"
 	     << "number of states" << endl;
-	cout << "--emiter [" << max_num_em_iterations << "]:       \t"
-	     << "maximum number of EM iterations" << endl;
+	cout << "--bwiter [" << max_num_em_iterations_baumwelch << "]:       \t"
+	     << "maximum number of Baum-Welch iterations" << endl;
+	cout << "--triter [" << max_num_em_iterations_transition << "]:     \t"
+	     << "maximum number of EM iterations for transition estimation"
+	     << endl;
 	cout << "--fwiter [" << max_num_fw_iterations << "]:       \t"
 	     << "maximum number of Frank-Wolfe iterations" << endl;
 	cout << "--check [" << development_interval << "]:        \t"
@@ -123,8 +127,10 @@ int main (int argc, char* argv[]) {
 	    unsupervised_learning_method = argv[++i];
 	} else if (arg == "--states") {
 	    num_states = stol(argv[++i]);
-	} else if (arg == "--emiter") {
-	    max_num_em_iterations = stol(argv[++i]);
+	} else if (arg == "--bwiter") {
+	    max_num_em_iterations_baumwelch = stol(argv[++i]);
+	} else if (arg == "--triter") {
+	    max_num_em_iterations_transition = stol(argv[++i]);
 	} else if (arg == "--fwiter") {
 	    max_num_fw_iterations = stol(argv[++i]);
 	} else if (arg == "--check") {
@@ -174,7 +180,8 @@ int main (int argc, char* argv[]) {
     hmm.set_lowercase(lowercase);
     hmm.set_rare_cutoff(rare_cutoff);
     hmm.set_unsupervised_learning_method(unsupervised_learning_method);
-    hmm.set_max_num_em_iterations(max_num_em_iterations);
+    hmm.set_max_num_em_iterations_baumwelch(max_num_em_iterations_baumwelch);
+    hmm.set_max_num_em_iterations_transition(max_num_em_iterations_transition);
     hmm.set_max_num_fw_iterations(max_num_fw_iterations);
     hmm.set_development_interval(development_interval);
     hmm.set_max_num_no_improvement(max_num_no_improvement);

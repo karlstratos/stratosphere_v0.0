@@ -239,7 +239,7 @@ void HMM::TrainSupervised(const string &data_path) {
 	    &sequence_accuracy, &label_mapping);
 	double likelihood = ComputeLogProbability(observation_string_sequences);
 	string line = util_string::printf_format(
-	    "---TRAINING---\n"
+	    "\n---TRAINING---\n"
 	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%"
 	    "   likelihood: %.2f",
 	    decoding_method_.c_str(), position_accuracy, sequence_accuracy,
@@ -290,7 +290,7 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
 	    likelihood += ComputeLogProbability(observation_string_sequence);
 	}
 	string line = util_string::printf_format(
-	    "---TRAINING---\nlikelihood: %.2f", likelihood);
+	    "\n---TRAINING---\nlikelihood: %.2f", likelihood);
 	cerr << line << endl;
     }
 }
@@ -321,7 +321,7 @@ void HMM::Evaluate(const string &labeled_data_path,
     double likelihood = ComputeLogProbability(observation_string_sequences);
     if (verbose_) {
 	string line = util_string::printf_format(
-	    "---EVALUATION---\n"
+	    "\n---EVALUATION---\n"
 	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%"
 	    "   likelihood: %.2f",
 	    decoding_method_.c_str(), position_accuracy, sequence_accuracy,
@@ -1055,6 +1055,9 @@ void HMM::RecoverPriorTransitionGivenEmission(
     double max_development_accuracy = 0.0;
     size_t no_improvement_count = 0;
 
+    // Start EM iterations.
+    if (verbose_) { cerr << endl << "EM ITERATIONS FOR TRANSITION" << endl; }
+
     // Compute initial accuracy on the development data, save the model.
     if (!development_path_.empty()) {
 	vector<vector<string> > predictions;
@@ -1080,10 +1083,9 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	Save(temp_model_path);
     }
 
-    // Start EM iterations.
     double log_likelihood = -numeric_limits<double>::infinity();  // Convention.
-    for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
-	 ++iteration_num) {
+    for (size_t iteration_num = 0;
+	 iteration_num < max_num_em_iterations_transition_; ++iteration_num) {
 	// Set up expected counts of state bigrams.
 	vector<vector<double> > state_bigram_count(NumStates());
 	for (State state = 0; state < NumStates(); ++state) {
@@ -1198,9 +1200,16 @@ void HMM::RecoverPriorTransitionGivenEmission(
 	// Stopping critera: development accuracy, or likelihood.
 	if (verbose_) {
 	    string line = util_string::printf_format(
-		"Iteration %ld: %.2f (%.2f)   ", iteration_num + 1,
+		"Iteration %ld: %.2f", iteration_num + 1,
 		new_log_likelihood, likelihood_difference);
-	    cerr << line;  // Put a newline later.
+	    cerr << line;
+	    if (iteration_num > 0) {
+		string line = util_string::printf_format(" (%.2f)   ",
+							 likelihood_difference);
+		cerr << line;
+	    } else {
+		cerr << "   ";
+	    }
 	}
 	if (!development_path_.empty()) {
 	    if ((iteration_num + 1) % development_interval_ != 0) {
@@ -1334,11 +1343,37 @@ void HMM::RunBaumWelch(const string &data_path) {
     double max_development_accuracy = 0.0;
     size_t no_improvement_count = 0;
 
-    // Run EM iterations.
-    if (verbose_) { cerr << endl << "BAUM-WELCH ITERATIONS" << endl; }
-    double log_likelihood = -numeric_limits<double>::infinity();
-    for (size_t iteration_num = 0; iteration_num < max_num_em_iterations_;
-	 ++iteration_num) {
+    // Start EM iterations.
+    if (verbose_) { cerr << endl << "EM ITERATIONS FOR BAUM-WELCH" << endl; }
+
+    // Compute initial accuracy on the development data, save the model.
+    if (!development_path_.empty()) {
+	vector<vector<string> > predictions;
+	for (size_t i = 0;
+	     i < development_observation_string_sequences.size(); ++i) {
+	    vector<string> prediction;
+	    Predict(development_observation_string_sequences[i], &prediction);
+	    predictions.push_back(prediction);
+	}
+	unordered_map<string, string> label_mapping;
+	double position_accuracy;
+	double sequence_accuracy;
+	eval_sequential::compute_accuracy_mapping_labels(
+	    development_state_string_sequences, predictions,
+	    &position_accuracy, &sequence_accuracy, &label_mapping);
+	if (verbose_) {
+	    cerr << "Original: ";
+	    cerr << util_file::get_file_name(development_path_) << ": "
+		 << util_string::printf_format("%.2f%% ", position_accuracy)
+		 << endl;
+	}
+	max_development_accuracy = position_accuracy;
+	Save(temp_model_path);
+    }
+
+    double log_likelihood = -numeric_limits<double>::infinity();  // Convention.
+    for (size_t iteration_num = 0;
+	 iteration_num < max_num_em_iterations_baumwelch_; ++iteration_num) {
 	// Set up expected counts.
 	vector<vector<double> > emission_count(NumObservations());
 	for (State state = 0; state < NumStates(); ++state) {
@@ -1424,9 +1459,16 @@ void HMM::RunBaumWelch(const string &data_path) {
 	log_likelihood = new_log_likelihood;
 	if (verbose_) {
 	    string line = util_string::printf_format(
-		"Iteration %ld: %.2f (%.2f)   ", iteration_num + 1,
+		"Iteration %ld: %.2f", iteration_num + 1,
 		new_log_likelihood, likelihood_difference);
-	    cerr << line;  // Put a newline later.
+	    cerr << line;
+	    if (iteration_num > 0) {
+		string line = util_string::printf_format(" (%.2f)   ",
+							 likelihood_difference);
+		cerr << line;
+	    } else {
+		cerr << "   ";
+	    }
 	}
 
 	// Update parameters from the expected counts.
