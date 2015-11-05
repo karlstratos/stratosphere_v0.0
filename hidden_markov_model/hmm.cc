@@ -337,22 +337,11 @@ void HMM::Evaluate(const string &labeled_data_path,
 	    size_t length = observation_string_sequences[i].size();
 	    for (size_t j = 0; j < length; ++j) {
 		file << observation_string_sequences[i][j] << " ";
-	    }
-	    file << endl;
-	    for (size_t j = 0; j < length; ++j) {
 		file << state_string_sequences[i][j] << " ";
+		file << label_mapping[predictions[i][j]] << " ";
+		file << predictions[i][j] << endl;
 	    }
 	    file << endl;
-	    if (label_mapping.size() > 0) {
-		for (size_t j = 0; j < length; ++j) {
-		    file << label_mapping[predictions[i][j]] << " ";
-		}
-		file << endl;
-	    }
-	    for (size_t j = 0; j < length; ++j) {
-		file << predictions[i][j] << " ";
-	    }
-	    file << endl << endl;
 	}
     }
 }
