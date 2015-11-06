@@ -123,6 +123,25 @@ namespace eigen_helper {
 	}
 	return true;
     }
+
+    // Computes the KL divergence of distribution 2 from distribution 1.
+    // WARNING: Assign distribution variables before passing them, e.g.,
+    //          don't do "kl_divergence(M.col(0), M.col(1));
+    template<typename EigenDenseVector>
+    double kl_divergence(const EigenDenseVector& distribution1,
+			 const EigenDenseVector& distribution2) {
+	double kl = 0.0;
+	for (size_t i = 0; i < distribution1.size(); ++i) {
+	    if (distribution2(i) <= 0.0) {
+		ASSERT(distribution1(i) <= 0.0, "KL is undefined");
+	    }
+	    if (distribution1(i) > 0.0) {
+		kl += distribution1(i) * (log(distribution1(i)) -
+					  log(distribution2(i)));
+	    }
+	}
+	return kl;
+    }
 }  // namespace eigen_helper
 
 #endif  // CORE_EIGEN_HELPER_H_

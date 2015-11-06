@@ -380,6 +380,14 @@ double HMM::ComputeLogProbability(
     return log_probability;
 }
 
+void HMM::ComputeLogMarginal(const vector<string> &observation_string_sequence,
+			     vector<vector<double> > *marginal) {
+    vector<Observation> observation_sequence;
+    ConvertObservationSequence(observation_string_sequence,
+			       &observation_sequence);
+    ComputeLogMarginal(observation_sequence, marginal);
+}
+
 void HMM::ReadLines(const string &file_path, bool labeled,
 		    vector<vector<string> > *observation_string_sequences,
 		    vector<vector<string> > *state_string_sequences) {
@@ -465,6 +473,41 @@ double HMM::StoppingProbability(string state_string) {
 	return exp(transition_[state][StoppingState()]);
     }
     return 0.0;
+}
+
+Observation HMM::GetObservationIndex(string observation_string) {
+    if (observation_dictionary_.find(observation_string) !=
+	observation_dictionary_.end()) {
+	return observation_dictionary_[observation_string];
+    } else {
+	ASSERT(false, "Unknown observation string: " << observation_string);
+    }
+}
+
+string HMM::GetObservationString(Observation observation) {
+    if (observation_dictionary_inverse_.find(observation) !=
+	observation_dictionary_inverse_.end()) {
+	return observation_dictionary_inverse_[observation];
+    } else {
+	ASSERT(false, "Unknown observation: " << observation);
+    }
+}
+
+State HMM::GetStateIndex(string state_string) {
+    if (state_dictionary_.find(state_string) != state_dictionary_.end()) {
+	return state_dictionary_[state_string];
+    } else {
+	ASSERT(false, "Unknown state string: " << state_string);
+    }
+}
+
+string HMM::GetStateString(State state) {
+    if (state_dictionary_inverse_.find(state) !=
+	state_dictionary_inverse_.end()) {
+	return state_dictionary_inverse_[state];
+    } else {
+	ASSERT(false, "Unknown state: " << state);
+    }
 }
 
 void HMM::RunAnchor(const string &data_path, const unordered_map<Observation,
@@ -2179,6 +2222,32 @@ void HMM::Backward(const vector<Observation> &observation_sequence,
 					log_probability);
 	    }
 	    (*be)[i][state] = log_summed_probabilities;
+	}
+    }
+}
+
+void HMM::ComputeLogMarginal(const vector<Observation> &observation_sequence,
+			       vector<vector<double> > *marginal) {
+    vector<vector<double> > al;
+    Forward(observation_sequence, &al);
+    vector<vector<double> > be;
+    Backward(observation_sequence, &be);
+
+    double log_sequence_probability = -numeric_limits<double>::infinity();
+    for (State state = 0; state < NumStates(); ++state) {
+	log_sequence_probability = util_math::sum_logs(
+	    log_sequence_probability,
+	    al[observation_sequence.size() - 1][state] +
+	    transition_[state][StoppingState()]);
+    }
+
+    marginal->clear();
+    marginal->resize(observation_sequence.size());
+    for (size_t i = 0; i < observation_sequence.size(); ++i) {
+	(*marginal)[i].resize(NumStates());
+	for (State state = 0; state < NumStates(); ++state) {
+	    (*marginal)[i][state] = al[i][state] + be[i][state] -
+		log_sequence_probability;
 	}
     }
 }

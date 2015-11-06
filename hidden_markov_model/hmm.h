@@ -65,6 +65,12 @@ public:
     double ComputeLogProbability(
 	const vector<vector<string> > &observation_string_sequences);
 
+    // Computes the log marginal probabilities for each position:
+    //    marginal[i][h] = log(probability of state h at the i-th position,
+    //                         given the observation string sequence)
+    void ComputeLogMarginal(const vector<string> &observation_string_sequence,
+			    vector<vector<double> > *marginal);
+
     // Reads lines from a data file.
     void ReadLines(const string &file_path, bool labeled,
 		   vector<vector<string> > *observation_string_sequences,
@@ -93,6 +99,18 @@ public:
 
     // Returns the number of state types.
     size_t NumStates() { return state_dictionary_.size(); }
+
+    // Returns the index corresponding to an observation string.
+    Observation GetObservationIndex(string observation_string);
+
+    // Returns the string corresponding to an observation index.
+    string GetObservationString(Observation observation);
+
+    // Returns the index corresponding to a state string.
+    State GetStateIndex(string state_string);
+
+    // Returns the string corresponding to a state index.
+    string GetStateString(State state);
 
     // Sets the flag for lowercasing all observation strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
@@ -340,6 +358,12 @@ private:
     //                   i+1 to the end, conditioned on the i-th state being h)
     void Backward(const vector<Observation> &observation_sequence,
 		  vector<vector<double> > *be);
+
+    // Computes the log marginal probabilities for each position:
+    //    marginal[i][h] = log(probability of state h at the i-th position,
+    //                         given the observation sequence)
+    void ComputeLogMarginal(const vector<Observation> &observation_sequence,
+			    vector<vector<double> > *marginal);
 
     // Performs minimum Bayes risk (MBR) decoding.
     void MinimumBayesRisk(const vector<Observation> &observation_sequence,

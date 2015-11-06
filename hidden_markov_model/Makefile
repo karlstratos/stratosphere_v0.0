@@ -25,9 +25,18 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TARGETS = hmm map_clusters
+TARGETS = hmm map_clusters ensemble
 
 all: $(TARGETS)
+
+ensemble: ensemble.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
+	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
+	$(CORE)/optimize.o $(CORE)/eigen_helper.o $(CORE)/features.o \
+	$(CORE)/cluster.o
+	$(CC) $(CFLAGS) $^ -o $@
+
+ensemble.o: ensemble.cc
+	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 map_clusters: map_clusters.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
 	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
