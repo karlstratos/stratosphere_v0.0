@@ -42,6 +42,9 @@ public:
     // Loads HMM parameters from a model file.
     void Load(const string &model_path);
 
+    // Writes useful model information to a log file.
+    void WriteLog(const string &log_path);
+
     // Trains HMM parameters from a text file of labeled sequences.
     void TrainSupervised(const string &data_path);
 
@@ -186,9 +189,6 @@ public:
 	extension_weight_ = extension_weight;
     }
 
-    // Sets the oversampling parameter.
-    void set_oversample(size_t oversample) { oversample_ = oversample; }
-
     // Sets the path to development data.
     void set_development_path(string development_path) {
 	development_path_ = development_path;
@@ -243,28 +243,17 @@ private:
 			    unordered_map<Context, unordered_map<Observation,
 			    double> > *context_observation_count);
 
-    // Populate anchor_observations_.
+    // Find anchor observations.
     void FindAnchors(const Eigen::MatrixXd &convex_hull,
 		     const unordered_map<Observation, size_t>
-		     &observation_count, size_t num_anchors);
+		     &observation_count,
+		     vector<Observation> *anchor_observations);
 
-    // Given anchors, compute the "flipped emission" p(State|Observation).
-    void ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
-				const unordered_map<Observation, size_t>
-				&observation_count,
-				Eigen::MatrixXd *flipped_emission);
-
-    // Recover emission parameters by decomposing a convex hull of observation
-    // vectors.
-    void RecoverEmissionFromConvexHull(const Eigen::MatrixXd &convex_hull,
-				       const unordered_map<Observation, size_t>
-				       &observation_count);
-
-    // Recovers the prior and transition parameters given the emission
-    // parameters.
-    void RecoverPriorTransitionGivenEmission(
+    // Recovers the model parameters given the "flipped" emission parameters.
+    void RecoverParametersGivenFlippedEmission(
 	const string &data_path,
-	const unordered_map<Observation, size_t> &observation_count);
+	const unordered_map<Observation, size_t> &observation_count,
+	const Eigen::MatrixXd &flipped_emission);
 
     // Runs the Baum-Welch algorithm (must already have dictionaries).
     // - If parameters exist, simply start from them.
@@ -393,9 +382,6 @@ private:
     // Prior log probabilities.
     vector<double> prior_;
 
-    // Anchor observations.
-    vector<Observation> anchor_observations_;
-
     // Lowercase all observation strings?
     bool lowercase_ = false;
 
@@ -445,9 +431,6 @@ private:
 
     // Weight for new context features v: weight * ||u|| = ||v|| (l2 norm).
     double extension_weight_ = 0.01;
-
-    // Oversampling parameter.
-    size_t oversample_ = 1;
 
     // Path to development data.
     string development_path_;
