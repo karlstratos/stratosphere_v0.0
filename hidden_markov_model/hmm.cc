@@ -962,20 +962,9 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	initial_observation_probabilities[observation_pair.first] =
 	    ((double) observation_pair.second) / num_initial_observations;
     }
-
-    /*
     Eigen::VectorXd prior_state_probabilities =
 	emission_matrix.transpose() * initial_observation_probabilities;
     prior_state_probabilities /= prior_state_probabilities.lpNorm<1>();
-    */
-
-    // Prior state probabilities are convex coefficients for the columns of
-    // the emission matrix to match the initial observation probabilities.
-    Eigen::VectorXd prior_state_probabilities;
-    optimize::compute_convex_coefficients_squared_loss(
-	emission_matrix, initial_observation_probabilities,
-	max_num_fw_iterations_, 1e-10, verbose_, &prior_state_probabilities);
-    if (verbose_) { cerr << endl; }
     prior_.resize(NumStates(), -numeric_limits<double>::infinity());
     for (State state = 0; state < NumStates(); ++state) {
 	prior_[state] = util_math::log0(prior_state_probabilities[state]);
@@ -989,20 +978,9 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	average_observation_probabilities[observation_pair.first] =
 	    ((double) observation_pair.second) / num_observations;
     }
-    /*
-    Eigen::VectorXd average_state_probabilities =
+    Eigen::VectorXd average_state_probabilities =  // p(h) = sum_x p(h|x) p(x)
 	emission_matrix.transpose() * average_observation_probabilities;
     average_state_probabilities /= average_state_probabilities.lpNorm<1>();
-    */
-
-    // Need the average state probabilities, which are convex coefficients for
-    // the columns of the emission matrix to match the average observation
-    // probabilities.
-    Eigen::VectorXd average_state_probabilities;
-    optimize::compute_convex_coefficients_squared_loss(
-	emission_matrix, average_observation_probabilities,
-	max_num_fw_iterations_, 1e-10, verbose_, &average_state_probabilities);
-    if (verbose_) { cerr << endl; }
 
     // Keep transition parameters as a matrix for convenience.
     Eigen::MatrixXd transition_matrix(NumStates() + 1, NumStates());  // +stop
