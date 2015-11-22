@@ -643,6 +643,38 @@ void HMM::RunAnchor(const string &data_path, const unordered_map<Observation,
 			     max_num_fw_iterations_, 1e-10, verbose_,
 			     anchor_observations, &flipped_emission);
 
+    // Write the flipped emission values in a temporary file.
+    string temp_path = tmpnam(nullptr);
+    if (verbose_) {
+	cerr << "Flipped emission parameters at: " << temp_path << endl;
+    }
+    ofstream temp_file(temp_path, ios::out);
+    vector<pair<Observation, size_t> > sorted_observations;
+    for (const auto &observation_pair : observation_count) {
+	sorted_observations.emplace_back(observation_pair.first,
+					 observation_pair.second);
+    }
+    sort(sorted_observations.begin(), sorted_observations.end(),
+	 util_misc::sort_pairs_second<Observation, size_t,
+	 greater<size_t> >());
+    for (size_t i = 0; i < sorted_observations.size(); ++i) {
+	Observation x = sorted_observations[i].first;
+	vector<pair<string, double> > v;
+	for (State h = 0; h < NumStates(); ++h) {
+	    string anchor_string = state_dictionary_inverse_[h];
+	    v.emplace_back(anchor_string, flipped_emission(x, h));
+	}
+	sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+	     double, greater<double> >());
+
+	temp_file << observation_dictionary_inverse_[x] << endl;
+	for (State h = 0; h < NumStates(); ++h) {
+	    temp_file << util_string::printf_format(
+		"%.2f:   %s", v[h].second, v[h].first.c_str()) << endl;
+	}
+	temp_file << endl;
+    }
+
     // Recover the model parameters from the flipped emission parameters.
     RecoverParametersGivenFlippedEmission(data_path, observation_count,
 					  flipped_emission);
