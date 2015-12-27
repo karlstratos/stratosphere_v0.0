@@ -1565,46 +1565,17 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 	cluster_dictionary_inverse[cluster_dictionary_inverse.size()] =
 	    cluster_string;
     }
-    double near_zero = 1e-15;  // Some tiny probability.
 
-    // Assign emission parameters.
-    emission_.resize(NumStates());
-    for (State state = 0; state < NumStates(); ++state) {
-	emission_[state].resize(NumObservations());
-
-	// See if we have a cluster associated with this state: if so, identify
-	// observation strings "active" in that cluster.
-	unordered_map<string, bool> active;
-	if (cluster_dictionary_inverse.find(state) !=
-	    cluster_dictionary_inverse.end()) {
-	    active = cluster_to_observations[cluster_dictionary_inverse[state]];
-	}
-
-	double state_normalizer = 0.0;
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    string observation_string =
-		observation_dictionary_inverse_[observation];
-
-	    // For a particular state, distribute (most of) the probability mass
-	    // over active observations uniformly.
-	    double value = (active.find(observation_string) != active.end()) ?
-		1.0 / active.size() : near_zero;
-	    emission_[state][observation] = value;
-	    state_normalizer += value;
-	}
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    emission_[state][observation] =
-		log(emission_[state][observation]) - log(state_normalizer);
-	}
-    }
-
+    // If given unlabeled data, calculate maximum-likelihood estimates (MLE)
+    // from fixed clusters.
+    vector<vector<size_t> > emission_count;
     vector<vector<size_t> > transition_count;
     vector<size_t> prior_count;
     if (!unlabeled_data_path.empty()) {
-	// If given unlabeled data, approximate state transition counts with
-	// cluster transition counts.
+	emission_count.resize(NumStates());
+	for (State state = 0; state < NumStates(); ++state) {
+	    emission_count[state].resize(NumObservations(), 0);
+	}
 	transition_count.resize(NumStates());
 	for (State state = 0; state < NumStates(); ++state) {
 	    transition_count[state].resize(NumStates() + 1, 0);  // +stop
@@ -1623,7 +1594,7 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 				&initial_observation_count,
 				&final_observation_count);
 
-	// Then translate them to state transition counts via cluster mapping.
+	// Then translate them to counts via cluster mapping.
 	for (const auto &observation1_pair : observation_bigram_count) {
 	    string observation1_string =
 		observation_dictionary_inverse_[observation1_pair.first];
@@ -1640,8 +1611,10 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 			observation_to_cluster[observation2_string];
 		    State state1 = cluster_dictionary[cluster1_string];
 		    State state2 = cluster_dictionary[cluster2_string];
-		    transition_count[state1][state2] +=  // Aggregate!
-			observation2_pair.second;
+		    emission_count[state1][observation1_pair.first] +=
+			observation2_pair.second;  // Aggregate!
+		    transition_count[state1][state2] +=
+			observation2_pair.second;  // Aggregate!
 		}
 	    }
 	}
@@ -1656,8 +1629,8 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 		    observation_to_cluster[initial_observation_string];
 		State initial_state =
 		    cluster_dictionary[initial_cluster_string];
-		prior_count[initial_state] +=  // Aggregate!
-		    observation_pair.second;
+		prior_count[initial_state] +=
+		    observation_pair.second;  // Aggregate!
 	    }
 	}
 
@@ -1670,9 +1643,56 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 		string final_cluster_string =
 		    observation_to_cluster[final_observation_string];
 		State final_state = cluster_dictionary[final_cluster_string];
-		transition_count[final_state][StoppingState()] +=  // Aggregate!
-		    observation_pair.second;
+		emission_count[final_state][observation_pair.first] +=
+		    observation_pair.second;  // Aggregate!
+		transition_count[final_state][StoppingState()] +=
+		    observation_pair.second;  // Aggregate!
 	    }
+	}
+    }
+
+    double near_zero = 1e-15;  // Some tiny probability.
+
+    // Assign emission parameters.
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_[state].resize(NumObservations());
+	double state_normalizer = 0.0;
+	if (emission_count.size() > 0) {  // Were given unlabeled data: use MLE.
+	    for (Observation observation = 0; observation < NumObservations();
+		 ++observation) {
+		emission_[state][observation] =
+		    emission_count[state][observation];
+		state_normalizer += emission_count[state][observation];
+	    }
+	} else {  // Were not given unlabeled data: use hard-clustering.
+	    // See if we have a cluster associated with this state: if so,
+	    // identify observation strings "active" in that cluster.
+	    unordered_map<string, bool> active;
+	    if (cluster_dictionary_inverse.find(state) !=
+		cluster_dictionary_inverse.end()) {
+		active = cluster_to_observations[
+		    cluster_dictionary_inverse[state]];
+	    }
+
+	    for (Observation observation = 0; observation < NumObservations();
+		 ++observation) {
+		string observation_string =
+		    observation_dictionary_inverse_[observation];
+
+		// Distribute (most of) the probability mass over active
+		// observations uniformly.
+		double value = (active.find(observation_string) !=
+				active.end()) ?
+		    1.0 / active.size() : near_zero;
+		emission_[state][observation] = value;
+		state_normalizer += value;
+	    }
+	}
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] =
+		log(emission_[state][observation]) - log(state_normalizer);
 	}
     }
 
@@ -1682,6 +1702,7 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 	transition_[state1].resize(NumStates() + 1);  // +stop
 	double state1_normalizer = 0.0;
 	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
+	    // Use MLE if given unlabeled data, otherwise uniform.
 	    double value = (transition_count.size() > 0) ?
 		transition_count[state1][state2] : near_zero;
 	    transition_[state1][state2] = value;
@@ -1698,6 +1719,7 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
     prior_.resize(NumStates());
     double prior_normalizer = 0.0;
     for (State state = 0; state < NumStates(); ++state) {
+	// Use MLE if given unlabeled data, otherwise uniform.
 	double value = (prior_count.size() > 0) ?
 	    prior_count[state] : near_zero;
 	prior_[state] = value;
