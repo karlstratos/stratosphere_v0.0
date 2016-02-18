@@ -2,6 +2,8 @@
 
 #include "features.h"
 
+#include <assert.h>
+
 namespace features {
     string basic_word_shape(const string &word_string) {
 	bool is_all_digit = true;
@@ -20,15 +22,50 @@ namespace features {
 	}
 
 	if (is_all_digit) {
-	    return "ALL-DIGIT";
+	    return "<shape5>=all-digit";
 	} else if (is_all_uppercase) {
-	    return "ALL-UPPER";
+	    return "<shape5>=all-upper";
 	} else if (is_all_lowercase) {
-	    return "ALL-LOWER";
+	    return "<shape5>=all-lower";
 	} else if (is_capitalized) {
-	    return "CAPITALIZED";
+	    return "<shape5>=capitalized";
 	} else {
-	    return "OTHER";
+	    return "<shape5>=other";
 	}
+    }
+
+    string word_identity(const string &word_string) {
+	return "<id>=" + word_string;
+    }
+
+    string prefix(const string &word_string, size_t prefix_length) {
+	assert(prefix_length <= word_string.size());
+	return "<prefix" + to_string(prefix_length) + ">=" +
+	    word_string.substr(0, prefix_length);
+    }
+
+    string suffix(const string &word_string, size_t suffix_length) {
+	assert(suffix_length <= word_string.size());
+	return "<suffix" + to_string(suffix_length) + ">=" +
+	    word_string.substr(word_string.size() - suffix_length);
+    }
+
+    string contains_digit(const string &word_string) {
+	for (char c : word_string) {
+	    if (isdigit(c)) { return "<contains-digit>=t"; }
+	}
+	return "<contains-digit>=f";
+    }
+
+    string contains_hyphen(const string &word_string) {
+	for (char c : word_string) {
+	    if (c == 45) { return "<contains-hyphen>=t"; }
+	}
+	return "<contains-hyphen>=f";
+    }
+
+    string is_capitalized(const string &word_string) {
+	return isupper(word_string.at(0)) ? "<is-capitalized>=t" :
+	    "<is-capitalized>=f";
     }
 }

@@ -816,7 +816,7 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 	Observation observation = observation_string_pair.second;
 	for (const string &extension_type : extension_types) {
 	    if (extension_type == "basic") {
-		string basic_word_shape = "<basic-word-shape>=" +
+		string basic_word_shape =
 		    features::basic_word_shape(observation_string);
 		if (context_dictionary->find(basic_word_shape) ==
 		    context_dictionary->end()) {
@@ -829,8 +829,8 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 		string prefix_size_string = extension_type.substr(4);
 		size_t prefix_size = stol(prefix_size_string);
 		if (observation_string.size() < prefix_size) { continue; }
-		string prefix = "<pref" + prefix_size_string + ">=" +
-		    observation_string.substr(0, prefix_size);
+		string prefix = features::prefix(observation_string,
+						 prefix_size);
 		if (context_dictionary->find(prefix) ==
 		    context_dictionary->end()) {
 		    (*context_dictionary)[prefix] = context_dictionary->size();
@@ -841,9 +841,8 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 		string suffix_size_string = extension_type.substr(4);
 		size_t suffix_size = stol(suffix_size_string);
 		if (observation_string.size() < suffix_size) { continue; }
-		string suffix = "<suff" + suffix_size_string + ">=" +
-		    observation_string.substr(observation_string.size() -
-					      suffix_size);
+		string suffix = features::suffix(observation_string,
+						 suffix_size);
 		if (context_dictionary->find(suffix) ==
 		    context_dictionary->end()) {
 		    (*context_dictionary)[suffix] = context_dictionary->size();

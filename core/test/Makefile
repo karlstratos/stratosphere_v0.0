@@ -26,7 +26,7 @@ endif
 
 # Top-level commands.
 TESTS = util_test eigen_helper_test optimize_test sparsesvd_test corpus_test \
-	cluster_test evaluate_test trees_test
+	cluster_test evaluate_test trees_test features_test
 
 all: $(TESTS)
 
@@ -141,4 +141,13 @@ trees_test.o: trees_test.cc
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(CORE)/trees.o: $(CORE)/trees.cc $(CORE)/trees.h $(CORE)/util.o
+	$(CC) $(CFLAGS) -c $< -o $@
+
+features_test: features_test.cc $(CORE)/features.o gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
+
+features_test.o: features_test.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(CORE)/features.o: $(CORE)/features.cc $(CORE)/features.h
 	$(CC) $(CFLAGS) -c $< -o $@
