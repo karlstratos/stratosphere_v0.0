@@ -461,6 +461,8 @@ void HMM::Predict(const vector<string> &observation_string_sequence,
 	Viterbi(observation_sequence, &state_sequence);
     } else if (decoding_method_ == "mbr") {
 	MinimumBayesRisk(observation_sequence, &state_sequence);
+    } else if (decoding_method_ == "greedy") {
+	GreedyDecoding(observation_sequence, &state_sequence);
     } else {
 	ASSERT(false, "Unknown decoding method: " << decoding_method_);
     }
@@ -2184,6 +2186,44 @@ void HMM::MinimumBayesRisk(const vector<Observation> &observation_sequence,
 	State best_state = 0;
 	for (State state = 0; state < NumStates(); ++state) {
 	    double log_probability = al[i][state] + be[i][state];
+	    if (log_probability >= max_log_probability) {
+		max_log_probability = log_probability;
+		best_state = state;
+	    }
+	}
+	state_sequence->push_back(best_state);
+    }
+}
+
+void HMM::GreedyDecoding(const vector<Observation> &observation_sequence,
+			 vector<State> *state_sequence) {
+    state_sequence->clear();
+
+    double max_log_probability = -numeric_limits<double>::infinity();
+    State best_state = 0;
+
+    Observation initial_observation = observation_sequence[0];
+    for (State state = 0; state < NumStates(); ++state) {
+	double emission_value = (initial_observation == UnknownObservation()) ?
+	    -log(NumObservations()) : emission_[state][initial_observation];
+	double log_probability = prior_[state] + emission_value;
+	if (log_probability >= max_log_probability) {
+	    max_log_probability = log_probability;
+	    best_state = state;
+	}
+    }
+    state_sequence->push_back(best_state);
+
+    for (size_t i = 1; i < observation_sequence.size(); ++i) {
+	max_log_probability = -numeric_limits<double>::infinity();
+	best_state = 0;
+	Observation observation = observation_sequence[i];
+	State previous_state = state_sequence->at(i-1);
+	for (State state = 0; state < NumStates(); ++state) {
+	    double emission_value = (observation == UnknownObservation()) ?
+		-log(NumObservations()) : emission_[state][observation];
+	    double log_probability =
+		transition_[previous_state][state] + emission_value;
 	    if (log_probability >= max_log_probability) {
 		max_log_probability = log_probability;
 		best_state = state;

@@ -95,7 +95,7 @@ int main (int argc, char* argv[]) {
 	cout << "--postmortem, -p:   \t"
 	     << "do post-training local search?" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
-	     << "decoding method: viterbi, mbr"  << endl;
+	     << "decoding method: viterbi, mbr, greedy"  << endl;
 	cout << "--log [-]:        \t"
 	     << "path to a log file" << endl;
 	cout << "--quiet, -q:          \t"
