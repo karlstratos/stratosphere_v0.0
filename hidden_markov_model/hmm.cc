@@ -814,10 +814,12 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
     for (const auto &observation_string_pair : observation_dictionary_) {
 	string observation_string = observation_string_pair.first;
 	Observation observation = observation_string_pair.second;
+	cout << " " << observation_string << endl;
 	for (const string &extension_type : extension_types) {
 	    if (extension_type == "basic") {
 		string basic_word_shape =
-		    features::basic_word_shape(observation_string);
+		    "<shape>=" + features::basic_word_shape(observation_string);
+		cout << basic_word_shape << endl;
 		if (context_dictionary->find(basic_word_shape) ==
 		    context_dictionary->end()) {
 		    (*context_dictionary)[basic_word_shape] =
@@ -829,8 +831,9 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 		string prefix_size_string = extension_type.substr(4);
 		size_t prefix_size = stol(prefix_size_string);
 		if (observation_string.size() < prefix_size) { continue; }
-		string prefix = features::prefix(observation_string,
-						 prefix_size);
+		string prefix = "<pref" + prefix_size_string + ">=" +
+		    features::prefix(observation_string, prefix_size);
+		cout << prefix << endl;
 		if (context_dictionary->find(prefix) ==
 		    context_dictionary->end()) {
 		    (*context_dictionary)[prefix] = context_dictionary->size();
@@ -841,8 +844,9 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 		string suffix_size_string = extension_type.substr(4);
 		size_t suffix_size = stol(suffix_size_string);
 		if (observation_string.size() < suffix_size) { continue; }
-		string suffix = features::suffix(observation_string,
-						 suffix_size);
+		string suffix = "<suff" + suffix_size_string + ">=" +
+		    features::suffix(observation_string, suffix_size);
+		cout << suffix << endl;
 		if (context_dictionary->find(suffix) ==
 		    context_dictionary->end()) {
 		    (*context_dictionary)[suffix] = context_dictionary->size();
