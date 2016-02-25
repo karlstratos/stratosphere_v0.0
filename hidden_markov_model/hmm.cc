@@ -818,14 +818,40 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 	Observation observation = observation_string_pair.second;
 	for (const string &extension_type : extension_types) {
 	    if (extension_type == "basic") {
-		string basic_word_shape =
+		string shape =
 		    "<shape>=" + features::basic_word_shape(observation_string);
-		if (context_dictionary->find(basic_word_shape) ==
+		if (context_dictionary->find(shape) ==
 		    context_dictionary->end()) {
-		    (*context_dictionary)[basic_word_shape] =
-			context_dictionary->size();
+		    (*context_dictionary)[shape] = context_dictionary->size();
 		}
-		Context new_context = (*context_dictionary)[basic_word_shape];
+		Context new_context = (*context_dictionary)[shape];
+		new_contexts[observation].push_back(new_context);
+	    } else if (extension_type == "cap") {
+		string cap =
+		    "<cap>=" + features::is_capitalized(observation_string);
+		if (context_dictionary->find(cap) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[cap] = context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[cap];
+		new_contexts[observation].push_back(new_context);
+	    } else if (extension_type == "hyphen") {
+		string hyphen =
+		    "<hyphen>=" + features::contains_hyphen(observation_string);
+		if (context_dictionary->find(hyphen) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[hyphen] = context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[hyphen];
+		new_contexts[observation].push_back(new_context);
+	    } else if (extension_type == "digit") {
+		string digit =
+		    "<digit>=" + features::contains_digit(observation_string);
+		if (context_dictionary->find(digit) ==
+		    context_dictionary->end()) {
+		    (*context_dictionary)[digit] = context_dictionary->size();
+		}
+		Context new_context = (*context_dictionary)[digit];
 		new_contexts[observation].push_back(new_context);
 	    } else if (extension_type.substr(0, 4) == "pref") {
 		string prefix_size_string = extension_type.substr(4);
