@@ -6,7 +6,7 @@
 #include "hmm.h"
 
 int main (int argc, char* argv[]) {
-    string model_path;
+    string output_directory;
     string data_path;
     string prediction_path;
     bool lowercase = false;
@@ -42,8 +42,8 @@ int main (int argc, char* argv[]) {
 	if (arg == "--help" || arg == "-h"){ display_options_and_quit = true; }
     }
     if (argc == 1 || display_options_and_quit) {
-	cout << "--model [-]:        \t"
-	     << "path to a model file" << endl;
+	cout << "--output [-]:        \t"
+	     << "path to an output directory" << endl;
 	cout << "--data [-]:        \t"
 	     << "path to a data file" << endl;
 	cout << "--pred [-]:        \t"
@@ -108,8 +108,8 @@ int main (int argc, char* argv[]) {
     // Parse command line arguments.
     for (int i = 1; i < argc; ++i) {
 	string arg = (string) argv[i];
-	if (arg == "--model") {
-	    model_path = argv[++i];
+	if (arg == "--output") {
+	    output_directory = argv[++i];
 	} else if (arg == "--data") {
 	    data_path = argv[++i];
 	} else if (arg == "--pred") {
@@ -171,7 +171,7 @@ int main (int argc, char* argv[]) {
 	}
     }
 
-    HMM hmm;
+    HMM hmm(output_directory);
     hmm.set_lowercase(lowercase);
     hmm.set_rare_cutoff(rare_cutoff);
     hmm.set_unsupervised_learning_method(unsupervised_learning_method);
@@ -197,6 +197,7 @@ int main (int argc, char* argv[]) {
     hmm.set_verbose(verbose);
 
     if (train) {
+	hmm.ResetOutputDirectory();
 	if (num_states == 0) {  // Supervised learning
 	    hmm.TrainSupervised(data_path);
 	} else {  // Unsupervised learning
@@ -205,9 +206,9 @@ int main (int argc, char* argv[]) {
 	if (!development_path.empty()) {
 	    hmm.Evaluate(development_path, prediction_path);
 	}
-	hmm.Save(model_path);
+	hmm.Save();
     } else {
-	hmm.Load(model_path);
+	hmm.Load();
 	if (!data_path.empty()) { hmm.Evaluate(data_path, prediction_path); }
     }
 

@@ -106,6 +106,3 @@ $(CORE)/evaluate.o: $(CORE)/evaluate.cc $(CORE)/evaluate.h
 
 $(CORE)/features.o: $(CORE)/features.cc $(CORE)/features.h
 	$(CC) $(CFLAGS) -c $< -o $@
-
-$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@

@@ -22,13 +22,21 @@ public:
     // Initializes empty.
     HMM() { }
 
-    // Initializes from a model file.
-    HMM(const string &model_path) { Load(model_path); }
+    // Initializes with an output directory.
+    HMM(const string &output_directory) {
+	SetOutputDirectory(output_directory);
+    }
 
     // Initializes randomly.
     HMM(size_t num_observations, size_t num_states) {
 	CreateRandomly(num_observations, num_states);
     }
+
+    // Sets the output directory.
+    void SetOutputDirectory(const string &output_directory);
+
+    // Resets the content in the output directory.
+    void ResetOutputDirectory();
 
     // Clears the model.
     void Clear();
@@ -36,8 +44,14 @@ public:
     // Creates a random HMM.
     void CreateRandomly(size_t num_observations, size_t num_states);
 
+    // Saves HMM parameters to the default model file.
+    void Save() { Save(ModelPath()); }
+
     // Saves HMM parameters to a model file.
     void Save(const string &model_path);
+
+    // Loads HMM parameters from the default model file.
+    void Load() { Load(ModelPath()); }
 
     // Loads HMM parameters from a model file.
     void Load(const string &model_path);
@@ -114,6 +128,11 @@ public:
 
     // Returns the string corresponding to a state index.
     string GetStateString(State state);
+
+    // Sets the output directory.
+    void set_output_directory(string output_directory) {
+	output_directory_ = output_directory;
+    }
 
     // Sets the flag for lowercasing all observation strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
@@ -362,6 +381,15 @@ private:
     void GreedyDecoding(const vector<Observation> &observation_sequence,
 			vector<State> *state_sequence);
 
+    // Reports status in a log file and optionally the standard output.
+    void Report(const string &report_string);
+
+    // Returns the path to the model file.
+    string ModelPath() { return output_directory_ + "/model.bin"; }
+
+    // Returns the path to the log file.
+    string LogPath() { return output_directory_ + "/log.txt"; }
+
     // Special string for separating observation/state in data files.
     const string kObservationStateSeperator_ = "__<label>__";
 
@@ -385,6 +413,9 @@ private:
 
     // Prior log probabilities.
     vector<double> prior_;
+
+    // Path to the output directory.
+    string output_directory_;
 
     // Lowercase all observation strings?
     bool lowercase_ = false;

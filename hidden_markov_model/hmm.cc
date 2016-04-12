@@ -15,6 +15,29 @@
 #include "../core/sparsesvd.h"
 #include "../core/util.h"
 
+void HMM::SetOutputDirectory(const string &output_directory) {
+    ASSERT(!output_directory.empty(), "Empty output directory.");
+    output_directory_ = output_directory;
+
+    // Remove a file at the path (if it exists).
+    if (util_file::exists(output_directory_) &&
+	util_file::get_file_type(output_directory_) == "file") {
+	ASSERT(system(("rm -f " + output_directory_).c_str()) == 0,
+	       "Cannot remove file: " << output_directory_);
+    }
+
+    // Create the current output directory (if necessary).
+    ASSERT(system(("mkdir -p " + output_directory_).c_str()) == 0,
+	   "Cannot create directory: " << output_directory_);
+}
+
+void HMM::ResetOutputDirectory() {
+    ASSERT(!output_directory_.empty(), "No output directory given.");
+    ASSERT(system(("rm -f " + output_directory_ + "/*").c_str()) == 0,
+	   "Cannot remove the content in: " << output_directory_);
+    SetOutputDirectory(output_directory_);
+}
+
 void HMM::Clear() {
     observation_dictionary_.clear();
     observation_dictionary_inverse_.clear();
@@ -343,13 +366,14 @@ void HMM::TrainSupervised(const string &data_path) {
 	    state_string_sequences, predictions, &position_accuracy,
 	    &sequence_accuracy, &label_mapping);
 	double likelihood = ComputeLogProbability(observation_string_sequences);
-	string line = util_string::printf_format(
-	    "\n---TRAINING---\n"
-	    "%s (many-to-one) per-position: %.2f%%   per-sequence: %.2f%%"
-	    "   likelihood: %.2f",
-	    decoding_method_.c_str(), position_accuracy, sequence_accuracy,
-	    likelihood);
-	cerr << line << endl;
+	Report(util_string::printf_format(
+		   "\n---TRAINING---\n"
+		   "%s (many-to-one)   "
+		   "per-position: %.2f%%   "
+		   "per-sequence: %.2f%%   "
+		   "likelihood: %.2f",
+		   decoding_method_.c_str(), position_accuracy,
+		   sequence_accuracy, likelihood));
     }
 }
 
@@ -394,9 +418,10 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
 			&state_string_sequence)) {
 	    likelihood += ComputeLogProbability(observation_string_sequence);
 	}
-	string line = util_string::printf_format(
-	    "\n---TRAINING---\nlikelihood: %.2f", likelihood);
-	cerr << line << endl;
+	Report(util_string::printf_format(
+		   "\n---TRAINING---\n"
+		   "likelihood: %.2f",
+		   likelihood));
     }
 }
 
@@ -2253,4 +2278,10 @@ void HMM::GreedyDecoding(const vector<Observation> &observation_sequence,
 	}
 	state_sequence->push_back(best_state);
     }
+}
+
+void HMM::Report(const string &report_string) {
+    ofstream log_file(LogPath(), ios::out | ios::app);
+    log_file << report_string << endl;
+    if (verbose_) { cerr << report_string << endl; }
 }

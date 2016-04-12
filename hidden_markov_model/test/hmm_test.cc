@@ -12,8 +12,9 @@
 class LabeledDataExample : public testing::Test {
 protected:
     virtual void SetUp() {
-	model_file_path_ = tmpnam(nullptr);
 	data_file_path_ = tmpnam(nullptr);
+	output_directory_path_ = tmpnam(nullptr);
+
 	ofstream data_file(data_file_path_, ios::out);
 	data_file << "the" + separater_ + "D ";
 	data_file << "dog" + separater_ + "N ";
@@ -52,11 +53,12 @@ protected:
 
     virtual void TearDown() {
 	remove(data_file_path_.c_str());
-	remove(model_file_path_.c_str());
+	ASSERT(system(("rm -rf " + output_directory_path_).c_str()) == 0,
+	       "Cannot remove: " << output_directory_path_);
     }
 
     string data_file_path_;
-    string model_file_path_;
+    string output_directory_path_;
     const string separater_ = "__<label>__";
     double tol_ = 1e-10;
     unordered_map<string, unordered_map<string, double> > rare0_emission_;
@@ -111,13 +113,14 @@ TEST_F(LabeledDataExample, CheckSupervisedTrainingRare1) {
 
 // Checks saving and loading a trained model
 TEST_F(LabeledDataExample, CheckSavingAndLoadingTrainedModel) {
-    HMM hmm1;
+    HMM hmm1(output_directory_path_);
     hmm1.set_rare_cutoff(1);
     hmm1.set_verbose(false);
     hmm1.TrainSupervised(data_file_path_);
-    hmm1.Save(model_file_path_);
+    hmm1.Save();
 
-    HMM hmm2(model_file_path_);  // Loading.
+    HMM hmm2(output_directory_path_);
+    hmm2.Load();
     // V -> <?>: 1.0
     // S -> <?>: 1.0 / 3.0;
     EXPECT_NEAR(1.0,
