@@ -274,6 +274,25 @@ private:
 	const unordered_map<Observation, size_t> &observation_count,
 	const Eigen::MatrixXd &flipped_emission);
 
+    // Recovers the emission parameters using Bayes' rule.
+    void RecoverEmissionParameters(
+	const unordered_map<Observation, size_t> &observation_count,
+	const Eigen::MatrixXd &flipped_emission);
+
+    // Recovers the prior parameters.
+    void RecoverPriorParameters(
+	const unordered_map<Observation, size_t> &initial_observation_count,
+	const Eigen::MatrixXd &emission_matrix);
+
+    // Organizes the emission parameters into a probability matrix.
+    void ConstructEmissionMatrix(Eigen::MatrixXd *emission_matrix);
+
+    // Organizes the transition parameters into a probability matrix.
+    void ConstructTransitionMatrix(Eigen::MatrixXd *transition_matrix);
+
+    // Initializes the transition parameters uniformly.
+    void InitializeTransitionParametersUniformly();
+
     // Runs the Baum-Welch algorithm (must already have dictionaries).
     // - If parameters exist, simply start from them.
     // - Otherwise, initialize them randomly.
@@ -389,6 +408,11 @@ private:
 
     // Returns the path to the log file.
     string LogPath() { return output_directory_ + "/log.txt"; }
+
+    // Returns the path to the flipped emission parameters file.
+    string FlippedEmissionPath() {
+	return output_directory_ + "/flipped_emission.txt";
+    }
 
     // Special string for separating observation/state in data files.
     const string kObservationStateSeperator_ = "__<label>__";
