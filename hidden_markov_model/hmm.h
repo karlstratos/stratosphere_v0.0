@@ -285,10 +285,17 @@ private:
 	const unordered_map<Observation, size_t> &observation_count,
 	const Eigen::MatrixXd &flipped_emission);
 
-    // Recovers the prior parameters given the emission parameters.
-    void RecoverPriorParametersGivenEmission(
+    // Recovers the prior parameters given flipped emission.
+    void RecoverPriorParametersGivenFlippedEmission(
 	const unordered_map<Observation, size_t> &initial_observation_count,
-	const Eigen::MatrixXd &emission_matrix);
+	const Eigen::MatrixXd &flipped_emission);
+
+    // Recovers the transition parameters given the rest of other parameters.
+    void RecoverTransitionParametersGivenOthers(
+	const Eigen::VectorXd &average_state_probabilities,
+	const unordered_map<Observation, unordered_map<Observation, size_t> >
+	&observation_bigram_count,
+	const unordered_map<Observation, size_t> &final_observation_count);
 
     // Organizes the emission parameters into a probability matrix.
     void ConstructEmissionMatrix(Eigen::MatrixXd *emission_matrix);

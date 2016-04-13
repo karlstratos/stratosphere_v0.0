@@ -17,7 +17,7 @@ int main (int argc, char* argv[]) {
     size_t max_num_em_iterations_baumwelch = 1000;
     size_t max_num_em_iterations_transition = 1;
     size_t max_num_fw_iterations = 1000;
-    size_t development_interval = 10;
+    size_t development_interval = 1;
     size_t max_num_no_improvement = 10;
     size_t window_size = 3;
     string context_definition = "list";

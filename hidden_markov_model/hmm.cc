@@ -346,35 +346,36 @@ void HMM::TrainSupervised(const string &data_path) {
     }
     CheckProperDistribution();
 
-    if (verbose_) {  // Report performance and likelihood on the training data.
-	vector<vector<string> > observation_string_sequences;
-	vector<vector<string> > state_string_sequences;
-	ReadLines(data_path, true, &observation_string_sequences,
-		  &state_string_sequences);
+    // Report performance and likelihood on the training data.
+    vector<vector<string> > observation_string_sequences;
+    vector<vector<string> > state_string_sequences;
+    ReadLines(data_path, true, &observation_string_sequences,
+	      &state_string_sequences);
 
-	// Make predictions.
-	vector<vector<string> > predictions;
-	for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
-	    vector<string> prediction;
-	    Predict(observation_string_sequences[i], &prediction);
-	    predictions.push_back(prediction);
-	}
-	unordered_map<string, string> label_mapping;
-	double position_accuracy;
-	double sequence_accuracy;
-	eval_sequential::compute_accuracy_mapping_labels(
-	    state_string_sequences, predictions, &position_accuracy,
-	    &sequence_accuracy, &label_mapping);
-	double likelihood = ComputeLogProbability(observation_string_sequences);
-	Report(util_string::printf_format(
-		   "\n---TRAINING---\n"
-		   "%s (many-to-one)   "
-		   "per-position: %.2f%%   "
-		   "per-sequence: %.2f%%   "
-		   "likelihood: %.2f",
-		   decoding_method_.c_str(), position_accuracy,
-		   sequence_accuracy, likelihood));
+    // Make predictions.
+    vector<vector<string> > predictions;
+    for (size_t i = 0; i < observation_string_sequences.size(); ++i) {
+	vector<string> prediction;
+	Predict(observation_string_sequences[i], &prediction);
+	predictions.push_back(prediction);
     }
+    unordered_map<string, string> label_mapping;
+    double position_accuracy;
+    double sequence_accuracy;
+    eval_sequential::compute_accuracy_mapping_labels(
+	state_string_sequences, predictions, &position_accuracy,
+	&sequence_accuracy, &label_mapping);
+    double likelihood = ComputeLogProbability(observation_string_sequences);
+    Report(util_string::printf_format(
+	       "\n---TRAINING---\n"
+	       "File: %s\n"
+	       "%s (many-to-one)   "
+	       "per-position: %.2f%%   "
+	       "per-sequence: %.2f%%   "
+	       "likelihood: %.2f",
+	       util_file::get_file_name(data_path).c_str(),
+	       decoding_method_.c_str(), position_accuracy,
+	       sequence_accuracy, likelihood));
 }
 
 void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
@@ -449,8 +450,9 @@ void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
     }
     Report(util_string::printf_format(
 	       "\n---TRAINING---\n"
+	       "File: %s\n"
 	       "likelihood: %.2f",
-	       likelihood));
+	       util_file::get_file_name(data_path).c_str(), likelihood));
 }
 
 void HMM::Evaluate(const string &labeled_data_path,
@@ -947,12 +949,15 @@ void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
 	   << num_anchor_candidates_ << " < " << NumStates());
 
     anchor_observations->clear();
-    Report(util_string::printf_format("Obtaining %d anchors", NumStates()));
+    string line = util_string::printf_format("Obtaining %d anchors",
+					     NumStates());
 
     if (anchor_path_.empty()) {
 	size_t num_candidates = (num_anchor_candidates_ >= NumStates()) ?
 	    num_anchor_candidates_ : NumStates();
-	Report(util_string::printf_format("(%d candidates)", num_candidates));
+	line += util_string::printf_format("   (out of %d candidates)",
+					   num_candidates);
+	Report(line);
 	unordered_map<Observation, bool> anchor_candidates;
 
 	// Will consider only frequent observation types for anchors.
@@ -970,7 +975,8 @@ void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
 	optimize::find_vertex_rows(convex_hull, NumStates(), anchor_candidates,
 				   anchor_observations);
     } else {
-	Report(util_string::printf_format("(provided by the user)"));
+	line += util_string::printf_format("(PROVIDED BY THE USER)");
+	Report(line);
 
 	ifstream anchor_file(anchor_path_, ios::in);
 	ASSERT(anchor_file.is_open(), "Cannot open " << anchor_path_);
@@ -1007,19 +1013,17 @@ void HMM::RecoverParametersGivenFlippedEmission(
     &observation_bigram_count,
     const unordered_map<Observation, size_t> &initial_observation_count,
     const unordered_map<Observation, size_t> &final_observation_count) {
-    // Recover the original emission parameters with Bayes' rule.
+    // 1. Emission parameters.
     RecoverEmissionParametersGivenFlippedEmission(observation_count,
 						  flipped_emission);
 
-    // Organize emission parameters into a probability matrix.
-    Eigen::MatrixXd emission_matrix;
-    ConstructEmissionMatrix(&emission_matrix);
+    // 2. Prior parameters.
+    RecoverPriorParametersGivenFlippedEmission(initial_observation_count,
+					       flipped_emission);
 
-    // Recover the prior parameters from initial observations.
-    RecoverPriorParametersGivenEmission(initial_observation_count,
-					emission_matrix);
+    // 3. Transition parameters.
 
-    // Recover the transition parameters from observation bigrams.
+    // Need to first compute average state probabilities p(h).
     Eigen::VectorXd average_observation_probabilities =
 	Eigen::VectorXd::Zero(NumObservations());
     double num_observations = util_misc::sum_values(observation_count);
@@ -1028,14 +1032,72 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	    ((double) observation_pair.second) / num_observations;
     }
     Eigen::VectorXd average_state_probabilities =  // p(h) = sum_x p(h|x) p(x)
-	emission_matrix.transpose() * average_observation_probabilities;
+	flipped_emission.transpose() * average_observation_probabilities;
     average_state_probabilities /= average_state_probabilities.lpNorm<1>();
 
+    RecoverTransitionParametersGivenOthers(average_state_probabilities,
+					   observation_bigram_count,
+					   final_observation_count);
+    CheckProperDistribution();
+}
+
+void HMM::RecoverEmissionParametersGivenFlippedEmission(
+    const unordered_map<Observation, size_t> &observation_count,
+    const Eigen::MatrixXd &flipped_emission) {
+    emission_.resize(NumStates());
+    for (State state = 0; state < NumStates(); ++state) {
+	emission_[state].resize(NumObservations());
+	double state_normalizer = 0.0;
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    // Bayes' rule: requires observation counts.
+	    emission_[state][observation] =
+		flipped_emission(observation, state) *
+		observation_count.at(observation);
+	    state_normalizer += emission_[state][observation];
+	}
+	// Convert to log and normalize.
+	for (Observation observation = 0; observation < NumObservations();
+	     ++observation) {
+	    emission_[state][observation] = log(emission_[state][observation])
+		- log(state_normalizer);
+	}
+    }
+}
+
+void HMM::RecoverPriorParametersGivenFlippedEmission(
+    const unordered_map<Observation, size_t> &initial_observation_count,
+    const Eigen::MatrixXd &flipped_emission) {
+    Eigen::VectorXd initial_observation_probabilities =
+	Eigen::VectorXd::Zero(NumObservations());
+    double num_initial_observations =
+	util_misc::sum_values(initial_observation_count);
+    for (const auto &observation_pair : initial_observation_count) {
+	initial_observation_probabilities[observation_pair.first] =
+	    ((double) observation_pair.second) / num_initial_observations;
+    }
+    // For convenience, assume p(h|x) \approx p(h|x,start).
+    Eigen::VectorXd prior_state_probabilities =
+	flipped_emission.transpose() * initial_observation_probabilities;
+    prior_state_probabilities /= prior_state_probabilities.lpNorm<1>();
+    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = util_math::log0(prior_state_probabilities[state]);
+    }
+}
+
+void HMM::RecoverTransitionParametersGivenOthers(
+    const Eigen::VectorXd &average_state_probabilities,
+    const unordered_map<Observation, unordered_map<Observation, size_t> >
+    &observation_bigram_count,
+    const unordered_map<Observation, size_t> &final_observation_count) {
     // Initialize transition parameters uniformly.
     InitializeTransitionParametersUniformly();
 
-    // Keep transition parameters as a matrix for convenience.
+    // Keep emission and transition parameters as matrices for convenience.
+    Eigen::MatrixXd emission_matrix;
     Eigen::MatrixXd transition_matrix;
+    ConstructEmissionMatrix(&emission_matrix);
     ConstructTransitionMatrix(&transition_matrix);
 
     // Prepare data-driven model development.
@@ -1069,8 +1131,9 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	eval_sequential::compute_accuracy_mapping_labels(
 	    development_state_string_sequences, predictions,
 	    &position_accuracy, &sequence_accuracy, &label_mapping);
+
 	Report(util_string::printf_format(
-		   "Original: %s %.2f%%",
+		   "Dev data provided: %s   (original accuracy %.2f%%)",
 		   util_file::get_file_name(development_path_).c_str(),
 		   position_accuracy));
 	max_development_accuracy = position_accuracy;
@@ -1078,8 +1141,12 @@ void HMM::RecoverParametersGivenFlippedEmission(
     }
 
     double log_likelihood = -numeric_limits<double>::infinity();  // Convention.
-    for (size_t iteration_num = 0;
-	 iteration_num < max_num_em_iterations_transition_; ++iteration_num) {
+
+    // Iterate (100 times maximum) until
+    //    1. If dev data is given:  we fail to improve the dev accuracy.
+    //    2. If dev data not given: we reach the pre-specified number of EM
+    //                              iterations, or we reach a local optimum.
+    for (size_t iteration_num = 0; iteration_num < 100; ++iteration_num) {
 	// Set up expected counts of state bigrams.
 	vector<vector<double> > state_bigram_count(NumStates());
 	for (State state = 0; state < NumStates(); ++state) {
@@ -1192,12 +1259,13 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	log_likelihood = new_log_likelihood;
 
 	// Stopping critera: development accuracy, or likelihood.
-	Report(util_string::printf_format(
-		   "Iteration %ld: %.2f (%.2f)", iteration_num + 1,
-		   new_log_likelihood, likelihood_difference));
+	string line = util_string::printf_format(
+	    "Iteration %ld: %.2f (%.2f)", iteration_num + 1,
+	    new_log_likelihood, likelihood_difference);
 
 	if (!development_path_.empty()) {
 	    if ((iteration_num + 1) % development_interval_ != 0) {
+		Report(line);
 		continue;  // Not at a checking interval.
 	    }
 	    // Check the accuracy on the (labeled) development data.
@@ -1217,77 +1285,33 @@ void HMM::RecoverParametersGivenFlippedEmission(
 		development_state_string_sequences, predictions,
 		&position_accuracy, &sequence_accuracy, &label_mapping);
 
-	    string line = util_string::printf_format(
-		"%s: %.2f%% ",
-		util_file::get_file_name(development_path_).c_str(),
-		position_accuracy);
+	    line += "   " + util_string::printf_format(
+		"dev accuracy %.2f%% ", position_accuracy);
 	    if (position_accuracy > max_development_accuracy) {  // New record.
 		max_development_accuracy = position_accuracy;
 		no_improvement_count = 0;  // Reset.
 		Save(temp_model_path);
-		line += "(new record)";
+		line += " (new record)";
 	    } else {  // No improvement.
 		++no_improvement_count;
 		line += util_string::printf_format(
-		    "(no improvement %d)", no_improvement_count);
+		    " (no improvement %d)", no_improvement_count);
 		if (no_improvement_count >= max_num_no_improvement_) {
 		    Report(line);
 		    Load(temp_model_path);
 		    break;
 		}
 	    }
-	    Report(line);
 	} else {  // No development data is given.
-	    if (likelihood_difference < 1e-10) { break; }  // Stationary point
+	    if (iteration_num + 1 >= max_num_em_iterations_transition_ ||
+		likelihood_difference < 1e-10) {
+		Report(line);
+		break;
+	    }
 	}
+	Report(line);
     }
     remove(temp_model_path.c_str());
-
-    CheckProperDistribution();
-}
-
-void HMM::RecoverEmissionParametersGivenFlippedEmission(
-    const unordered_map<Observation, size_t> &observation_count,
-    const Eigen::MatrixXd &flipped_emission) {
-    emission_.resize(NumStates());
-    for (State state = 0; state < NumStates(); ++state) {
-	emission_[state].resize(NumObservations());
-	double state_normalizer = 0.0;
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    // Bayes' rule: requires observation counts.
-	    emission_[state][observation] =
-		flipped_emission(observation, state) *
-		observation_count.at(observation);
-	    state_normalizer += emission_[state][observation];
-	}
-	// Convert to log and normalize.
-	for (Observation observation = 0; observation < NumObservations();
-	     ++observation) {
-	    emission_[state][observation] = log(emission_[state][observation])
-		- log(state_normalizer);
-	}
-    }
-}
-
-void HMM::RecoverPriorParametersGivenEmission(
-    const unordered_map<Observation, size_t> &initial_observation_count,
-    const Eigen::MatrixXd &emission_matrix) {
-    Eigen::VectorXd initial_observation_probabilities =
-	Eigen::VectorXd::Zero(NumObservations());
-    double num_initial_observations =
-	util_misc::sum_values(initial_observation_count);
-    for (const auto &observation_pair : initial_observation_count) {
-	initial_observation_probabilities[observation_pair.first] =
-	    ((double) observation_pair.second) / num_initial_observations;
-    }
-    Eigen::VectorXd prior_state_probabilities =
-	emission_matrix.transpose() * initial_observation_probabilities;
-    prior_state_probabilities /= prior_state_probabilities.lpNorm<1>();
-    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
-    for (State state = 0; state < NumStates(); ++state) {
-	prior_[state] = util_math::log0(prior_state_probabilities[state]);
-    }
 }
 
 void HMM::ConstructEmissionMatrix(Eigen::MatrixXd *emission_matrix) {
@@ -1298,6 +1322,18 @@ void HMM::ConstructEmissionMatrix(Eigen::MatrixXd *emission_matrix) {
 	     ++observation) {
 	    (*emission_matrix)(observation, state) =
 		exp(emission_[state][observation]);
+	}
+    }
+}
+
+void HMM::ConstructTransitionMatrix(Eigen::MatrixXd *transition_matrix) {
+    transition_matrix->resize(NumStates() + 1, NumStates());  // +stop
+    for (State state = 0; state < NumStates(); ++state) {
+	// Each column is a distribution.
+	for (State next_state = 0; next_state < NumStates() + 1;  // +stop
+	     ++next_state) {
+	    (*transition_matrix)(next_state, state) =
+		exp(transition_[state][next_state]);
 	}
     }
 }
@@ -1315,18 +1351,6 @@ void HMM::InitializeTransitionParametersUniformly() {
 	for (State state2 = 0; state2 < NumStates() + 1; ++state2) {  // +stop
 	    transition_[state1][state2] =
 		log(transition_[state1][state2]) - log(state1_normalizer);
-	}
-    }
-}
-
-void HMM::ConstructTransitionMatrix(Eigen::MatrixXd *transition_matrix) {
-    transition_matrix->resize(NumStates() + 1, NumStates());  // +stop
-    for (State state = 0; state < NumStates(); ++state) {
-	// Each column is a distribution.
-	for (State next_state = 0; next_state < NumStates() + 1;  // +stop
-	     ++next_state) {
-	    (*transition_matrix)(next_state, state) =
-		exp(transition_[state][next_state]);
 	}
     }
 }
@@ -1351,7 +1375,7 @@ void HMM::RunBaumWelch(const string &data_path) {
     size_t no_improvement_count = 0;
 
     // Start EM iterations.
-    if (verbose_) { cerr << endl << "EM ITERATIONS FOR BAUM-WELCH" << endl; }
+    Report(util_string::printf_format("\nEM ITERATIONS FOR BAUM-WELCH"));
 
     // Compute initial accuracy on the development data, save the model.
     if (!development_path_.empty()) {
@@ -1368,19 +1392,22 @@ void HMM::RunBaumWelch(const string &data_path) {
 	eval_sequential::compute_accuracy_mapping_labels(
 	    development_state_string_sequences, predictions,
 	    &position_accuracy, &sequence_accuracy, &label_mapping);
-	if (verbose_) {
-	    cerr << "Original: ";
-	    cerr << util_file::get_file_name(development_path_) << ": "
-		 << util_string::printf_format("%.2f%% ", position_accuracy)
-		 << endl;
-	}
+	Report(util_string::printf_format(
+		   "Dev data provided: %s   (random accuracy %.2f%%)",
+		   util_file::get_file_name(development_path_).c_str(),
+		   position_accuracy));
 	max_development_accuracy = position_accuracy;
 	Save(temp_model_path);
     }
 
     double log_likelihood = -numeric_limits<double>::infinity();  // Convention.
-    for (size_t iteration_num = 0;
-	 iteration_num < max_num_em_iterations_baumwelch_; ++iteration_num) {
+
+    // Iterate (1000 times maximum) until
+    //    1. If dev data is given:  we fail to improve the dev accuracy.
+    //    2. If dev data not given: we reach the pre-specified number of
+    //                              Baum-Welch iterations, or we reach a local
+    //                              optimum.
+    for (size_t iteration_num = 0; iteration_num < 1000; ++iteration_num) {
 	// Set up expected counts.
 	vector<vector<double> > emission_count(NumObservations());
 	for (State state = 0; state < NumStates(); ++state) {
@@ -1459,25 +1486,6 @@ void HMM::RunBaumWelch(const string &data_path) {
 	    }
 	}
 
-	// Must always increase likelihood.
-	double likelihood_difference = new_log_likelihood - log_likelihood;
-	ASSERT(likelihood_difference > -1e-5, "Likelihood decreased by: "
-	       << likelihood_difference);
-	log_likelihood = new_log_likelihood;
-	if (verbose_) {
-	    string line = util_string::printf_format(
-		"Iteration %ld: %.2f", iteration_num + 1,
-		new_log_likelihood, likelihood_difference);
-	    cerr << line;
-	    if (iteration_num > 0) {
-		string line = util_string::printf_format(" (%.2f)   ",
-							 likelihood_difference);
-		cerr << line;
-	    } else {
-		cerr << "   ";
-	    }
-	}
-
 	// Update parameters from the expected counts.
 	for (State state = 0; state < NumStates(); ++state) {
 	    double state_normalizer = accumulate(emission_count[state].begin(),
@@ -1508,10 +1516,20 @@ void HMM::RunBaumWelch(const string &data_path) {
 	}
 	CheckProperDistribution();
 
+	// Must always increase likelihood.
+	double likelihood_difference = new_log_likelihood - log_likelihood;
+	ASSERT(likelihood_difference > -1e-5, "Likelihood decreased by: "
+	       << likelihood_difference);
+	log_likelihood = new_log_likelihood;
+
 	// Stopping critera: development accuracy, or likelihood.
+	string line = util_string::printf_format(
+	    "Iteration %ld: %.2f (%.2f)", iteration_num + 1,
+	    new_log_likelihood, likelihood_difference);
+
 	if (!development_path_.empty()) {
 	    if ((iteration_num + 1) % development_interval_ != 0) {
-		if (verbose_) { cerr << endl; }
+		Report(line);
 		continue;  // Not at a checking interval.
 	    }
 	    // Check the accuracy on the (labeled) development data.
@@ -1530,31 +1548,31 @@ void HMM::RunBaumWelch(const string &data_path) {
 	    eval_sequential::compute_accuracy_mapping_labels(
 		development_state_string_sequences, predictions,
 		&position_accuracy, &sequence_accuracy, &label_mapping);
-	    if (verbose_) {
-		cerr << util_file::get_file_name(development_path_) << ": "
-		     << util_string::printf_format("%.2f%% ",
-						   position_accuracy);
-	    }
+	    line += "   " + util_string::printf_format(
+		"dev accuracy %.2f%% ", position_accuracy);
 	    if (position_accuracy > max_development_accuracy) {
-		if (verbose_) { cerr << "(new record)" << endl; }
 		max_development_accuracy = position_accuracy;
 		no_improvement_count = 0;  // Reset.
 		Save(temp_model_path);
+		line += " (new record)";
 	    } else {
 		++no_improvement_count;
-		if (verbose_) {
-		    cerr << "(no improvement " + to_string(no_improvement_count)
-			 << ")" << endl;
-		}
+		line += util_string::printf_format(
+		    " (no improvement %d)", no_improvement_count);
 		if (no_improvement_count >= max_num_no_improvement_) {
+		    Report(line);
 		    Load(temp_model_path);
 		    break;
 		}
 	    }
 	} else {  // No development data is given.
-	    if (verbose_) { cerr << endl; }
-	    if (likelihood_difference < 1e-10) { break; }  // Stationary point
+	    if (iteration_num + 1 >= max_num_em_iterations_baumwelch_ ||
+		likelihood_difference < 1e-10) {
+		Report(line);
+		break;
+	    }
 	}
+	Report(line);
     }
     remove(temp_model_path.c_str());
 }
