@@ -380,49 +380,77 @@ void HMM::TrainSupervised(const string &data_path) {
 void HMM::TrainUnsupervised(const string &data_path, size_t num_states) {
     Clear();
 
-    // Construct observation dictionaries from the data.
+    // First, construct observation dictionaries from the data.
     unordered_map<Observation, size_t> observation_count;
     ConstructDictionaries(data_path, false, &observation_count);
 
-    // But manually construct synthetic state dictionaries.
-    state_dictionary_.clear();
-    state_dictionary_inverse_.clear();
+    // Also, construct state dictionaries (already clear) synthetically.
     for (State state = 0; state < num_states; ++state) {
-	AddStateIfUnknown("state" + to_string(state));
+	AddStateIfUnknown(kState_ + to_string(state));
     }
 
-    if (unsupervised_learning_method_ == "cluster") {
-	ASSERT(!cluster_path_.empty(), "Need a cluster file");
-	InitializeParametersFromClusters(cluster_path_, data_path);
-    } else if (unsupervised_learning_method_ == "bw") {
+    // Count observation transitions for count-based methods below.
+    Corpus corpus(data_path, verbose_);
+    corpus.set_lowercase(lowercase_);
+    unordered_map<Observation,
+		  unordered_map<Observation, size_t> > observation_bigram_count;
+    unordered_map<Observation, size_t> initial_observation_count;
+    unordered_map<Observation, size_t> final_observation_count;
+    corpus.CountTransitions(observation_dictionary_,
+			    &observation_bigram_count,
+			    &initial_observation_count,
+			    &final_observation_count);
+
+    // Use one of the unsupervised learning methods.
+    if (unsupervised_learning_method_ == "cluster") {  // (Count-based)
+	// Set parameters using clusters.
+	InitializeParametersFromClusters(observation_bigram_count,
+					 initial_observation_count,
+					 final_observation_count);
+    } else if (unsupervised_learning_method_ == "bw") {  // (Iterative)
+	// Run Baum-Welch on the data.
 	RunBaumWelch(data_path);
-    } else if (unsupervised_learning_method_ == "anchor") {
-	RunAnchor(data_path, observation_count);
+    } else if (unsupervised_learning_method_ == "anchor") {  // (Count-based)
+	// Build a convex hull of observation vectors (rows of a matrix).
+	Eigen::MatrixXd convex_hull;
+	BuildConvexHull(&corpus, &convex_hull);
+
+	// Compute the "flipped" emission distributions p(State|Observation)
+	// (rows of a matrix).
+	Eigen::MatrixXd flipped_emission;
+	ComputeFlippedEmission(convex_hull, observation_count,
+			       &flipped_emission);
+
+	// Finally, recover the model parameters from the flipped emission.
+	RecoverParametersGivenFlippedEmission(flipped_emission,
+					      observation_count,
+					      observation_bigram_count,
+					      initial_observation_count,
+					      final_observation_count);
     } else {
 	ASSERT(false, "Unknown unsupervised learning method: "
 	       << unsupervised_learning_method_);
     }
 
-    // Optionally perform post-training local search.
-    if (unsupervised_learning_method_ != "bw" && post_training_local_search_) {
+    // (Optional) Perform post-training local search.
+    if (post_training_local_search_ && unsupervised_learning_method_ != "bw") {
 	RunBaumWelch(data_path);
     }
 
-    if (verbose_) {  // Report likelihood on the training data.
-	double likelihood = 0.0;
-	ifstream data_file(data_path, ios::in);
-	ASSERT(data_file.is_open(), "Cannot open " << data_path);
-	vector<string> observation_string_sequence;
-	vector<string> state_string_sequence;  // Unused.
-	while (ReadLine(false, &data_file, &observation_string_sequence,
-			&state_string_sequence)) {
-	    likelihood += ComputeLogProbability(observation_string_sequence);
-	}
-	Report(util_string::printf_format(
-		   "\n---TRAINING---\n"
-		   "likelihood: %.2f",
-		   likelihood));
+    // Report likelihood on the training data.
+    double likelihood = 0.0;
+    ifstream data_file(data_path, ios::in);
+    ASSERT(data_file.is_open(), "Cannot open " << data_path);
+    vector<string> observation_string_sequence;
+    vector<string> state_string_sequence;  // Unused.
+    while (ReadLine(false, &data_file, &observation_string_sequence,
+		    &state_string_sequence)) {
+	likelihood += ComputeLogProbability(observation_string_sequence);
     }
+    Report(util_string::printf_format(
+	       "\n---TRAINING---\n"
+	       "likelihood: %.2f",
+	       likelihood));
 }
 
 void HMM::Evaluate(const string &labeled_data_path,
@@ -642,78 +670,13 @@ string HMM::GetStateString(State state) {
     }
 }
 
-void HMM::RunAnchor(const string &data_path, const unordered_map<Observation,
-		    size_t> &observation_count) {
-    ASSERT(num_anchor_candidates_ >= NumStates(), "Number of anchor candidates "
-	   << num_anchor_candidates_ << " < " << NumStates());
-
-    // Build a convex hull of observation vectors as rows of a matrix.
-    Eigen::MatrixXd convex_hull;
-    BuildConvexHull(data_path, &convex_hull);
-
-    // Find anchor observations.
-    vector<Observation> anchor_observations;
-    FindAnchors(convex_hull, observation_count, &anchor_observations);
-
-    state_dictionary_.clear();  // Name each state by its anchor.
-    state_dictionary_inverse_.clear();
-    for (State state = 0; state < anchor_observations.size(); ++state) {
-	string anchor_string = observation_dictionary_inverse_[
-	    anchor_observations[state]];
-	state_dictionary_[anchor_string] = state;
-	state_dictionary_inverse_[state] = anchor_string;
-    }
-
-    // Given anchors, compute the "flipped" emission p(State|Observation).
-    Eigen::MatrixXd flipped_emission;
-    optimize::extract_matrix(convex_hull, anchor_observations.size(),
-			     max_num_fw_iterations_, 1e-10, verbose_,
-			     anchor_observations, &flipped_emission);
-
-    // Write the flipped emission values.
-    ofstream flipped_emission_file(FlippedEmissionPath(), ios::out);
-    vector<pair<Observation, size_t> > sorted_observations;
-    for (const auto &observation_pair : observation_count) {
-	sorted_observations.emplace_back(observation_pair.first,
-					 observation_pair.second);
-    }
-    sort(sorted_observations.begin(), sorted_observations.end(),
-	 util_misc::sort_pairs_second<Observation, size_t,
-	 greater<size_t> >());
-    for (size_t i = 0; i < sorted_observations.size(); ++i) {
-	Observation x = sorted_observations[i].first;
-	vector<pair<string, double> > v;
-	for (State h = 0; h < NumStates(); ++h) {
-	    string anchor_string = state_dictionary_inverse_[h];
-	    v.emplace_back(anchor_string, flipped_emission(x, h));
-	}
-	sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
-	     double, greater<double> >());
-
-	flipped_emission_file << observation_dictionary_inverse_[x] << endl;
-	for (State h = 0; h < NumStates(); ++h) {
-	    flipped_emission_file << util_string::printf_format(
-		"%.2f:   %s", v[h].second, v[h].first.c_str()) << endl;
-	}
-	flipped_emission_file << endl;
-    }
-
-    // Recover the model parameters from the flipped emission parameters.
-    RecoverParametersGivenFlippedEmission(data_path, observation_count,
-					  flipped_emission);
-    CheckProperDistribution();
-}
-
-void HMM::BuildConvexHull(const string &data_path,
-			  Eigen::MatrixXd *convex_hull) {
+void HMM::BuildConvexHull(Corpus *corpus, Eigen::MatrixXd *convex_hull) {
     // Extract observation-context co-occurrence counts using the observation
     // dictionary.
-    Corpus corpus(data_path, verbose_);
-    corpus.set_lowercase(lowercase_);
     unordered_map<string, Context> context_dictionary;
     unordered_map<Context, unordered_map<Observation, double> >
 	context_observation_count;
-    corpus.SlideWindow(observation_dictionary_, true, context_definition_,
+    corpus->SlideWindow(observation_dictionary_, true, context_definition_,
 		       window_size_, 0, &context_dictionary,
 		       &context_observation_count);
 
@@ -925,10 +888,64 @@ void HMM::ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
     }
 }
 
+void HMM::ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
+				 const unordered_map<Observation, size_t>
+				 &observation_count,
+				 Eigen::MatrixXd *flipped_emission) {
+    // Find anchor observations.
+    vector<Observation> anchor_observations;
+    FindAnchors(convex_hull, observation_count, &anchor_observations);
+
+    state_dictionary_.clear();  // Name each state by its anchor.
+    state_dictionary_inverse_.clear();
+    for (State state = 0; state < anchor_observations.size(); ++state) {
+	string anchor_string = observation_dictionary_inverse_[
+	    anchor_observations[state]];
+	state_dictionary_[anchor_string] = state;
+	state_dictionary_inverse_[state] = anchor_string;
+    }
+
+    // Given anchors, compute the "flipped" emission p(State|Observation).
+    optimize::extract_matrix(convex_hull, anchor_observations.size(),
+			     max_num_fw_iterations_, 1e-10, verbose_,
+			     anchor_observations, flipped_emission);
+
+    // Write the flipped emission values (for the record).
+    ofstream flipped_emission_file(FlippedEmissionPath(), ios::out);
+    vector<pair<Observation, size_t> > sorted_observations;
+    for (const auto &observation_pair : observation_count) {
+	sorted_observations.emplace_back(observation_pair.first,
+					 observation_pair.second);
+    }
+    sort(sorted_observations.begin(), sorted_observations.end(),
+	 util_misc::sort_pairs_second<Observation, size_t,
+	 greater<size_t> >());
+    for (size_t i = 0; i < sorted_observations.size(); ++i) {
+	Observation x = sorted_observations[i].first;
+	vector<pair<string, double> > v;
+	for (State h = 0; h < NumStates(); ++h) {
+	    string anchor_string = state_dictionary_inverse_[h];
+	    v.emplace_back(anchor_string, (*flipped_emission)(x, h));
+	}
+	sort(v.begin(), v.end(), util_misc::sort_pairs_second<string,
+	     double, greater<double> >());
+
+	flipped_emission_file << observation_dictionary_inverse_[x] << endl;
+	for (State h = 0; h < NumStates(); ++h) {
+	    flipped_emission_file << util_string::printf_format(
+		"%.2f:   %s", v[h].second, v[h].first.c_str()) << endl;
+	}
+	flipped_emission_file << endl;
+    }
+}
+
 void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
 		      const unordered_map<Observation, size_t>
 		      &observation_count,
 		      vector<Observation> *anchor_observations) {
+    ASSERT(num_anchor_candidates_ >= NumStates(), "Number of anchor candidates "
+	   << num_anchor_candidates_ << " < " << NumStates());
+
     anchor_observations->clear();
     Report(util_string::printf_format("Obtaining %d anchors", NumStates()));
 
@@ -984,30 +1001,23 @@ void HMM::FindAnchors(const Eigen::MatrixXd &convex_hull,
 }
 
 void HMM::RecoverParametersGivenFlippedEmission(
-    const string &data_path,
+    const Eigen::MatrixXd &flipped_emission,
     const unordered_map<Observation, size_t> &observation_count,
-    const Eigen::MatrixXd &flipped_emission) {
-
+    const unordered_map<Observation, unordered_map<Observation, size_t> >
+    &observation_bigram_count,
+    const unordered_map<Observation, size_t> &initial_observation_count,
+    const unordered_map<Observation, size_t> &final_observation_count) {
     // Recover the original emission parameters with Bayes' rule.
-    RecoverEmissionParameters(observation_count, flipped_emission);
+    RecoverEmissionParametersGivenFlippedEmission(observation_count,
+						  flipped_emission);
 
     // Organize emission parameters into a probability matrix.
     Eigen::MatrixXd emission_matrix;
     ConstructEmissionMatrix(&emission_matrix);
 
-    // Count observations needed for transition estimation from the corpus.
-    Corpus corpus(data_path, verbose_);
-    corpus.set_lowercase(lowercase_);
-    unordered_map<Observation,
-		  unordered_map<Observation, size_t> > observation_bigram_count;
-    unordered_map<Observation, size_t> initial_observation_count;
-    unordered_map<Observation, size_t> final_observation_count;
-    corpus.CountTransitions(observation_dictionary_, &observation_bigram_count,
-			    &initial_observation_count,
-			    &final_observation_count);
-
     // Recover the prior parameters from initial observations.
-    RecoverPriorParameters(initial_observation_count, emission_matrix);
+    RecoverPriorParametersGivenEmission(initial_observation_count,
+					emission_matrix);
 
     // Recover the transition parameters from observation bigrams.
     Eigen::VectorXd average_observation_probabilities =
@@ -1232,9 +1242,11 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	}
     }
     remove(temp_model_path.c_str());
+
+    CheckProperDistribution();
 }
 
-void HMM::RecoverEmissionParameters(
+void HMM::RecoverEmissionParametersGivenFlippedEmission(
     const unordered_map<Observation, size_t> &observation_count,
     const Eigen::MatrixXd &flipped_emission) {
     emission_.resize(NumStates());
@@ -1258,7 +1270,7 @@ void HMM::RecoverEmissionParameters(
     }
 }
 
-void HMM::RecoverPriorParameters(
+void HMM::RecoverPriorParametersGivenEmission(
     const unordered_map<Observation, size_t> &initial_observation_count,
     const Eigen::MatrixXd &emission_matrix) {
     Eigen::VectorXd initial_observation_probabilities =
@@ -1602,15 +1614,19 @@ void HMM::InitializeParametersRandomly() {
     CheckProperDistribution();
 }
 
-void HMM::InitializeParametersFromClusters(const string &cluster_path,
-					   const string &unlabeled_data_path) {
+void HMM::InitializeParametersFromClusters(
+    const unordered_map<Observation, unordered_map<Observation, size_t> >
+    &observation_bigram_count,
+    const unordered_map<Observation, size_t> &initial_observation_count,
+    const unordered_map<Observation, size_t> &final_observation_count) {
     ASSERT(NumObservations() > 0 && NumStates() > 0, "Must have dictionaries");
+    ASSERT(!cluster_path_.empty(), "Need a cluster file");
 
     // Read clusters.
     unordered_map<string, unordered_map<string, bool> > cluster_to_observations;
     unordered_map<string, string> observation_to_cluster;
-    ifstream cluster_file(cluster_path, ios::in);
-    ASSERT(cluster_file.is_open(), "Cannot open " << cluster_path);
+    ifstream cluster_file(cluster_path_, ios::in);
+    ASSERT(cluster_file.is_open(), "Cannot open " << cluster_path_);
     while (cluster_file.good()) {
 	vector<string> tokens;
 	util_file::read_line(&cluster_file, &tokens);
@@ -1634,12 +1650,14 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 	    cluster_string;
     }
 
-    // If given unlabeled data, calculate maximum-likelihood estimates (MLE)
+    // If given transition counts, calculate maximum-likelihood estimates (MLE)
     // from fixed clusters.
     vector<vector<size_t> > emission_count;
     vector<vector<size_t> > transition_count;
     vector<size_t> prior_count;
-    if (!unlabeled_data_path.empty()) {
+    if (!observation_bigram_count.empty() &&
+	!initial_observation_count.empty() &&
+	!final_observation_count.empty()) {
 	emission_count.resize(NumStates());
 	for (State state = 0; state < NumStates(); ++state) {
 	    emission_count[state].resize(NumObservations(), 0);
@@ -1650,19 +1668,7 @@ void HMM::InitializeParametersFromClusters(const string &cluster_path,
 	}
 	prior_count.resize(NumStates(), 0);
 
-	// First, compute observation transition counts.
-	Corpus corpus(unlabeled_data_path, verbose_);
-	corpus.set_lowercase(lowercase_);
-	unordered_map<Observation, unordered_map<Observation, size_t> >
-	    observation_bigram_count;
-	unordered_map<Observation, size_t> initial_observation_count;
-	unordered_map<Observation, size_t> final_observation_count;
-	corpus.CountTransitions(observation_dictionary_,
-				&observation_bigram_count,
-				&initial_observation_count,
-				&final_observation_count);
-
-	// Then translate them to counts via cluster mapping.
+	// Translate observation bigram counts to cluster co-occurrence counts.
 	for (const auto &observation1_pair : observation_bigram_count) {
 	    string observation1_string =
 		observation_dictionary_inverse_[observation1_pair.first];

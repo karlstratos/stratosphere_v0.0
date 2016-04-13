@@ -249,18 +249,21 @@ private:
     // Returns the index corresponding to a special stopping state.
     State StoppingState() { return NumStates(); }
 
-    // Runs the anchor algorithm (must already have dictionaries).
-    void RunAnchor(const string &data_path,
-		   const unordered_map<Observation, size_t> &observation_count);
-
     // Builds a convex hull of observation vectors as rows of a matrix.
-    void BuildConvexHull(const string &data_path, Eigen::MatrixXd *convex_hull);
+    void BuildConvexHull(Corpus *corpus, Eigen::MatrixXd *convex_hull);
 
     // Extends the context space (i.e., add additional columns to the
     // observation-context co-occurrence matrix).
     void ExtendContextSpace(unordered_map<string, Context> *context_dictionary,
 			    unordered_map<Context, unordered_map<Observation,
 			    double> > *context_observation_count);
+
+    // Computes the "flipped" emission distributions p(State|Observation) as
+    // rows of a matrix by decomposing the given convex hull.
+    void ComputeFlippedEmission(const Eigen::MatrixXd &convex_hull,
+				const unordered_map<Observation, size_t>
+				&observation_count,
+				Eigen::MatrixXd *flipped_emission);
 
     // Find anchor observations.
     void FindAnchors(const Eigen::MatrixXd &convex_hull,
@@ -270,17 +273,20 @@ private:
 
     // Recovers the model parameters given the "flipped" emission parameters.
     void RecoverParametersGivenFlippedEmission(
-	const string &data_path,
+	const Eigen::MatrixXd &flipped_emission,
+	const unordered_map<Observation, size_t> &observation_count,
+	const unordered_map<Observation, unordered_map<Observation, size_t> >
+	&observation_bigram_count,
+	const unordered_map<Observation, size_t> &initial_observation_count,
+	const unordered_map<Observation, size_t> &final_observation_count);
+
+    // Recovers the emission parameters given flipped emission.
+    void RecoverEmissionParametersGivenFlippedEmission(
 	const unordered_map<Observation, size_t> &observation_count,
 	const Eigen::MatrixXd &flipped_emission);
 
-    // Recovers the emission parameters using Bayes' rule.
-    void RecoverEmissionParameters(
-	const unordered_map<Observation, size_t> &observation_count,
-	const Eigen::MatrixXd &flipped_emission);
-
-    // Recovers the prior parameters.
-    void RecoverPriorParameters(
+    // Recovers the prior parameters given the emission parameters.
+    void RecoverPriorParametersGivenEmission(
 	const unordered_map<Observation, size_t> &initial_observation_count,
 	const Eigen::MatrixXd &emission_matrix);
 
@@ -302,15 +308,21 @@ private:
     void InitializeParametersRandomly();
 
     // Initializes parameters from clusters (must already have dictionaries).
-    // - For each state with a cluster, assign nearly all its emission
-    //   probabilities to the observations in the cluster.
-    // - Otherwise, assign uniformly.
-    // Also estimates the transition and prior parameters from unlabeled data.
-    void InitializeParametersFromClusters(const string &cluster_path,
-					  const string &unlabeled_data_path);
+    // Use MLE if transition counts are non-empty. Otherwise, use uniform
+    // distribution except for emission parameters as follows:
+    //    A state that has a cluster assigns (nearly all) its probability mass
+    //    uniformly to its observation members.
+    void InitializeParametersFromClusters(
+	const unordered_map<Observation, unordered_map<Observation, size_t> >
+	&observation_bigram_count,
+	const unordered_map<Observation, size_t> &initial_observation_count,
+	const unordered_map<Observation, size_t> &final_observation_count);
 
     void InitializeParametersFromClusters(const string &cluster_path) {
-	InitializeParametersFromClusters(cluster_path, "");
+	InitializeParametersFromClusters(
+	    unordered_map<Observation, unordered_map<Observation, size_t> >(),
+	    unordered_map<Observation, size_t>(),
+	    unordered_map<Observation, size_t>());
     }
 
     // Check if parameters form proper distributions.
@@ -416,6 +428,9 @@ private:
 
     // Special string for separating observation/state in data files.
     const string kObservationStateSeperator_ = "__<label>__";
+
+    // Special string for representing synthetic states.
+    const string kState_ = "state";
 
     // Maps an observation string to a unique index.
     unordered_map<string, Observation> observation_dictionary_;
