@@ -56,8 +56,11 @@ public:
     // Loads HMM parameters from a model file.
     void Load(const string &model_path);
 
-    // Writes useful model information to a log file.
-    void WriteLog(const string &log_path);
+    // Writes useful model information to the default info file.
+    void WriteModelInfo() { WriteModelInfo(ModelInfoPath()); }
+
+    // Writes useful model information to a file.
+    void WriteModelInfo(const string &info_path);
 
     // Trains HMM parameters from a text file of labeled sequences.
     void TrainSupervised(const string &data_path);
@@ -239,9 +242,6 @@ public:
     // Sets whether to turn on the debug mode.
     void set_debug(bool debug) { debug_ = debug; }
 
-    // Sets the path to a log file.
-    void set_log_path(string log_path) { log_path_ = log_path; }
-
 private:
     // Returns the index corresponding to an unknown observation.
     Observation UnknownObservation() { return NumObservations(); }
@@ -286,9 +286,8 @@ private:
 	const Eigen::MatrixXd &flipped_emission);
 
     // Recovers the prior parameters given flipped emission.
-    void RecoverPriorParametersGivenFlippedEmission(
-	const unordered_map<Observation, size_t> &initial_observation_count,
-	const Eigen::MatrixXd &flipped_emission);
+    void RecoverPriorParametersGivenEmission(
+	const unordered_map<Observation, size_t> &initial_observation_count);
 
     // Recovers the transition parameters given the rest of other parameters.
     void RecoverTransitionParametersGivenOthers(
@@ -428,6 +427,9 @@ private:
     // Returns the path to the log file.
     string LogPath() { return output_directory_ + "/log.txt"; }
 
+    // Returns the path to the model info file.
+    string ModelInfoPath() { return output_directory_ + "/info.txt"; }
+
     // Returns the path to the flipped emission parameters file.
     string FlippedEmissionPath() {
 	return output_directory_ + "/flipped_emission.txt";
@@ -533,9 +535,6 @@ private:
 
     // Turn on the debug mode?
     bool debug_ = false;
-
-    // Path to a log file.
-    string log_path_;
 };
 
 #endif  // HIDDEN_MARKOV_MODEL_HMM_H_

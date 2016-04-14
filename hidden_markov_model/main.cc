@@ -33,7 +33,6 @@ int main (int argc, char* argv[]) {
     bool post_training_local_search = false;
     string decoding_method = "mbr";
     bool verbose = true;
-    string log_path;
 
     // If appropriate, display default options and then close the program.
     bool display_options_and_quit = false;
@@ -96,8 +95,6 @@ int main (int argc, char* argv[]) {
 	     << "do post-training local search?" << endl;
 	cout << "--decode [" << decoding_method << "]: \t"
 	     << "decoding method: viterbi, mbr, greedy"  << endl;
-	cout << "--log [-]:        \t"
-	     << "path to a log file" << endl;
 	cout << "--quiet, -q:          \t"
 	     << "do not print messages to stderr?" << endl;
 	cout << "--help, -h:           \t"
@@ -162,8 +159,6 @@ int main (int argc, char* argv[]) {
 	    decoding_method = argv[++i];
 	} else if (arg == "--quiet" || arg == "-q") {
 	    verbose = false;
-	} else if (arg == "--log") {
-	    log_path = argv[++i];
 	} else {
 	    cerr << "Invalid argument \"" << arg << "\": run the command with "
 		 << "-h or --help to see possible arguments." << endl;
@@ -193,7 +188,6 @@ int main (int argc, char* argv[]) {
     hmm.set_anchor_path(anchor_path);
     hmm.set_post_training_local_search(post_training_local_search);
     hmm.set_decoding_method(decoding_method);
-    hmm.set_log_path(log_path);
     hmm.set_verbose(verbose);
 
     if (train) {
@@ -207,10 +201,9 @@ int main (int argc, char* argv[]) {
 	    hmm.Evaluate(development_path, prediction_path);
 	}
 	hmm.Save();
+	hmm.WriteModelInfo();
     } else {
 	hmm.Load();
 	if (!data_path.empty()) { hmm.Evaluate(data_path, prediction_path); }
     }
-
-    if (!log_path.empty()) { hmm.WriteLog(log_path); }
 }

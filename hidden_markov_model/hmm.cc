@@ -163,9 +163,7 @@ void HMM::Load(const string &model_path) {
     CheckProperDistribution();
 }
 
-void HMM::WriteLog(const string &log_path) {
-    if (log_path.empty()) { return; }
-
+void HMM::WriteModelInfo(const string &info_path) {
     // Get max string legnths for pretty outputs.
     size_t max_state_string_length = 0;
     size_t max_observation_string_length = 0;
@@ -186,18 +184,18 @@ void HMM::WriteLog(const string &log_path) {
     const size_t buffer = 3;
 
     // Write string representations of hidden states.
-    ofstream log_file(log_path_, ios::out);
-    log_file << endl << "STATE STRINGS" << endl;
+    ofstream info_file(info_path, ios::out);
+    info_file << endl << "STATE STRINGS" << endl;
     for (State state = 0; state < NumStates(); ++state) {
 	string state_string = state_dictionary_inverse_[state];
 	string line = util_string::printf_format(
 	    "State %d \"%s\"", state + 1,
 	    state_dictionary_inverse_[state].c_str());
-	log_file << line << endl;
+	info_file << line << endl;
     }
 
     // For each state, write most likely observations.
-    log_file << endl << "TOP EMISSION PROBABILITIES" << endl;
+    info_file << endl << "TOP EMISSION PROBABILITIES" << endl;
     for (State state = 0; state < NumStates(); ++state) {
 	vector<pair<string, double> > v;
 	for (Observation observation = 0; observation < NumObservations();
@@ -213,17 +211,17 @@ void HMM::WriteLog(const string &log_path) {
 	    util_string::printf_format(
 		"\n%s", state_dictionary_inverse_[state].c_str()),
 	    max_state_string_length + buffer, ' ', "left");
-	log_file << line;
+	info_file << line;
 	for (size_t i = 0; i < min((int) v.size(), 20); ++i) {  // Top 20
 	    line = util_string::printf_format("\n%s (%.2f)", v[i].first.c_str(),
 					      v[i].second);
-	    log_file << line;
+	    info_file << line;
 	}
-	log_file << endl;
+	info_file << endl;
     }
 
     // Write prior probabilities for states.
-    log_file << endl << "PRIOR PROBABILITIES" << endl;
+    info_file << endl << "PRIOR PROBABILITIES" << endl;
     vector<pair<string, double> > v;
     for (State state = 0; state < NumStates(); ++state) {
 	v.emplace_back(state_dictionary_inverse_[state],
@@ -237,11 +235,11 @@ void HMM::WriteLog(const string &log_path) {
 	string line = util_string::printf_format("%s   %.2f",
 						 state_string.c_str(),
 						 v[state].second);
-	log_file << line << endl;
+	info_file << line << endl;
     }
 
     // Write transition  probabilities between states.
-    log_file << endl << "TOP TRANSITION PROBABILITIES" << endl;
+    info_file << endl << "TOP TRANSITION PROBABILITIES" << endl;
     for (State state = 0; state < NumStates(); ++state) {
 	vector<pair<string, double> > v;
 	for (State next_state = 0; next_state < NumStates(); ++next_state) {
@@ -255,16 +253,16 @@ void HMM::WriteLog(const string &log_path) {
 	    util_string::printf_format(
 		"%s", state_dictionary_inverse_[state].c_str()),
 	    max_state_string_length + buffer, ' ', "left");
-	log_file << line;
+	info_file << line;
 	for (size_t i = 0; i < min((int) v.size(), 5); ++i) {  // Top 5
 	    line = util_string::buffer_string(
 		util_string::printf_format("%s (%.2f) ",
 					   v[i].first.c_str(),
 					   v[i].second),
 		max_state_string_length + buffer + 7, ' ', "right");
-	    log_file << line;
+	    info_file << line;
 	}
-	log_file << endl;
+	info_file << endl;
     }
 }
 
@@ -1018,8 +1016,7 @@ void HMM::RecoverParametersGivenFlippedEmission(
 						  flipped_emission);
 
     // 2. Prior parameters.
-    RecoverPriorParametersGivenFlippedEmission(initial_observation_count,
-					       flipped_emission);
+    RecoverPriorParametersGivenEmission(initial_observation_count);
 
     // 3. Transition parameters.
 
@@ -1065,9 +1062,8 @@ void HMM::RecoverEmissionParametersGivenFlippedEmission(
     }
 }
 
-void HMM::RecoverPriorParametersGivenFlippedEmission(
-    const unordered_map<Observation, size_t> &initial_observation_count,
-    const Eigen::MatrixXd &flipped_emission) {
+void HMM::RecoverPriorParametersGivenEmission(
+    const unordered_map<Observation, size_t> &initial_observation_count) {
     Eigen::VectorXd initial_observation_probabilities =
 	Eigen::VectorXd::Zero(NumObservations());
     double num_initial_observations =
@@ -1076,13 +1072,20 @@ void HMM::RecoverPriorParametersGivenFlippedEmission(
 	initial_observation_probabilities[observation_pair.first] =
 	    ((double) observation_pair.second) / num_initial_observations;
     }
-    // For convenience, assume p(h|x) \approx p(h|x,start).
-    Eigen::VectorXd prior_state_probabilities =
-	flipped_emission.transpose() * initial_observation_probabilities;
-    prior_state_probabilities /= prior_state_probabilities.lpNorm<1>();
+
+    // Compute prior parameters as convex coefficients for emission
+    // distributions resulting to become the initial observation
+    // probabilities.
+    Eigen::MatrixXd emission_matrix;
+    ConstructEmissionMatrix(&emission_matrix);
+
+    Eigen::VectorXd convex_coefficients;
+    optimize::compute_convex_coefficients_squared_loss(
+	emission_matrix, initial_observation_probabilities,
+	max_num_fw_iterations_, 1e-10, verbose_, &convex_coefficients);
     prior_.resize(NumStates(), -numeric_limits<double>::infinity());
     for (State state = 0; state < NumStates(); ++state) {
-	prior_[state] = util_math::log0(prior_state_probabilities[state]);
+	prior_[state] = util_math::log0(convex_coefficients[state]);
     }
 }
 
