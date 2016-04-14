@@ -1028,8 +1028,14 @@ void HMM::RecoverParametersGivenFlippedEmission(
 	average_observation_probabilities[observation_pair.first] =
 	    ((double) observation_pair.second) / num_observations;
     }
+    /*
     Eigen::VectorXd average_state_probabilities =  // p(h) = sum_x p(h|x) p(x)
 	flipped_emission.transpose() * average_observation_probabilities;
+    */
+    Eigen::MatrixXd emission_matrix;
+    ConstructEmissionMatrix(&emission_matrix);
+    Eigen::VectorXd average_state_probabilities =  // Experimental.
+	emission_matrix.transpose() * average_observation_probabilities;
     average_state_probabilities /= average_state_probabilities.lpNorm<1>();
 
     RecoverTransitionParametersGivenOthers(average_state_probabilities,
@@ -1073,12 +1079,13 @@ void HMM::RecoverPriorParametersGivenEmission(
 	    ((double) observation_pair.second) / num_initial_observations;
     }
 
-    // Compute prior parameters as convex coefficients for emission
-    // distributions resulting to become the initial observation
-    // probabilities.
     Eigen::MatrixXd emission_matrix;
     ConstructEmissionMatrix(&emission_matrix);
 
+    // Compute prior parameters as convex coefficients for emission
+    // distributions resulting to become the initial observation
+    // probabilities.
+    /*
     Eigen::VectorXd convex_coefficients;
     optimize::compute_convex_coefficients_squared_loss(
 	emission_matrix, initial_observation_probabilities,
@@ -1086,6 +1093,14 @@ void HMM::RecoverPriorParametersGivenEmission(
     prior_.resize(NumStates(), -numeric_limits<double>::infinity());
     for (State state = 0; state < NumStates(); ++state) {
 	prior_[state] = util_math::log0(convex_coefficients[state]);
+    }
+    */
+    Eigen::VectorXd initial_state_probabilities =  // Experimental.
+	emission_matrix.transpose() * initial_observation_probabilities;
+    initial_state_probabilities /= initial_state_probabilities.lpNorm<1>();
+    prior_.resize(NumStates(), -numeric_limits<double>::infinity());
+    for (State state = 0; state < NumStates(); ++state) {
+	prior_[state] = util_math::log0(initial_state_probabilities[state]);
     }
 }
 
