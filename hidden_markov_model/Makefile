@@ -25,31 +25,13 @@ ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 endif
 
 # Top-level commands.
-TARGETS = hmm map_clusters ensemble
+TARGETS = hmm
 
 all: $(TARGETS)
 
-ensemble: ensemble.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
-	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
-	$(CORE)/optimize.o $(CORE)/eigen_helper.o $(CORE)/features.o \
-	$(CORE)/cluster.o
-	$(CC) $(CFLAGS) $^ -o $@
-
-ensemble.o: ensemble.cc
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
-
-map_clusters: map_clusters.o  hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
-	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
-	$(CORE)/optimize.o $(CORE)/eigen_helper.o $(CORE)/features.o \
-	$(CORE)/cluster.o
-	$(CC) $(CFLAGS) $^ -o $@
-
-map_clusters.o: map_clusters.cc
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
-
 hmm: main.o hmm.o $(CORE)/util.o $(CORE)/evaluate.o $(CORE)/corpus.o \
 	$(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a $(CORE)/optimize.o \
-	$(CORE)/eigen_helper.o $(CORE)/features.o $(CORE)/cluster.o
+	$(CORE)/eigen_helper.o $(CORE)/features.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 main.o: main.cc hmm.o
@@ -81,9 +63,6 @@ $(CORE)/eigen_helper.o: $(CORE)/eigen_helper.cc $(CORE)/eigen_helper.h
 
 $(CORE)/features.o: $(CORE)/features.cc $(CORE)/features.h
 	$(CC) $(CFLAGS) -c $< -o $@
-
-$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:

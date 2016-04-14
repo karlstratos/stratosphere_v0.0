@@ -1,4 +1,6 @@
 // Author: Karl Stratos (stratos@cs.columbia.edu)
+//
+// DEPRECATED: Code for ensembling unsupervised HMMs.
 
 #include <iostream>
 #include <string>

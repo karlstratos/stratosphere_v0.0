@@ -1,7 +1,9 @@
 # Author: Karl Stratos (stratos@cs.columbia.edu)
 """
 This module is used to display possible labels of an observation sorted in
-decreasing frequency.
+decreasing frequency. E.g.,
+
+>> python3 display_label.py [labeled_sequences]
 """
 import argparse
 from collections import Counter

@@ -7,7 +7,6 @@
 #include <numeric>
 #include <random>
 
-#include "../core/cluster.h"
 #include "../core/eigen_helper.h"
 #include "../core/evaluate.h"
 #include "../core/features.h"

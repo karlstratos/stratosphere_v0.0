@@ -71,7 +71,7 @@ gtest_main.a: gtest-all.o gtest_main.o
 hmm_test: hmm_test.o $(SRC)/hmm.o $(CORE)/util.o $(CORE)/evaluate.o \
 	$(CORE)/corpus.o $(CORE)/sparsesvd.o $(SVDLIBC)/libsvd.a \
 	$(CORE)/optimize.o $(CORE)/eigen_helper.o  $(CORE)/features.o \
-	$(CORE)/cluster.o gtest_main.a
+	gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 hmm_test.o: hmm_test.cc
@@ -96,9 +96,6 @@ $(SVDLIBC)/libsvd.a:
 	make -C $(SVDLIBC)
 
 $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
-	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
-
-$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 $(CORE)/evaluate.o: $(CORE)/evaluate.cc $(CORE)/evaluate.h

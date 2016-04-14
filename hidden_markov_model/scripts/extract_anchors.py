@@ -2,7 +2,11 @@
 """
 This module is used to extract anchor words from labeled sequences like
 
-Influential__ADJ members__NOUN of__ADP ...
+Influential[sep]ADJ members[sep]NOUN of[sep]ADP ...
+
+where [sep] is a special separating symbol. E.g.,
+
+>> python3 extract-anchors.py [labeled_sequences] --output /tmp/anchors.txt
 """
 import argparse
 from collections import Counter
@@ -28,8 +32,8 @@ def extract_anchors(args):
 
     for word in word_to_tag_map:
         if len(word_to_tag_map[word]) == 1:
-            tag = word_to_tag_map[word].keys()[0]
-            count = word_to_tag_map[word].values()[0]
+            tag = list(word_to_tag_map[word].keys())[0]
+            count = list(word_to_tag_map[word].values())[0]
             anchors[tag].append((word, count))
 
     for tag in anchors:
@@ -42,16 +46,16 @@ def extract_anchors(args):
     tracker = Counter()
 
     while len(final_anchor_list) < num_distinct_tags:
-        print "----------------ROUND--------------"
+        print("----------------ROUND--------------")
         for tag, _ in sorted_tags:
             if tracker[tag] < len(anchors[tag]):
                 ind = tracker[tag]
                 final_anchor_list.append(anchors[tag][ind][0])
                 tracker[tag] += 1
-                print tag, anchors[tag][ind][0]
+                print(tag, anchors[tag][ind][0])
                 if len(final_anchor_list) >= num_distinct_tags: break
             else:
-                print ">>>>>>>>>>Skipping ", tag
+                print(">>>>>>>>>>Skipping ", tag)
 
     output_path = args.output_path if args.output_path else \
         args.input_path + ".anchors-min" + str(args.cutoff)
@@ -64,9 +68,9 @@ if __name__ == "__main__":
     argparser.add_argument("input_path", type=str, help="path to input data")
     argparser.add_argument("--output_path", type=str, default="",
                            help="path to output (auto if not specified)")
-    argparser.add_argument("--sep", type=str, default="__",
+    argparser.add_argument("--sep", type=str, default="__<label>__",
                            help="word-tag separator")
-    argparser.add_argument("--cutoff", type=int, default=5,
+    argparser.add_argument("--cutoff", type=int, default=0,
                            help="frequency <= this not considered")
     parsed_args = argparser.parse_args()
     extract_anchors(parsed_args)

@@ -1,4 +1,6 @@
 // Author: Karl Stratos (stratos@cs.columbia.edu)
+//
+// DEPRECATED: Code for mapping clusters for sequence prediction.
 
 #include <iostream>
 #include <string>
