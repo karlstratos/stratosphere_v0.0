@@ -208,6 +208,10 @@ namespace util_file {
 }  // namespace util_file
 
 namespace util_math {
+    // Computes a random permutation of {1...n}, runtime/memory O(n).
+    //    n = 100 million => ~2.5G memory, ~2.5 minutes
+    void permute_indices(size_t num_indices, vector<size_t> *permuted_indices);
+
     // Returns -inf if a = 0, returns log(a) otherwise (error if a < 0).
     double log0(double a);
 

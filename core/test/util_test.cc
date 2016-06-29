@@ -28,8 +28,6 @@ TEST(PrintfFormatString, CheckBehavior) {
 	util_string::printf_format("Percent: 100%%");
     EXPECT_EQ("String: TEST_STRING", string_string);
     EXPECT_EQ("Float: 3.14", float_string);
-    cout << test_float_carry << endl;
-    cout << float_carry_string << endl;
     EXPECT_EQ("Float carry: 3.15", float_carry_string);
     EXPECT_EQ("Science: 3.14e+00", science_string);
     EXPECT_EQ("Long: 999999999999999", long_string);
@@ -204,6 +202,30 @@ TEST_F(FileWritingReading, FlatUnorderedMapStringSizeT) {
     EXPECT_EQ(2, table["saw"]);
     EXPECT_EQ(3, table["."]);
     remove(file_path.c_str());
+}
+
+// Checks the index permutation.
+TEST(UtilMath, PermuteIndices) {
+    size_t num_indices = 100;  // Set to > 1.
+    vector<size_t> permuted_indices;
+    util_math::permute_indices(num_indices, &permuted_indices);
+    EXPECT_EQ(num_indices, permuted_indices.size());
+
+    // We must eventually get a non-identity permutation if we keep permuting.
+    while (true) {
+	bool not_identity = false;
+	for (size_t i = 0; i < num_indices; ++i) {
+	    if (permuted_indices[i] != i) {
+		not_identity = true;
+		break;
+	    }
+	}
+	if (not_identity) {
+	    break;  // We have a non-identity permutation.
+	} else {
+	    util_math::permute_indices(num_indices, &permuted_indices);
+	}
+    }
 }
 
 // Checks the average-rank transform of a sequence.

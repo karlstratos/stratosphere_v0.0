@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <algorithm>
+#include <random>
 
 namespace util_string {
     string buffer_string(const string &given_string, size_t length,
@@ -244,6 +245,16 @@ namespace util_file {
 }  // namespace util_file
 
 namespace util_math {
+    void permute_indices(size_t num_indices, vector<size_t> *permuted_indices) {
+	permuted_indices->clear();
+	for (size_t i = 0; i < num_indices; ++i) {
+	    permuted_indices->push_back(i);
+	}
+	size_t seed = chrono::system_clock::now().time_since_epoch().count();
+	shuffle(permuted_indices->begin(), permuted_indices->end(),
+		default_random_engine(seed));
+    }
+
     double log0(double a) {
 	if (a > 0.0) {
 	    return log(a);

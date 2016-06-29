@@ -116,7 +116,7 @@ corpus_test.o: corpus_test.cc
 $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a
+cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a $(CORE)/util.o
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 cluster_test.o: cluster_test.cc

@@ -13,6 +13,39 @@
 
 #include "util.h"
 
+// Class for the k-means clustering algorithm.
+class KMeans {
+public:
+    // Runs k-means on n vectors of length d for T iterations. Computes:
+    //    k "centers" (means of the k clusters): initialized from given centers
+    //    clustering: {1...n} -> {1...k}
+    //    clustering_inverse: {1...k} -> {1...n}
+    // Also returns the k-means objective value. O(nkd) memory, O(nkdT) runtime
+    // (without parallelization).
+    double Cluster(const vector<Eigen::VectorXd> &vectors,
+		   size_t max_num_iterations,
+		   vector<Eigen::VectorXd> *centers,
+		   unordered_map<size_t, size_t> *clustering,
+		   unordered_map<size_t, vector<size_t> > *clustering_inverse);
+
+    // Selects a set of centers in the given vectors.
+    void SelectCenters(const vector<Eigen::VectorXd> &vectors,
+		       size_t num_centers, vector<Eigen::VectorXd> *centers);
+
+    // Sets the initialization method for seed centers.
+    void set_seed_method(string seed_method) { seed_method_ = seed_method; }
+
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
+
+private:
+    // Initialization method for seed centers.
+    string seed_method_ = "rand";
+
+    // Print messages to stderr?
+    bool verbose_ = true;
+};
+
 // Class for agglomerative clustering. Since complex index manipulation is
 // needed, we will have the following convention.
 //        n := number of vectors to cluster

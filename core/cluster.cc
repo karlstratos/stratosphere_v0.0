@@ -6,6 +6,113 @@
 #include <limits>
 #include <stack>
 
+double KMeans::Cluster(const vector<Eigen::VectorXd> &vectors,
+		       size_t max_num_iterations,
+		       vector<Eigen::VectorXd> *centers,
+		       unordered_map<size_t, size_t> *clustering,
+		       unordered_map<size_t, vector<size_t> >
+		       *clustering_inverse) {
+    double old_objective_value = numeric_limits<double>::infinity();
+    double new_objective_value = numeric_limits<double>::infinity();
+    for (size_t iteration_num = 0; iteration_num < max_num_iterations;
+	 ++iteration_num) {
+	if (verbose_) { cerr << "Iteration " << iteration_num + 1 << ":\t"; }
+
+	// Part I: Fix centers, optimize clusters.
+	clustering->clear();
+	clustering_inverse->clear();
+	new_objective_value = 0.0;
+	for (size_t i = 0; i < vectors.size(); ++i) {
+	    // Assign each vector to its closest center.
+	    double min_dist = numeric_limits<double>::infinity();
+	    size_t closest_center_index = 0;
+	    for (size_t j = 0; j < centers->size(); ++j) {
+		Eigen::VectorXd diff = vectors.at(i) - centers->at(j);
+		double dist = diff.squaredNorm();
+		if (dist < min_dist) {
+		    min_dist = dist;
+		    closest_center_index = j;
+		}
+	    }
+	    (*clustering)[i] = closest_center_index;
+	    (*clustering_inverse)[closest_center_index].push_back(i);
+	    new_objective_value += min_dist;
+	}
+
+	// Check if there exist centers that yielded empty clusters.
+	vector<size_t> lone_center_indices;
+	for (size_t j = 0; j < centers->size(); ++j) {
+	    if (clustering_inverse->find(j) == clustering_inverse->end()) {
+		lone_center_indices.push_back(j);
+	    }
+	}
+	if (lone_center_indices.size() > 0) {
+	    // Reset each lone center with a random point.
+	    vector<size_t> permuted_indices;
+	    util_math::permute_indices(vectors.size(), &permuted_indices);
+	    for (size_t j : lone_center_indices) {
+		if (verbose_) {
+		    cerr << "Center " << j << " yielded an empty cluster! "
+			 << "Replacing it with point " << permuted_indices[j]
+			 << endl;
+		}
+		(*centers)[j] = vectors.at(permuted_indices[j]);
+	    }
+	    continue;  // Optimize clusters again (counted as an iteration).
+	}
+
+	if (verbose_) {
+	     cerr << new_objective_value << " (clusters)\t";
+	}
+
+	// Part II: Fix clusters, optimize centers.
+	new_objective_value = 0.0;
+	for (size_t j = 0; j < centers->size(); ++j) {
+	    // Set each center to be the mean of the corresponding cluster.
+	    (*centers)[j] = Eigen::VectorXd::Zero(vectors.at(0).size());
+	    for (size_t i : clustering_inverse->at(j)) {
+		(*centers)[j] += vectors.at(i);
+	    }
+	    (*centers)[j] /= clustering_inverse->at(j).size();
+	    for (size_t i : clustering_inverse->at(j)) {
+		Eigen::VectorXd diff =
+		    vectors.at(i) - centers->at(clustering->at(i));
+		new_objective_value += diff.squaredNorm();
+	    }
+	}
+	if (verbose_) {
+	    cerr << new_objective_value << " (centers)\t";
+	}
+
+	// Check if converged.
+	if (old_objective_value - new_objective_value < 1e-15) {
+	    if (verbose_) { cerr << " CONVERGED" << endl; }
+	    break;
+	}
+        old_objective_value = new_objective_value;
+	if (verbose_) { cerr << endl; }
+    }
+
+    return new_objective_value;
+}
+
+void KMeans::SelectCenters(const vector<Eigen::VectorXd> &vectors,
+			   size_t num_centers,
+			   vector<Eigen::VectorXd> *centers) {
+    centers->resize(num_centers);
+    if (seed_method_ == "rand") {
+	vector<size_t> permuted_indices;
+	util_math::permute_indices(vectors.size(), &permuted_indices);
+
+	// Copy vectors corresponding to the top k shuffled indices.
+	for (size_t j = 0; j < num_centers; ++j) {
+	    (*centers)[j] = vectors.at(permuted_indices[j]);
+	}
+    } else {
+	ASSERT(false, "Unknown seed method: " << seed_method_);
+    }
+}
+
 double AgglomerativeClustering::ClusterOrderedVectors(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t num_leaf_clusters) {
     size_t n = ordered_vectors.size();
