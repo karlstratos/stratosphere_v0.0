@@ -5,113 +5,198 @@
 #include <cfloat>
 #include <limits>
 #include <stack>
+#include <thread>
 
-double KMeans::Cluster(const vector<Eigen::VectorXd> &vectors,
-		       size_t max_num_iterations,
-		       vector<Eigen::VectorXd> *centers,
-		       unordered_map<size_t, size_t> *clustering,
-		       unordered_map<size_t, vector<size_t> >
-		       *clustering_inverse) {
-    double old_objective_value = numeric_limits<double>::infinity();
-    double new_objective_value = numeric_limits<double>::infinity();
-    for (size_t iteration_num = 0; iteration_num < max_num_iterations;
-	 ++iteration_num) {
-	if (verbose_) { cerr << "Iteration " << iteration_num + 1 << ":\t"; }
+namespace kmeans {
+    double cluster(const vector<Eigen::VectorXd> &vectors,
+		   size_t max_num_iterations, size_t num_threads, bool verbose,
+		   vector<Eigen::VectorXd> *centers,
+		   vector<size_t> *clustering) {
+	clustering->resize(vectors.size());
 
-	// Part I: Fix centers, optimize clusters.
-	clustering->clear();
-	clustering_inverse->clear();
-	new_objective_value = 0.0;
-	for (size_t i = 0; i < vectors.size(); ++i) {
-	    // Assign each vector to its closest center.
-	    double min_dist = numeric_limits<double>::infinity();
-	    size_t closest_center_index = 0;
-	    for (size_t j = 0; j < centers->size(); ++j) {
-		Eigen::VectorXd diff = vectors.at(i) - centers->at(j);
-		double dist = diff.squaredNorm();
-		if (dist < min_dist) {
-		    min_dist = dist;
-		    closest_center_index = j;
+	// Infer the number of clusters from given centers.
+	size_t num_clusters = centers->size();
+	ASSERT(num_clusters > 0, "No initial centers given!");
+	vector<size_t> cluster_sizes(num_clusters);
+
+	// Prepare variables for multithreading.
+	ASSERT(num_threads > 0, "Number of threads must be at least 1!");
+	size_t num_vectors_per_worker = vectors.size() / num_threads;
+	size_t extra_num_vectors_last_worker = vectors.size() % num_threads;
+	vector<vector<size_t> > partial_cluster_sizes(num_threads);
+	for (size_t t = 0; t < num_threads; ++t) {
+	    partial_cluster_sizes[t].resize(num_clusters);
+	}
+	vector<double> partial_objective(num_threads);
+	vector<vector<Eigen::VectorXd> > partial_centers(num_threads);
+	for (size_t t = 0; t < num_threads; ++t) {
+	    partial_centers[t].resize(num_clusters);
+	    for (size_t j = 0; j < num_clusters; ++j) {
+		partial_centers[t][j] =
+		    Eigen::VectorXd::Zero(vectors.at(0).size());
+	    }
+	}
+
+	// Start the k-means loop.
+	double old_objective = numeric_limits<double>::infinity();
+	double new_objective = numeric_limits<double>::infinity();
+	for (size_t iteration_num = 1; iteration_num <= max_num_iterations;
+	     ++iteration_num) {
+	    if (verbose) { cerr << "Iteration " << iteration_num << ":\t"; }
+
+	    // STEP 1: Assign vectors to their closest centers. Each worker
+	    //         accumulates necessary quantities in parallel.
+	    for (size_t t = 0; t < num_threads; ++t) {
+		fill(partial_cluster_sizes[t].begin(),
+		     partial_cluster_sizes[t].end(), 0);
+	    }
+	    fill(partial_objective.begin(), partial_objective.end(), 0.0);
+
+	    // Lambda function for assigning vectors [start ... end).
+	    auto cluster_code = [&vectors, &centers, &clustering,
+				 &partial_objective, &partial_cluster_sizes]
+		(size_t start, size_t end, size_t thread_num) -> void {
+		for (size_t i = start; i < end; ++i) {
+		    double min_dist = numeric_limits<double>::infinity();
+		    size_t closest_center_index = 0;
+		    for (size_t j = 0; j < centers->size(); ++j) {
+			Eigen::VectorXd diff = vectors.at(i) - centers->at(j);
+			double dist = diff.squaredNorm();
+			if (dist < min_dist) {
+			    min_dist = dist;
+			    closest_center_index = j;
+			}
+		    }
+		    (*clustering)[i] = closest_center_index;
+		    ++partial_cluster_sizes[thread_num][closest_center_index];
+		    partial_objective[thread_num] += min_dist;
+		}
+	    };
+
+	    size_t start = 0;
+	    size_t end = num_vectors_per_worker;
+	    vector<thread> workers;
+	    for (size_t t = 0; t < num_threads; ++t) {
+		if (t == num_threads - 1) {  // Last worker does extra work.
+		    end += extra_num_vectors_last_worker;
+		}
+		workers.push_back(thread(cluster_code, start, end, t));
+		start = end;
+		end += num_vectors_per_worker;
+	    }
+	    for (thread &worker : workers) { worker.join(); }
+	    workers.clear();
+
+	    // Sum over workers to get global cluster sizes and objective.
+	    fill(cluster_sizes.begin(), cluster_sizes.end(), 0);
+	    new_objective = 0.0;
+	    for (size_t t = 0; t < num_threads; ++t) {
+		for (size_t j = 0; j < num_clusters; ++j) {
+		    cluster_sizes[j] += partial_cluster_sizes[t][j];
+		}
+		new_objective += partial_objective[t];
+	    }
+
+	    // Check if there exist centers that yielded empty clusters.
+	    vector<size_t> lone_center_indices;
+	    for (size_t j = 0; j < cluster_sizes.size(); ++j) {
+		if (cluster_sizes[j] == 0) { lone_center_indices.push_back(j); }
+	    }
+	    if (lone_center_indices.size() > 0) {  // Hopefully not often.
+		// Reset each lone center with a random point.
+		vector<size_t> permuted_indices;
+		util_math::permute_indices(vectors.size(), &permuted_indices);
+		for (size_t j : lone_center_indices) {
+		    if (verbose) {
+			cerr << "Center " << j << " yielded an empty cluster! "
+			     << "Replacing it with point "
+			     << permuted_indices[j] << endl;
+		    }
+		    (*centers)[j] = vectors.at(permuted_indices[j]);
+		}
+		continue;  // Optimize clusters again (counted as an iteration).
+	    }
+	    if (verbose) { cerr << new_objective << "\t"; }
+
+	    // STEP 2: Calculate cluster means for new centers in parallel.
+	    for (size_t j = 0; j < num_clusters; ++j) {
+		(*centers)[j] = Eigen::VectorXd::Zero(vectors.at(0).size());
+	    }
+	    for (size_t t = 0; t < num_threads; ++t) {
+		for (size_t j = 0; j < num_clusters; ++j) {
+		    partial_centers[t][j].setZero();
 		}
 	    }
-	    (*clustering)[i] = closest_center_index;
-	    (*clustering_inverse)[closest_center_index].push_back(i);
-	    new_objective_value += min_dist;
+
+	    // Lambda function for accumulating vectors [start ... end).
+	    auto center_code = [&vectors, &clustering, &partial_centers]
+		(size_t start, size_t end, size_t thread_num) -> void {
+		for (size_t i = start; i < end; ++i) {
+		    partial_centers[thread_num][clustering->at(i)] +=
+		    vectors.at(i);
+		}
+	    };
+
+	    start = 0;
+	    end = num_vectors_per_worker;
+	    for (size_t t = 0; t < num_threads; ++t) {
+		if (t == num_threads - 1) {  // Last worker does extra work.
+		    end += extra_num_vectors_last_worker;
+		}
+		workers.push_back(thread(center_code, start, end, t));
+		start = end;
+		end += num_vectors_per_worker;
+	    }
+	    for (thread &worker : workers) { worker.join(); }
+	    workers.clear();
+
+	    // Sum over workers to get global cluster means (new centers).
+	    for (size_t t = 0; t < num_threads; ++t) {
+		for (size_t j = 0; j < num_clusters; ++j) {
+		    (*centers)[j] += partial_centers[t][j] / cluster_sizes[j];
+		}
+	    }
+
+	    // Check if converged.
+	    if (old_objective - new_objective < 1e-15) {
+		if (verbose) { cerr << " CONVERGED" << endl; }
+		break;
+	    }
+	    old_objective = new_objective;
+	    if (verbose) { cerr << endl; }
 	}
 
-	// Check if there exist centers that yielded empty clusters.
-	vector<size_t> lone_center_indices;
-	for (size_t j = 0; j < centers->size(); ++j) {
-	    if (clustering_inverse->find(j) == clustering_inverse->end()) {
-		lone_center_indices.push_back(j);
-	    }
-	}
-	if (lone_center_indices.size() > 0) {
-	    // Reset each lone center with a random point.
+	return new_objective;
+    }
+
+    void select_centers(const vector<Eigen::VectorXd> &vectors,
+			size_t num_centers, const string &select_method,
+			vector<Eigen::VectorXd> *centers) {
+	centers->resize(num_centers);
+	if (select_method == "rand") {  // Uniform sampling.
 	    vector<size_t> permuted_indices;
 	    util_math::permute_indices(vectors.size(), &permuted_indices);
-	    for (size_t j : lone_center_indices) {
-		if (verbose_) {
-		    cerr << "Center " << j << " yielded an empty cluster! "
-			 << "Replacing it with point " << permuted_indices[j]
-			 << endl;
-		}
+
+	    // Copy vectors corresponding to the top k shuffled indices.
+	    for (size_t j = 0; j < num_centers; ++j) {
 		(*centers)[j] = vectors.at(permuted_indices[j]);
 	    }
-	    continue;  // Optimize clusters again (counted as an iteration).
+	} else {
+	    ASSERT(false, "Unknown selection method: " << select_method);
 	}
-
-	if (verbose_) {
-	     cerr << new_objective_value << " (clusters)\t";
-	}
-
-	// Part II: Fix clusters, optimize centers.
-	new_objective_value = 0.0;
-	for (size_t j = 0; j < centers->size(); ++j) {
-	    // Set each center to be the mean of the corresponding cluster.
-	    (*centers)[j] = Eigen::VectorXd::Zero(vectors.at(0).size());
-	    for (size_t i : clustering_inverse->at(j)) {
-		(*centers)[j] += vectors.at(i);
-	    }
-	    (*centers)[j] /= clustering_inverse->at(j).size();
-	    for (size_t i : clustering_inverse->at(j)) {
-		Eigen::VectorXd diff =
-		    vectors.at(i) - centers->at(clustering->at(i));
-		new_objective_value += diff.squaredNorm();
-	    }
-	}
-	if (verbose_) {
-	    cerr << new_objective_value << " (centers)\t";
-	}
-
-	// Check if converged.
-	if (old_objective_value - new_objective_value < 1e-15) {
-	    if (verbose_) { cerr << " CONVERGED" << endl; }
-	    break;
-	}
-        old_objective_value = new_objective_value;
-	if (verbose_) { cerr << endl; }
     }
 
-    return new_objective_value;
-}
-
-void KMeans::SelectCenters(const vector<Eigen::VectorXd> &vectors,
-			   size_t num_centers,
-			   vector<Eigen::VectorXd> *centers) {
-    centers->resize(num_centers);
-    if (seed_method_ == "rand") {
-	vector<size_t> permuted_indices;
-	util_math::permute_indices(vectors.size(), &permuted_indices);
-
-	// Copy vectors corresponding to the top k shuffled indices.
-	for (size_t j = 0; j < num_centers; ++j) {
-	    (*centers)[j] = vectors.at(permuted_indices[j]);
+    void invert_clustering(const vector<size_t> &clustering,
+			   vector<vector<size_t> > *clustering_inverse) {
+	for (size_t i = 0; i < clustering.size(); ++i) {
+	    size_t cluster_num = clustering.at(i);
+	    if (cluster_num >= clustering_inverse->size()) {
+		clustering_inverse->resize(cluster_num + 1);
+	    }
+	    (*clustering_inverse)[cluster_num].push_back(i);
 	}
-    } else {
-	ASSERT(false, "Unknown seed method: " << seed_method_);
     }
-}
+}  // namespace kmeans
 
 double AgglomerativeClustering::ClusterOrderedVectors(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t num_leaf_clusters) {

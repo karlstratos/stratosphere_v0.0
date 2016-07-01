@@ -5,15 +5,55 @@
 #include "gtest/gtest.h"
 
 #include <limits>
+#include <random>
+#include <thread>
 
 #include "../cluster.h"
+
+// Test class that provides a random set of vectors for clustering.
+class RandomVectorsForClustering : public testing::Test {
+protected:
+    virtual void SetUp() {
+	vector<Eigen::VectorXd> vectors(num_vectors_);
+	for (size_t i = 0; i < num_vectors_; ++i) {
+	    vectors_.push_back(Eigen::VectorXd::Random(dim_));
+	}
+    }
+    vector<Eigen::VectorXd> vectors_;
+    size_t num_vectors_ = 197;
+    size_t dim_ = 10;
+    size_t num_clusters_ = 10;
+};
+
+// Checks that k-means behaves consistently under multithreading.
+TEST_F(RandomVectorsForClustering, KMeansMultithreading) {
+    size_t max_num_iterations = 1000;  // Basically run until converged.
+    bool verbose = false;
+    vector<size_t> clustering;
+
+    // Use front vectors as initial centers.
+    vector<Eigen::VectorXd> centers;
+    for (size_t i = 0; i < num_clusters_; ++i) {
+	centers.push_back(vectors_[i]);
+    }
+    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations,
+					   1, verbose, &centers, &clustering);
+
+    // Reset centers.
+    centers.clear();
+    for (size_t i = 0; i < num_clusters_; ++i) {
+	centers.push_back(vectors_[i]);
+    }
+    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations,
+					   4, verbose, &centers, &clustering);
+    EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
+}
 
 // Test class that provides a k-means example with an empty cluster problem:
 // http://www.ceng.metu.edu.tr/~tcan/ceng465_f1314/Schedule/KMeansEmpty.html
 class KMeansEmptyClusterVectors : public testing::Test {
 protected:
     virtual void SetUp() {
-	kmeans_.set_verbose(false);
 	Eigen::VectorXd v0(2);
 	Eigen::VectorXd v1(2);
 	Eigen::VectorXd v2(2);
@@ -36,12 +76,15 @@ protected:
 	vectors_.push_back(v5);
 	vectors_.push_back(v6);
     }
-    KMeans kmeans_;
     vector<Eigen::VectorXd> vectors_;
 };
 
 // Checks that 3-means can result in an empty cluster.
 TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
+    bool verbose = false;
+    size_t num_threads = 1;
+    vector<size_t> clustering;
+
     // Given centers
     //   |
     //   |         v3    v4         [v5]
@@ -72,7 +115,7 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     //   |
     //   |______________________________________
     //
-    // Iteration 2. EMPTY CLUSTER
+    // Iteration 2. EMPTY CLUSTER 1
     //   |
     //   |    (    v3    v4)   ()   (v5     )
     //   |    (    v2    )            (     )
@@ -82,24 +125,23 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     //   |
     //   |______________________________________
 
-    unordered_map<size_t, size_t> clustering;
-    unordered_map<size_t, vector<size_t> > clustering_inverse;
-
     // With 2 iterations, the example results in an empty cluster.
-    kmeans_.Cluster(vectors_, 2, &centers, &clustering, &clustering_inverse);
-    EXPECT_EQ(2, clustering_inverse.size());
+    kmeans::cluster(vectors_, 2, num_threads, verbose, &centers, &clustering);
+    vector<vector<size_t> > clustering_inverse;
+    kmeans::invert_clustering(clustering, &clustering_inverse);
+    EXPECT_EQ(0, clustering_inverse[1].size());
 
     // But the implementation should handle the empty cluster!
     centers = {vectors_[0], vectors_[5], vectors_[6]};  // Reset centers.
-    kmeans_.Cluster(vectors_, 10, &centers, &clustering, &clustering_inverse);
-    EXPECT_EQ(3, clustering_inverse.size());
+    kmeans::cluster(vectors_, 10, num_threads, verbose, &centers, &clustering);
+    kmeans::invert_clustering(clustering, &clustering_inverse);
+    EXPECT_TRUE(clustering_inverse[1].size() > 0);
 }
 
 // Test class that provides a set of vectors for clustering.
 class VectorsForClustering : public testing::Test {
 protected:
     virtual void SetUp() {
-	kmeans_.set_verbose(false);
 	Eigen::VectorXd v0(1);
 	Eigen::VectorXd v1(1);
 	Eigen::VectorXd v2(1);
@@ -120,10 +162,6 @@ protected:
 	ordered_vectors_.push_back(v3);
 	ordered_vectors_.push_back(v4);
 	ordered_vectors_.push_back(v5);
-
-	three_clusters_mean1_ = (v0 + v3)[0] / 2;
-	three_clusters_mean2_ = (v1 + v4)[0] / 2;
-	three_clusters_mean3_ = (v2 + v5)[0] / 2;
 
 	// For agglomerative clustering, structures are disambiguated by the
 	// "left < right" children ordering.
@@ -151,69 +189,10 @@ protected:
     }
     vector<Eigen::VectorXd> ordered_vectors_;
     AgglomerativeClustering agglomerative_;
-    KMeans kmeans_;
     vector<string> all_leaves_paths_;
     vector<string> two_leaves_paths_;
     vector<string> two_leaves_pruned_paths_;
-    double three_clusters_mean1_;
-    double three_clusters_mean2_;
-    double three_clusters_mean3_;
-
 };
-
-// Checks that 3-means converges to the optimum point given good centers (in 1
-// iteration).
-TEST_F(VectorsForClustering, KMeans3ClustersGoodCenters) {
-    // Given centers
-    //----[v0]-v3---------[v1]----v4------------------------------[v2]--v5------
-    vector<Eigen::VectorXd> centers = {ordered_vectors_[0], ordered_vectors_[1],
-				       ordered_vectors_[2]};
-    // Iteration 1. OPTIMAL
-    //----(v0-v3)---------(v1----v4)------------------------------(v2--v5)------
-    //----v0[]v3-----------v1-[]-v4--------------------------------v2[]v5-------
-    size_t num_iterations = 1;
-    unordered_map<size_t, size_t> clustering;
-    unordered_map<size_t, vector<size_t> > clustering_inverse;
-    kmeans_.Cluster(ordered_vectors_, num_iterations, &centers, &clustering,
-		    &clustering_inverse);
-    EXPECT_EQ(clustering[0], clustering[3]);
-    EXPECT_EQ(clustering[1], clustering[4]);
-    EXPECT_EQ(clustering[2], clustering[5]);
-    EXPECT_NEAR(centers[0][0], three_clusters_mean1_, 1e-15);
-    EXPECT_NEAR(centers[1][0], three_clusters_mean2_, 1e-15);
-    EXPECT_NEAR(centers[2][0], three_clusters_mean3_, 1e-15);
-}
-
-// Checks that 3-means (still) converges to the optimum point given bad centers
-// (in 3 iterations).
-TEST_F(VectorsForClustering, KMeans3ClustersBadCenters) {
-    // Given centers
-    //----[v0]-[v3]--------[v1]----v4-------------------------------v2--v5------
-    vector<Eigen::VectorXd> centers = {ordered_vectors_[0], ordered_vectors_[3],
-				       ordered_vectors_[1]};
-    // Iteration 1.
-    //----(v0)-(v3)--------(v1----v4--------------------------------v2--v5)-----
-    //----[v0]-[v3]---------v1----v4------------[]------------------v2--v5------
-    //
-    // Iteration 2.
-    //----(v0)-(v3----------v1)--(v4--------------------------------v2--v5)-----
-    //----[v0]--v3----[]----v1----v4--------------------[]----------v2--v5)-----
-    //
-    // Iteration 3. OPTIMAL
-    //----(v0--v3)---------(v1----v4)------------------------------(v2--v5)-----
-    //-----v0[]v3-----------v1-[]-v4--------------------------------v2[]v5------
-    size_t num_iterations = 3;
-    unordered_map<size_t, size_t> clustering;
-    unordered_map<size_t, vector<size_t> > clustering_inverse;
-    kmeans_.Cluster(ordered_vectors_, num_iterations, &centers, &clustering,
-		    &clustering_inverse);
-    EXPECT_EQ(clustering[0], clustering[3]);
-    EXPECT_EQ(clustering[1], clustering[4]);
-    EXPECT_EQ(clustering[2], clustering[5]);
-    EXPECT_NEAR(centers[0][0], three_clusters_mean1_, 1e-15);
-    EXPECT_NEAR(centers[1][0], three_clusters_mean2_, 1e-15);
-    EXPECT_NEAR(centers[2][0], three_clusters_mean3_, 1e-15);
-}
 
 // Checks agglomerative clustering with all 6 leaves.
 TEST_F(VectorsForClustering, AgglomerativeAll6Leaves) {

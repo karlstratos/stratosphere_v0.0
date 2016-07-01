@@ -13,38 +13,29 @@
 
 #include "util.h"
 
-// Class for the k-means clustering algorithm.
-class KMeans {
-public:
-    // Runs k-means on n vectors of length d for T iterations. Computes:
-    //    k "centers" (means of the k clusters): initialized from given centers
-    //    clustering: {1...n} -> {1...k}
-    //    clustering_inverse: {1...k} -> {1...n}
-    // Also returns the k-means objective value. O(nkd) memory, O(nkdT) runtime
-    // (without parallelization).
-    double Cluster(const vector<Eigen::VectorXd> &vectors,
-		   size_t max_num_iterations,
+namespace kmeans {
+    // Runs k-means on n vectors of length d for T iterations, returns the
+    // final objective value. Calculates:
+    //    - centers[j]   : mean of cluster j (initialized from given centers)
+    //    - clustering[i]: cluster of vector i (an index in {1...k})
+    //
+    // The code is optimized for large n and small k.
+    //    * RUNTIME: O(Tndk / num_threads)
+    //    * MEMORY: O(ndk)
+    double cluster(const vector<Eigen::VectorXd> &vectors,
+		   size_t max_num_iterations, size_t num_threads, bool verbose,
 		   vector<Eigen::VectorXd> *centers,
-		   unordered_map<size_t, size_t> *clustering,
-		   unordered_map<size_t, vector<size_t> > *clustering_inverse);
+		   vector<size_t> *clustering);
 
-    // Selects a set of centers in the given vectors.
-    void SelectCenters(const vector<Eigen::VectorXd> &vectors,
-		       size_t num_centers, vector<Eigen::VectorXd> *centers);
+    // Selects centers from given vectors.
+    void select_centers(const vector<Eigen::VectorXd> &vectors,
+			size_t num_centers, const string &select_method,
+			vector<Eigen::VectorXd> *centers);
 
-    // Sets the initialization method for seed centers.
-    void set_seed_method(string seed_method) { seed_method_ = seed_method; }
-
-    // Sets the flag for printing messages to stderr.
-    void set_verbose(bool verbose) { verbose_ = verbose; }
-
-private:
-    // Initialization method for seed centers.
-    string seed_method_ = "rand";
-
-    // Print messages to stderr?
-    bool verbose_ = true;
-};
+    // Inverts the mapping vector->cluster to the mapping cluster->{vectors}.
+    void invert_clustering(const vector<size_t> &clustering,
+			   vector<vector<size_t> > *clustering_inverse);
+}
 
 // Class for agglomerative clustering. Since complex index manipulation is
 // needed, we will have the following convention.
