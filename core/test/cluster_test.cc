@@ -23,30 +23,60 @@ protected:
     size_t num_vectors_ = 197;
     size_t dim_ = 10;
     size_t num_clusters_ = 10;
+    size_t max_num_iterations_ = 1000;
+    bool verbose_ = false;
 };
 
-// Checks that k-means behaves consistently under multithreading.
-TEST_F(RandomVectorsForClustering, KMeansMultithreading) {
-    size_t max_num_iterations = 1000;  // Basically run until converged.
-    bool verbose = false;
+// Checks that k-means with Euclidean distance behaves correctly under
+// multithreading.
+TEST_F(RandomVectorsForClustering, KMeansEuclideanMultithreading) {
+    size_t distance_type = 0;  // Squared Euclidean distance
     vector<size_t> clustering;
+    vector<size_t> clustering_multi;
 
     // Use front vectors as initial centers.
     vector<Eigen::VectorXd> centers;
-    for (size_t i = 0; i < num_clusters_; ++i) {
-	centers.push_back(vectors_[i]);
-    }
-    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations,
-					   1, verbose, &centers, &clustering);
+    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
+					   1, distance_type, verbose_, &centers,
+					   &clustering);  // 1 thread
 
-    // Reset centers.
-    centers.clear();
-    for (size_t i = 0; i < num_clusters_; ++i) {
-	centers.push_back(vectors_[i]);
-    }
-    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations,
-					   4, verbose, &centers, &clustering);
+    // Centers have been modified, reset.
+    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
+					   4, distance_type, verbose_, &centers,
+					   &clustering_multi);  // 4 threads
+
     EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
+    for (size_t i = 0; i < num_vectors_; ++i) {
+	EXPECT_EQ(clustering[i], clustering_multi[i]);
+    }
+}
+
+// Checks that k-means with Manhattan distance behaves correctly under
+// multithreading.
+TEST_F(RandomVectorsForClustering, KMeansManhattanMultithreading) {
+    size_t distance_type = 1;  // Manhattan distance
+    vector<size_t> clustering;
+    vector<size_t> clustering_multi;
+
+    // Use front vectors as initial centers.
+    vector<Eigen::VectorXd> centers;
+    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
+					   1, distance_type, verbose_, &centers,
+					   &clustering);  // 1 thread
+
+    // Centers have been modified, reset.
+    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
+					   4, distance_type, verbose_, &centers,
+					   &clustering_multi);  // 4 threads
+
+    EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
+    for (size_t i = 0; i < num_vectors_; ++i) {
+	EXPECT_EQ(clustering[i], clustering_multi[i]);
+    }
 }
 
 // Test class that provides a k-means example with an empty cluster problem:
@@ -83,6 +113,7 @@ protected:
 TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     bool verbose = false;
     size_t num_threads = 1;
+    size_t distance_type = 0;
     vector<size_t> clustering;
 
     // Given centers
@@ -126,14 +157,16 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     //   |______________________________________
 
     // With 2 iterations, the example results in an empty cluster.
-    kmeans::cluster(vectors_, 2, num_threads, verbose, &centers, &clustering);
+    kmeans::cluster(vectors_, 2, num_threads, distance_type, verbose, &centers,
+		    &clustering);
     vector<vector<size_t> > clustering_inverse;
     kmeans::invert_clustering(clustering, &clustering_inverse);
     EXPECT_EQ(0, clustering_inverse[1].size());
 
     // But the implementation should handle the empty cluster!
     centers = {vectors_[0], vectors_[5], vectors_[6]};  // Reset centers.
-    kmeans::cluster(vectors_, 10, num_threads, verbose, &centers, &clustering);
+    kmeans::cluster(vectors_, 10, num_threads, distance_type, verbose, &centers,
+		    &clustering);
     kmeans::invert_clustering(clustering, &clustering_inverse);
     EXPECT_TRUE(clustering_inverse[1].size() > 0);
 }

@@ -14,16 +14,17 @@
 #include "util.h"
 
 namespace kmeans {
-    // Runs k-means on n vectors of length d for T iterations, returns the
-    // final objective value. Calculates:
+    // Runs k-means on n vectors of length d for T iterations. Runtime O(Tndk)
+    // and memory O(ndk). Returns the final objective value. Calculates:
     //    - centers[j]   : mean of cluster j (initialized from given centers)
     //    - clustering[i]: cluster of vector i (an index in {1...k})
     //
-    // The code is optimized for large n and small k.
-    //    * RUNTIME: O(Tndk / num_threads)
-    //    * MEMORY: O(ndk)
+    // Distance types:
+    //    0: Squared Euclidean distance
+    //    1: Manhattan distance
     double cluster(const vector<Eigen::VectorXd> &vectors,
-		   size_t max_num_iterations, size_t num_threads, bool verbose,
+		   size_t max_num_iterations, size_t num_threads,
+		   size_t distance_type, bool verbose,
 		   vector<Eigen::VectorXd> *centers,
 		   vector<size_t> *clustering);
 

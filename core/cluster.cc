@@ -9,10 +9,12 @@
 
 namespace kmeans {
     double cluster(const vector<Eigen::VectorXd> &vectors,
-		   size_t max_num_iterations, size_t num_threads, bool verbose,
+		   size_t max_num_iterations, size_t num_threads,
+		   size_t distance_type, bool verbose,
 		   vector<Eigen::VectorXd> *centers,
 		   vector<size_t> *clustering) {
 	clustering->resize(vectors.size());
+	size_t dim = vectors.at(0).size();
 
 	// Infer the number of clusters from given centers.
 	size_t num_clusters = centers->size();
@@ -22,7 +24,9 @@ namespace kmeans {
 	// Prepare variables for multithreading.
 	ASSERT(num_threads > 0, "Number of threads must be at least 1!");
 	size_t num_vectors_per_worker = vectors.size() / num_threads;
+	size_t num_clusters_per_worker = num_clusters / num_threads;
 	size_t extra_num_vectors_last_worker = vectors.size() % num_threads;
+	size_t extra_num_clusters_last_worker = num_clusters % num_threads;
 	vector<vector<size_t> > partial_cluster_sizes(num_threads);
 	for (size_t t = 0; t < num_threads; ++t) {
 	    partial_cluster_sizes[t].resize(num_clusters);
@@ -32,8 +36,7 @@ namespace kmeans {
 	for (size_t t = 0; t < num_threads; ++t) {
 	    partial_centers[t].resize(num_clusters);
 	    for (size_t j = 0; j < num_clusters; ++j) {
-		partial_centers[t][j] =
-		    Eigen::VectorXd::Zero(vectors.at(0).size());
+		partial_centers[t][j] = Eigen::VectorXd::Zero(dim);
 	    }
 	}
 
@@ -53,15 +56,29 @@ namespace kmeans {
 	    fill(partial_objective.begin(), partial_objective.end(), 0.0);
 
 	    // Lambda function for assigning vectors [start ... end).
-	    auto cluster_code = [&vectors, &centers, &clustering,
+	    auto cluster_code = [&vectors, distance_type, &centers, &clustering,
 				 &partial_objective, &partial_cluster_sizes]
 		(size_t start, size_t end, size_t thread_num) -> void {
 		for (size_t i = start; i < end; ++i) {
 		    double min_dist = numeric_limits<double>::infinity();
 		    size_t closest_center_index = 0;
 		    for (size_t j = 0; j < centers->size(); ++j) {
-			Eigen::VectorXd diff = vectors.at(i) - centers->at(j);
-			double dist = diff.squaredNorm();
+			double dist;
+			switch (distance_type) {
+			case 0: {  // Squared Euclidean distance
+			    dist =
+				(vectors.at(i) - centers->at(j)).squaredNorm();
+			    break;
+			}
+			case 1: {  // Manhattan distance
+			    dist =
+				(vectors.at(i) - centers->at(j)).lpNorm<1>();
+			    break;
+			}
+			default: {
+			    ASSERT(false, "Unknown dist: " << distance_type);
+			}
+			}
 			if (dist < min_dist) {
 			    min_dist = dist;
 			    closest_center_index = j;
@@ -118,46 +135,105 @@ namespace kmeans {
 	    }
 	    if (verbose) { cerr << new_objective << "\t"; }
 
-	    // STEP 2: Calculate cluster means for new centers in parallel.
-	    for (size_t j = 0; j < num_clusters; ++j) {
-		(*centers)[j] = Eigen::VectorXd::Zero(vectors.at(0).size());
-	    }
-	    for (size_t t = 0; t < num_threads; ++t) {
+	    // STEP 2: Calculate new centers.
+	    switch (distance_type) {
+	    case 0: {  // Squared Euclidean distance
+		// Accumulate cluster means in parallel.
 		for (size_t j = 0; j < num_clusters; ++j) {
-		    partial_centers[t][j].setZero();
+		    (*centers)[j] = Eigen::VectorXd::Zero(dim);
 		}
+		for (size_t t = 0; t < num_threads; ++t) {
+		    for (size_t j = 0; j < num_clusters; ++j) {
+			partial_centers[t][j].setZero();
+		    }
+		}
+
+		// Lambda function for accumulating vectors [start ... end).
+		auto center_code = [&vectors, &clustering, &partial_centers]
+		    (size_t start, size_t end, size_t thread_num) -> void {
+		    for (size_t i = start; i < end; ++i) {
+			partial_centers[thread_num][clustering->at(i)] +=
+			vectors.at(i);
+		    }
+		};
+
+		start = 0;
+		end = num_vectors_per_worker;
+		for (size_t t = 0; t < num_threads; ++t) {
+		    if (t == num_threads - 1) {  // Last worker does extra work.
+			end += extra_num_vectors_last_worker;
+		    }
+		    workers.push_back(thread(center_code, start, end, t));
+		    start = end;
+		    end += num_vectors_per_worker;
+		}
+		for (thread &worker : workers) { worker.join(); }
+		workers.clear();
+
+		// Sum over workers to get global cluster means (new centers).
+		for (size_t t = 0; t < num_threads; ++t) {
+		    for (size_t j = 0; j < num_clusters; ++j) {
+			(*centers)[j] +=
+			    partial_centers[t][j] / cluster_sizes[j];
+		    }
+		}
+		break;
 	    }
-
-	    // Lambda function for accumulating vectors [start ... end).
-	    auto center_code = [&vectors, &clustering, &partial_centers]
-		(size_t start, size_t end, size_t thread_num) -> void {
-		for (size_t i = start; i < end; ++i) {
-		    partial_centers[thread_num][clustering->at(i)] +=
-		    vectors.at(i);
-		}
-	    };
-
-	    start = 0;
-	    end = num_vectors_per_worker;
-	    for (size_t t = 0; t < num_threads; ++t) {
-		if (t == num_threads - 1) {  // Last worker does extra work.
-		    end += extra_num_vectors_last_worker;
-		}
-		workers.push_back(thread(center_code, start, end, t));
-		start = end;
-		end += num_vectors_per_worker;
-	    }
-	    for (thread &worker : workers) { worker.join(); }
-	    workers.clear();
-
-	    // Sum over workers to get global cluster means (new centers).
-	    for (size_t t = 0; t < num_threads; ++t) {
+	    case 1: {  // Manhattan distance
+		// In each cluster, sort vectors dimension-wise.
+		vector<vector<vector<double> > > values(num_clusters);
 		for (size_t j = 0; j < num_clusters; ++j) {
-		    (*centers)[j] += partial_centers[t][j] / cluster_sizes[j];
+		    values[j].resize(dim);
 		}
+		for (size_t i = 0; i < vectors.size(); ++i) {  // O(#vectors)...
+		    for (size_t d = 0; d < dim; ++d) {
+			// values[j][d][z] = d-th value of z-th vector
+			//                   in cluster j
+			values[clustering->at(i)][d].push_back(
+			    vectors.at(i)(d));
+		    }
+		}
+
+		// Lambda function for sorting clusters [start ... end).
+		auto sort_code = [&values, dim, &centers]
+		    (size_t start, size_t end) -> void {
+		    for (size_t j = start; j < end; ++j) {
+			size_t cluster_size = values[j][0].size();  // Know > 0.
+			size_t middle = (cluster_size - 1) / 2;
+			for (size_t d = 0; d < dim; ++d) {
+			    sort(values[j][d].begin(), values[j][d].end());
+			    double median_value = (cluster_size % 2 == 1) ?
+				values[j][d][middle] :
+				(values[j][d][middle] +
+				 values[j][d][middle + 1]) / 2;
+			    (*centers)[j](d) = median_value;
+			}
+		    }
+		};
+
+		start = 0;
+		end = num_clusters_per_worker;
+		for (size_t t = 0; t < num_threads; ++t) {
+		    if (t == num_threads - 1) {  // Last worker does extra work.
+			end += extra_num_clusters_last_worker;
+		    }
+		    workers.push_back(thread(sort_code, start, end));
+		    start = end;
+		    end += num_clusters_per_worker;
+		}
+		for (thread &worker : workers) { worker.join(); }
+		workers.clear();
+
+		break;
+	    }
+	    default: {
+		ASSERT(false, "Unknown dist: " << distance_type);
+	    }
 	    }
 
 	    // Check if converged.
+	    ASSERT(old_objective - new_objective > -1e-32,
+		   "Clustering objective increased, something is wrong!");
 	    if (old_objective - new_objective < 1e-15) {
 		if (verbose) { cerr << " CONVERGED" << endl; }
 		break;
@@ -172,6 +248,7 @@ namespace kmeans {
     void select_centers(const vector<Eigen::VectorXd> &vectors,
 			size_t num_centers, const string &select_method,
 			vector<Eigen::VectorXd> *centers) {
+	ASSERT(vectors.size() >= num_centers, "More centers than vectors?");
 	centers->resize(num_centers);
 	if (select_method == "rand") {  // Uniform sampling.
 	    vector<size_t> permuted_indices;
@@ -180,6 +257,10 @@ namespace kmeans {
 	    // Copy vectors corresponding to the top k shuffled indices.
 	    for (size_t j = 0; j < num_centers; ++j) {
 		(*centers)[j] = vectors.at(permuted_indices[j]);
+	    }
+	} else if (select_method == "front") {  // Front k vectors.
+	    for (size_t j = 0; j < num_centers; ++j) {
+		(*centers)[j] = vectors.at(j);
 	    }
 	} else {
 	    ASSERT(false, "Unknown selection method: " << select_method);
