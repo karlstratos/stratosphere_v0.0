@@ -6,8 +6,28 @@
 #include <limits>
 #include <stack>
 #include <thread>
+#include <random>
 
 namespace kmeans {
+    double compute_distance(const Eigen::VectorXd &v1,
+			    const Eigen::VectorXd &v2, size_t distance_type) {
+	double dist;
+	switch (distance_type) {
+	case 0: {  // Squared Euclidean distance
+	    dist = (v1 - v2).squaredNorm();
+	    break;
+	}
+	case 1: {  // Manhattan distance
+	    dist = (v1 - v2).lpNorm<1>();
+	    break;
+	}
+	default: {
+	    ASSERT(false, "Unknown dist: " << distance_type);
+	}
+	}
+	return dist;
+    }
+
     double cluster(const vector<Eigen::VectorXd> &vectors,
 		   size_t max_num_iterations, size_t num_threads,
 		   size_t distance_type, bool verbose,
@@ -63,22 +83,9 @@ namespace kmeans {
 		    double min_dist = numeric_limits<double>::infinity();
 		    size_t closest_center_index = 0;
 		    for (size_t j = 0; j < centers->size(); ++j) {
-			double dist;
-			switch (distance_type) {
-			case 0: {  // Squared Euclidean distance
-			    dist =
-				(vectors.at(i) - centers->at(j)).squaredNorm();
-			    break;
-			}
-			case 1: {  // Manhattan distance
-			    dist =
-				(vectors.at(i) - centers->at(j)).lpNorm<1>();
-			    break;
-			}
-			default: {
-			    ASSERT(false, "Unknown dist: " << distance_type);
-			}
-			}
+			double dist = compute_distance(vectors.at(i),
+						       centers->at(j),
+						       distance_type);
 			if (dist < min_dist) {
 			    min_dist = dist;
 			    closest_center_index = j;
@@ -245,25 +252,150 @@ namespace kmeans {
 	return new_objective;
     }
 
-    void select_centers(const vector<Eigen::VectorXd> &vectors,
-			size_t num_centers, const string &select_method,
-			vector<Eigen::VectorXd> *centers) {
+    void select_center_indices(const vector<Eigen::VectorXd> &vectors,
+			       size_t num_centers, const string &seed_method,
+			       size_t num_threads, size_t distance_type,
+			       vector<size_t> *center_indices) {
 	ASSERT(vectors.size() >= num_centers, "More centers than vectors?");
-	centers->resize(num_centers);
-	if (select_method == "rand") {  // Uniform sampling.
+	center_indices->resize(num_centers);
+	if (seed_method == "pp") {  // k-means++
+	    random_device rd;
+	    mt19937 gen(rd());
+	    ASSERT(num_threads > 0, "Number of threads must be at least 1!");
+	    size_t num_vectors_per_worker = vectors.size() / num_threads;
+	    size_t extra_num_vectors_last_worker = vectors.size() % num_threads;
+
+	    // Draw the first center.
+	    uniform_int_distribution<> uniform_dis(0, vectors.size() - 1);
+	    (*center_indices)[0] = uniform_dis(gen);  // Uniform draw
+
+	    // Draw the remaining centers.
+	    for (size_t j = 1; j < num_centers; ++j) {
+		vector<double> vector_weights(vectors.size());
+
+		// Lambda function for computing vector weights [start ... end)
+		// when selecting center_indices->at(center_index).
+		auto weight_code = [&vectors, distance_type, &center_indices,
+				    &vector_weights]
+		    (size_t start, size_t end, size_t center_index) -> void {
+		    for (size_t i = start; i < end; ++i) {
+			double min_dist = numeric_limits<double>::infinity();
+			for (size_t q = 0; q < center_index; ++q) {
+			    // Search over the previously selected centers.
+			    double dist = compute_distance(
+				vectors.at(i),
+				vectors.at(center_indices->at(q)),
+				distance_type);
+			    if (dist < min_dist) { min_dist = dist; }
+			}
+			vector_weights[i] = min_dist;
+		    }
+		};
+
+		size_t start = 0;
+		size_t end = num_vectors_per_worker;
+		vector<thread> workers;
+		for (size_t t = 0; t < num_threads; ++t) {
+		    if (t == num_threads - 1) {  // Last worker does extra work.
+			end += extra_num_vectors_last_worker;
+		    }
+		    workers.push_back(thread(weight_code, start, end, j));
+		    start = end;
+		    end += num_vectors_per_worker;
+		}
+		for (thread &worker : workers) { worker.join(); }
+
+		discrete_distribution<> weighted_dis(vector_weights.begin(),
+						     vector_weights.end());
+		(*center_indices)[j] = weighted_dis(gen);  // Weighted draw
+	    }
+	} else if (seed_method == "uniform") {  // Uniform sampling.
 	    vector<size_t> permuted_indices;
 	    util_math::permute_indices(vectors.size(), &permuted_indices);
-
-	    // Copy vectors corresponding to the top k shuffled indices.
 	    for (size_t j = 0; j < num_centers; ++j) {
-		(*centers)[j] = vectors.at(permuted_indices[j]);
+		(*center_indices)[j] = permuted_indices[j];
 	    }
-	} else if (select_method == "front") {  // Front k vectors.
+	} else if (seed_method == "front") {  // Front k vectors.
 	    for (size_t j = 0; j < num_centers; ++j) {
-		(*centers)[j] = vectors.at(j);
+		(*center_indices)[j] = j;
 	    }
 	} else {
-	    ASSERT(false, "Unknown selection method: " << select_method);
+	    ASSERT(false, "Unknown seed method: " << seed_method);
+	}
+    }
+
+    void select_centers(const vector<Eigen::VectorXd> &vectors,
+			size_t num_centers, const string &seed_method,
+			size_t num_threads, size_t distance_type,
+			vector<Eigen::VectorXd> *centers) {
+	centers->clear();
+	vector<size_t> center_indices;
+	select_center_indices(vectors, num_centers, seed_method, num_threads,
+			      distance_type, &center_indices);
+	for (size_t index : center_indices) {
+	    (*centers).push_back(vectors.at(index));
+	}
+    }
+
+    void cluster(const vector<Eigen::VectorXd> &vectors,
+		 size_t max_num_iterations, size_t num_threads,
+		 size_t distance_type, size_t num_centers,
+		 const string &seed_method, size_t num_restarts,
+		 vector<vector<Eigen::VectorXd> > *list_centers,
+		 vector<vector<size_t> > *list_clustering,
+		 vector<double> *list_objective) {
+	list_centers->resize(num_restarts);
+	list_clustering->resize(num_restarts);
+	list_objective->resize(num_restarts);
+
+	size_t start = 0;  // Restart start index
+	size_t end = start;  // Restart end index (TBD)
+	size_t num_restarts_left = num_restarts;
+	while (num_restarts_left > 0) { // Handle as many restarts as we can.
+	    size_t num_threads_per_worker;
+	    size_t extra_num_threads_last_worker;
+	    if (num_restarts_left <= num_threads) {
+		// More threads than restarts: finished.
+		num_threads_per_worker = num_threads / num_restarts_left;
+		extra_num_threads_last_worker = num_threads % num_restarts_left;
+		end += num_restarts_left;
+		num_restarts_left = 0;
+	    } else {
+		// More restarts than threads: assign 1 thread per restart.
+		num_threads_per_worker = 1;
+		extra_num_threads_last_worker = 0;
+		end += num_threads;
+		num_restarts_left -= num_threads;
+	    }
+
+	    // Lambda function for 1 restart.
+	    auto restart_code = [&vectors, max_num_iterations, distance_type,
+				 num_centers, seed_method, &list_centers,
+				 &list_clustering, &list_objective]
+		(size_t restart_num, size_t num_threads_assigned) -> void {
+		select_centers(vectors, num_centers, seed_method,
+			       num_threads_assigned, distance_type,
+			       &list_centers->at(restart_num));
+
+		(*list_objective)[restart_num] =
+		cluster(vectors, max_num_iterations, num_threads_assigned,
+			distance_type, false, &list_centers->at(restart_num),
+			&list_clustering->at(restart_num));
+	    };
+
+	    vector<thread> workers;
+	    for (size_t restart_num = start; restart_num < end; ++restart_num) {
+		size_t num_threads_assigned = num_threads_per_worker;
+		if (restart_num == end - start - 1) {
+		    num_threads_assigned += extra_num_threads_last_worker;
+		}
+		workers.push_back(thread(restart_code, restart_num,
+					 num_threads_assigned));
+	    }
+	    for (thread &worker : workers) { worker.join(); }
+
+	    start = end;
+	    end = start;  // TBD
 	}
     }
 

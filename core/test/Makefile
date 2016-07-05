@@ -116,13 +116,13 @@ corpus_test.o: corpus_test.cc
 $(CORE)/corpus.o: $(CORE)/corpus.cc $(CORE)/corpus.h $(CORE)/sparsesvd.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-cluster_test: cluster_test.o $(CORE)/cluster.o gtest_main.a $(CORE)/util.o
+cluster_test: cluster_test.o $(CORE)/cluster.o $(CORE)/util.o gtest_main.a
 	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 cluster_test.o: cluster_test.cc
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
-$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h
+$(CORE)/cluster.o: $(CORE)/cluster.cc $(CORE)/cluster.h $(CORE)/util.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@
 
 evaluate_test: evaluate_test.o $(CORE)/evaluate.o $(CORE)/util.o gtest_main.a

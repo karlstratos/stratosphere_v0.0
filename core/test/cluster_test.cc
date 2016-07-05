@@ -10,8 +10,8 @@
 
 #include "../cluster.h"
 
-// Test class that provides a random set of vectors for clustering.
-class RandomVectorsForClustering : public testing::Test {
+// Test class that provides a random set of vectors.
+class RandomVectors : public testing::Test {
 protected:
     virtual void SetUp() {
 	vector<Eigen::VectorXd> vectors(num_vectors_);
@@ -27,22 +27,82 @@ protected:
     bool verbose_ = false;
 };
 
+// Checks the behavior of the k-means++ initialization under multithreading.
+TEST_F(RandomVectors, KMeansPlusPlusInitialization) {
+    string seed_method = "pp";
+    size_t distance_type = 0;  // Any distance is fine (checked in other test).
+    size_t num_threads = 4;
+    size_t num_fewer_vectors = (num_vectors_ > 40) ? 40 : num_vectors_;
+    vector<Eigen::VectorXd> fewer_vectors(num_fewer_vectors);
+    for (size_t i = 0; i < num_fewer_vectors; ++i) {
+	fewer_vectors[i] = vectors_[i];
+    }
+    vector<size_t> center_indices;
+
+    // Draw as many centers as there are vectors.
+    kmeans::select_center_indices(fewer_vectors, num_fewer_vectors, seed_method,
+				  num_threads, distance_type, &center_indices);
+
+    // Then every vector must be selected as a center under k-means++.
+    unordered_map<size_t, bool> covered_indices;
+    for (size_t index : center_indices) { covered_indices[index] = true; }
+    EXPECT_EQ(num_fewer_vectors, covered_indices.size());
+}
+
+// Checks that k-means with restarts behaves correctly under multithreading.
+TEST_F(RandomVectors, KMeansWithRestarts) {
+    size_t num_restarts;
+    size_t num_threads;
+    size_t distance_type = 0;  // Any distance is fine (checked in other test).
+    vector<vector<Eigen::VectorXd> > list_centers;
+    vector<vector<size_t> > list_clustering;
+    vector<double> list_objective;
+
+    // Vary numbers of restarts and threads and check with deterministic seeds.
+    num_restarts = 4;
+    num_threads = 4;  // Equal number of restarts and threads
+    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
+		    num_clusters_, "front", num_restarts, &list_centers,
+		    &list_clustering, &list_objective);
+    for (size_t r = 1; r < num_restarts; ++r) {
+	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+    }
+
+    num_restarts = 7;
+    num_threads = 2;  // More restarts than threads.
+    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
+		    num_clusters_, "front", num_restarts, &list_centers,
+		    &list_clustering, &list_objective);
+    for (size_t r = 1; r < num_restarts; ++r) {
+	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+    }
+
+    num_restarts = 3;
+    num_threads = 11;  // More threads than restarts.
+    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
+		    num_clusters_, "front", num_restarts, &list_centers,
+		    &list_clustering, &list_objective);
+    for (size_t r = 1; r < num_restarts; ++r) {
+	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+    }
+}
+
 // Checks that k-means with Euclidean distance behaves correctly under
 // multithreading.
-TEST_F(RandomVectorsForClustering, KMeansEuclideanMultithreading) {
+TEST_F(RandomVectors, KMeansEuclideanMultithreading) {
     size_t distance_type = 0;  // Squared Euclidean distance
     vector<size_t> clustering;
     vector<size_t> clustering_multi;
 
     // Use front vectors as initial centers.
     vector<Eigen::VectorXd> centers;
-    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
     double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
 					   1, distance_type, verbose_, &centers,
 					   &clustering);  // 1 thread
 
     // Centers have been modified, reset.
-    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0,  &centers);
     double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
 					   4, distance_type, verbose_, &centers,
 					   &clustering_multi);  // 4 threads
@@ -55,20 +115,20 @@ TEST_F(RandomVectorsForClustering, KMeansEuclideanMultithreading) {
 
 // Checks that k-means with Manhattan distance behaves correctly under
 // multithreading.
-TEST_F(RandomVectorsForClustering, KMeansManhattanMultithreading) {
+TEST_F(RandomVectors, KMeansManhattanMultithreading) {
     size_t distance_type = 1;  // Manhattan distance
     vector<size_t> clustering;
     vector<size_t> clustering_multi;
 
     // Use front vectors as initial centers.
     vector<Eigen::VectorXd> centers;
-    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
     double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
 					   1, distance_type, verbose_, &centers,
 					   &clustering);  // 1 thread
 
     // Centers have been modified, reset.
-    kmeans::select_centers(vectors_, num_clusters_, "front", &centers);
+    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
     double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
 					   4, distance_type, verbose_, &centers,
 					   &clustering_multi);  // 4 threads
@@ -171,8 +231,8 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     EXPECT_TRUE(clustering_inverse[1].size() > 0);
 }
 
-// Test class that provides a set of vectors for clustering.
-class VectorsForClustering : public testing::Test {
+// Test class that provides a set of vectors for agglomerative clustering.
+class VectorsAgglomerative : public testing::Test {
 protected:
     virtual void SetUp() {
 	Eigen::VectorXd v0(1);
@@ -228,7 +288,7 @@ protected:
 };
 
 // Checks agglomerative clustering with all 6 leaves.
-TEST_F(VectorsForClustering, AgglomerativeAll6Leaves) {
+TEST_F(VectorsAgglomerative, AgglomerativeAll6Leaves) {
     size_t num_leaf_clusters = numeric_limits<size_t>::max();
     double gamma = agglomerative_.ClusterOrderedVectors(ordered_vectors_,
 							num_leaf_clusters);
@@ -239,7 +299,7 @@ TEST_F(VectorsForClustering, AgglomerativeAll6Leaves) {
 }
 
 // Checks agglomerative clustering twice.
-TEST_F(VectorsForClustering, AgglomerativeAll6LeavesTwice) {
+TEST_F(VectorsAgglomerative, AgglomerativeAll6LeavesTwice) {
     size_t num_leaf_clusters = numeric_limits<size_t>::max();
     double gamma1 = agglomerative_.ClusterOrderedVectors(ordered_vectors_,
 							 num_leaf_clusters);
@@ -253,7 +313,7 @@ TEST_F(VectorsForClustering, AgglomerativeAll6LeavesTwice) {
 }
 
 // Checks agglomerative clustering with 2 leaf clusters without pruning.
-TEST_F(VectorsForClustering, Agglomerative2LeavesNotPruned) {
+TEST_F(VectorsAgglomerative, Agglomerative2LeavesNotPruned) {
     size_t num_leaf_clusters = 2;
     agglomerative_.set_prune(false);  // Do not prune.
     double gamma = agglomerative_.ClusterOrderedVectors(ordered_vectors_,
@@ -265,7 +325,7 @@ TEST_F(VectorsForClustering, Agglomerative2LeavesNotPruned) {
 }
 
 // Checks agglomerative clustering with 2 leaf clusters with pruning.
-TEST_F(VectorsForClustering, Agglomerative2LeavesPruned) {
+TEST_F(VectorsAgglomerative, Agglomerative2LeavesPruned) {
     size_t num_leaf_clusters = 2;
     agglomerative_.set_prune(true);  // Prune.
     double gamma = agglomerative_.ClusterOrderedVectors(ordered_vectors_,

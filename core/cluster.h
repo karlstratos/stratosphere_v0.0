@@ -2,11 +2,13 @@
 //
 // Code for clustering algorithms. References:
 //
+// - k-means++: The Advantages of Careful Seeding (Arthur and Vassilvitskii,
+//   2006).
 // - Fast and memory efficient implementation of the exact pnn (Franti et al.,
 //   2000).
 
-#ifndef CLUSTER_H
-#define CLUSTER_H
+#ifndef CORE_CLUSTER_H
+#define CORE_CLUSTER_H
 
 #include <Eigen/Dense>
 #include <unordered_map>
@@ -14,14 +16,16 @@
 #include "util.h"
 
 namespace kmeans {
+    // Computes distance between vectors v1, v2. Distance types:
+    //    0: Squared Euclidean distance
+    //    1: Manhattan distance
+    double compute_distance(const Eigen::VectorXd &v1,
+			    const Eigen::VectorXd &v2, size_t distance_type);
+
     // Runs k-means on n vectors of length d for T iterations. Runtime O(Tndk)
     // and memory O(ndk). Returns the final objective value. Calculates:
     //    - centers[j]   : mean of cluster j (initialized from given centers)
     //    - clustering[i]: cluster of vector i (an index in {1...k})
-    //
-    // Distance types:
-    //    0: Squared Euclidean distance
-    //    1: Manhattan distance
     double cluster(const vector<Eigen::VectorXd> &vectors,
 		   size_t max_num_iterations, size_t num_threads,
 		   size_t distance_type, bool verbose,
@@ -29,9 +33,29 @@ namespace kmeans {
 		   vector<size_t> *clustering);
 
     // Selects centers from given vectors.
+    void select_center_indices(const vector<Eigen::VectorXd> &vectors,
+			       size_t num_centers, const string &seed_method,
+			       size_t num_threads, size_t distance_type,
+			       vector<size_t> *center_indices);
+
     void select_centers(const vector<Eigen::VectorXd> &vectors,
-			size_t num_centers, const string &select_method,
+			size_t num_centers, const string &seed_method,
+			size_t num_threads, size_t distance_type,
 			vector<Eigen::VectorXd> *centers);
+
+    // Runs k-means with multiple restarts. In each restart, initial centers are
+    // chosen according to seed_method. The number of threads is split across
+    // independent restarts. Calculates:
+    //    - list_centers[r]   : centers of restart r
+    //    - list_clustering[r]: clustering of restart r
+    //    - list_objective[r] : objective value of restart r
+    void cluster(const vector<Eigen::VectorXd> &vectors,
+		 size_t max_num_iterations, size_t num_threads,
+		 size_t distance_type, size_t num_centers,
+		 const string &seed_method, size_t num_restarts,
+		 vector<vector<Eigen::VectorXd> > *list_centers,
+		 vector<vector<size_t> > *list_clustering,
+		 vector<double> *list_objective);
 
     // Inverts the mapping vector->cluster to the mapping cluster->{vectors}.
     void invert_clustering(const vector<size_t> &clustering,
@@ -130,4 +154,4 @@ private:
     unordered_map<size_t, string> path_from_root_;
 };
 
-#endif  // CLUSTER_H
+#endif  // CORE_CLUSTER_H
