@@ -29,12 +29,14 @@ namespace kmeans {
     }
 
     double cluster(const vector<Eigen::VectorXd> &vectors,
+		   const vector<size_t> &indices,
 		   size_t max_num_iterations, size_t num_threads,
 		   size_t distance_type, bool verbose,
 		   vector<Eigen::VectorXd> *centers,
 		   vector<size_t> *clustering) {
-	clustering->resize(vectors.size());
-	size_t dim = vectors.at(0).size();
+	// clustering[i] = cluster of vectors.at(indices.at(i))
+	clustering->resize(indices.size());
+	size_t dim = vectors.at(indices.at(0)).size();
 
 	// Infer the number of clusters from given centers.
 	size_t num_clusters = centers->size();
@@ -43,9 +45,9 @@ namespace kmeans {
 
 	// Prepare variables for multithreading.
 	ASSERT(num_threads > 0, "Number of threads must be at least 1!");
-	size_t num_vectors_per_worker = vectors.size() / num_threads;
+	size_t num_vectors_per_worker = indices.size() / num_threads;
 	size_t num_clusters_per_worker = num_clusters / num_threads;
-	size_t extra_num_vectors_last_worker = vectors.size() % num_threads;
+	size_t extra_num_vectors_last_worker = indices.size() % num_threads;
 	size_t extra_num_clusters_last_worker = num_clusters % num_threads;
 	vector<vector<size_t> > partial_cluster_sizes(num_threads);
 	for (size_t t = 0; t < num_threads; ++t) {
@@ -75,17 +77,19 @@ namespace kmeans {
 	    }
 	    fill(partial_objective.begin(), partial_objective.end(), 0.0);
 
-	    // Lambda function for assigning vectors [start ... end).
-	    auto cluster_code = [&vectors, distance_type, &centers, &clustering,
-				 &partial_objective, &partial_cluster_sizes]
+	    // Lambda function for assigning vectors(indices.at(i)) for i in
+	    // [start ... end).
+	    auto cluster_code = [&vectors, &indices, distance_type, &centers,
+				 &clustering, &partial_objective,
+				 &partial_cluster_sizes]
 		(size_t start, size_t end, size_t thread_num) -> void {
 		for (size_t i = start; i < end; ++i) {
 		    double min_dist = numeric_limits<double>::infinity();
 		    size_t closest_center_index = 0;
 		    for (size_t j = 0; j < centers->size(); ++j) {
-			double dist = compute_distance(vectors.at(i),
-						       centers->at(j),
-						       distance_type);
+			double dist =
+			    compute_distance(vectors.at(indices.at(i)),
+					     centers->at(j), distance_type);
 			if (dist < min_dist) {
 			    min_dist = dist;
 			    closest_center_index = j;
@@ -128,8 +132,11 @@ namespace kmeans {
 	    }
 	    if (lone_center_indices.size() > 0) {  // Hopefully not often.
 		// Reset each lone center with a random point.
-		vector<size_t> permuted_indices;
-		util_math::permute_indices(vectors.size(), &permuted_indices);
+		vector<size_t> permuted_indices(indices);
+		size_t seed =
+		    chrono::system_clock::now().time_since_epoch().count();
+		shuffle(permuted_indices.begin(), permuted_indices.end(),
+			default_random_engine(seed));
 		for (size_t j : lone_center_indices) {
 		    if (verbose) {
 			cerr << "Center " << j << " yielded an empty cluster! "
@@ -155,12 +162,14 @@ namespace kmeans {
 		    }
 		}
 
-		// Lambda function for accumulating vectors [start ... end).
-		auto center_code = [&vectors, &clustering, &partial_centers]
+		// Lambda function for accumulating vectors.at(indices.at(i))
+		// for i in [start ... end).
+		auto center_code = [&vectors, &indices, &clustering,
+				    &partial_centers]
 		    (size_t start, size_t end, size_t thread_num) -> void {
 		    for (size_t i = start; i < end; ++i) {
 			partial_centers[thread_num][clustering->at(i)] +=
-			vectors.at(i);
+			vectors.at(indices.at(i));
 		    }
 		};
 
@@ -192,12 +201,12 @@ namespace kmeans {
 		for (size_t j = 0; j < num_clusters; ++j) {
 		    values[j].resize(dim);
 		}
-		for (size_t i = 0; i < vectors.size(); ++i) {  // O(#vectors)...
+		for (size_t i = 0; i < indices.size(); ++i) {  // O(#vectors)...
 		    for (size_t d = 0; d < dim; ++d) {
-			// values[j][d][z] = d-th value of z-th vector
-			//                   in cluster j
+			// values[j][d][z] = d-th value of (indices.at(z))-th
+			//                   vector in cluster j
 			values[clustering->at(i)][d].push_back(
-			    vectors.at(i)(d));
+			    vectors.at(indices.at(i))(d));
 		    }
 		}
 
@@ -253,37 +262,38 @@ namespace kmeans {
     }
 
     void select_center_indices(const vector<Eigen::VectorXd> &vectors,
+			       const vector<size_t> &indices,
 			       size_t num_centers, const string &seed_method,
 			       size_t num_threads, size_t distance_type,
 			       vector<size_t> *center_indices) {
-	ASSERT(vectors.size() >= num_centers, "More centers than vectors?");
+	ASSERT(indices.size() >= num_centers, "More centers than vectors?");
 	center_indices->resize(num_centers);
 	if (seed_method == "pp") {  // k-means++
 	    random_device rd;
 	    mt19937 gen(rd());
 	    ASSERT(num_threads > 0, "Number of threads must be at least 1!");
-	    size_t num_vectors_per_worker = vectors.size() / num_threads;
-	    size_t extra_num_vectors_last_worker = vectors.size() % num_threads;
+	    size_t num_vectors_per_worker = indices.size() / num_threads;
+	    size_t extra_num_vectors_last_worker = indices.size() % num_threads;
 
-	    // Draw the first center.
-	    uniform_int_distribution<> uniform_dis(0, vectors.size() - 1);
-	    (*center_indices)[0] = uniform_dis(gen);  // Uniform draw
+	    // Draw the first center uniformly at random.
+	    uniform_int_distribution<> uniform_dis(0, indices.size() - 1);
+	    (*center_indices)[0] = indices.at(uniform_dis(gen));
 
 	    // Draw the remaining centers.
 	    for (size_t j = 1; j < num_centers; ++j) {
-		vector<double> vector_weights(vectors.size());
+		vector<double> vector_weights(indices.size());
 
 		// Lambda function for computing vector weights [start ... end)
 		// when selecting center_indices->at(center_index).
-		auto weight_code = [&vectors, distance_type, &center_indices,
-				    &vector_weights]
+		auto weight_code = [&vectors, &indices, distance_type,
+				    &center_indices, &vector_weights]
 		    (size_t start, size_t end, size_t center_index) -> void {
 		    for (size_t i = start; i < end; ++i) {
 			double min_dist = numeric_limits<double>::infinity();
 			for (size_t q = 0; q < center_index; ++q) {
 			    // Search over the previously selected centers.
 			    double dist = compute_distance(
-				vectors.at(i),
+				vectors.at(indices.at(i)),
 				vectors.at(center_indices->at(q)),
 				distance_type);
 			    if (dist < min_dist) { min_dist = dist; }
@@ -307,43 +317,37 @@ namespace kmeans {
 
 		discrete_distribution<> weighted_dis(vector_weights.begin(),
 						     vector_weights.end());
-		(*center_indices)[j] = weighted_dis(gen);  // Weighted draw
+		// Weighted draw
+		(*center_indices)[j] = indices.at(weighted_dis(gen));
 	    }
 	} else if (seed_method == "uniform") {  // Uniform sampling.
-	    vector<size_t> permuted_indices;
-	    util_math::permute_indices(vectors.size(), &permuted_indices);
+	    vector<size_t> permuted_indices(indices);
+	    size_t seed =
+		chrono::system_clock::now().time_since_epoch().count();
+	    shuffle(permuted_indices.begin(), permuted_indices.end(),
+		    default_random_engine(seed));
 	    for (size_t j = 0; j < num_centers; ++j) {
 		(*center_indices)[j] = permuted_indices[j];
 	    }
 	} else if (seed_method == "front") {  // Front k vectors.
 	    for (size_t j = 0; j < num_centers; ++j) {
-		(*center_indices)[j] = j;
+		(*center_indices)[j] = indices.at(j);
 	    }
 	} else {
 	    ASSERT(false, "Unknown seed method: " << seed_method);
 	}
     }
 
-    void select_centers(const vector<Eigen::VectorXd> &vectors,
-			size_t num_centers, const string &seed_method,
-			size_t num_threads, size_t distance_type,
-			vector<Eigen::VectorXd> *centers) {
-	centers->clear();
-	vector<size_t> center_indices;
-	select_center_indices(vectors, num_centers, seed_method, num_threads,
-			      distance_type, &center_indices);
-	for (size_t index : center_indices) {
-	    (*centers).push_back(vectors.at(index));
-	}
-    }
-
     void cluster(const vector<Eigen::VectorXd> &vectors,
-		 size_t max_num_iterations, size_t num_threads,
-		 size_t distance_type, size_t num_centers,
+		 const vector<size_t> &indices, size_t max_num_iterations,
+		 size_t num_threads, size_t distance_type, size_t num_centers,
 		 const string &seed_method, size_t num_restarts,
 		 vector<vector<Eigen::VectorXd> > *list_centers,
 		 vector<vector<size_t> > *list_clustering,
 		 vector<double> *list_objective) {
+	list_centers->clear();
+	list_clustering->clear();
+	list_objective->clear();
 	list_centers->resize(num_restarts);
 	list_clustering->resize(num_restarts);
 	list_objective->resize(num_restarts);
@@ -369,17 +373,24 @@ namespace kmeans {
 	    }
 
 	    // Lambda function for 1 restart.
-	    auto restart_code = [&vectors, max_num_iterations, distance_type,
-				 num_centers, seed_method, &list_centers,
-				 &list_clustering, &list_objective]
+	    auto restart_code = [&vectors, &indices, max_num_iterations,
+				 distance_type, num_centers, seed_method,
+				 &list_centers, &list_clustering,
+				 &list_objective]
 		(size_t restart_num, size_t num_threads_assigned) -> void {
-		select_centers(vectors, num_centers, seed_method,
-			       num_threads_assigned, distance_type,
-			       &list_centers->at(restart_num));
+		vector<size_t> center_indices;
+		select_center_indices(vectors, indices, num_centers,
+				      seed_method, num_threads_assigned,
+				      distance_type, &center_indices);
+		for (size_t center_index : center_indices) {
+		    list_centers->at(restart_num).push_back(
+			vectors.at(center_index));
+		}
 
 		(*list_objective)[restart_num] =
-		cluster(vectors, max_num_iterations, num_threads_assigned,
-			distance_type, false, &list_centers->at(restart_num),
+		cluster(vectors, indices, max_num_iterations,
+			num_threads_assigned, distance_type, false,
+			&list_centers->at(restart_num),
 			&list_clustering->at(restart_num));
 	    };
 

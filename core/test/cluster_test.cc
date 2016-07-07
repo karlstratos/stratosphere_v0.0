@@ -10,16 +10,132 @@
 
 #include "../cluster.h"
 
+// Checks the correctness of k-means for clustering a strict subset of vectors.
+TEST(KMeansOnStrictSubset, CheckClustering) {
+    vector<Eigen::VectorXd> vectors;
+    size_t max_num_iterations = 1000;
+    size_t num_threads = 1;
+    size_t distance_type = 0;  // Squared Euclidean distance
+    bool verbose = false;
+
+    Eigen::VectorXd v0(1);
+    Eigen::VectorXd v1(1);
+    Eigen::VectorXd v2(1);
+    Eigen::VectorXd v3(1);
+    Eigen::VectorXd v4(1);
+    Eigen::VectorXd v5(1);
+    v3 << 0.0;
+    v5 << 1.0;
+    v2 << 4.0;
+    v0 << 5.0;
+    v4 << 20.0;
+    v1 << 21.0;
+
+    //        0   1         4   5                                    20  21
+    //------[v3]--v5------ v2--[v0]----------------------------------v4--v1-----
+    vectors = {v0, v1, v2, v3, v4, v5};
+    vector<Eigen::VectorXd> centers = {v3, v0};
+
+    // If we use all indices, we should get
+    //                2.5                                             20.5
+    //------(v3---v5------v2---v0)----------------------------------(v4--v1)----
+    vector<Eigen::VectorXd> centers_all(centers);
+    vector<size_t> indices_all = {0, 1, 2, 3, 4, 5};
+    vector<size_t> clustering_all;
+    kmeans::cluster(vectors, indices_all, max_num_iterations, num_threads,
+		    distance_type, verbose, &centers_all, &clustering_all);
+    EXPECT_EQ(2, centers_all.size());
+    EXPECT_EQ(6, clustering_all.size());
+    EXPECT_NEAR(2.5, centers_all[0](0), 1e-15);  // Mean of cluster 1
+    EXPECT_NEAR(20.5, centers_all[1](0), 1e-15);  // Mean of cluster 2
+    EXPECT_EQ(0, clustering_all[3]);
+    EXPECT_EQ(0, clustering_all[5]);
+    EXPECT_EQ(0, clustering_all[2]);
+    EXPECT_EQ(0, clustering_all[0]);
+    EXPECT_EQ(1, clustering_all[4]);
+    EXPECT_EQ(1, clustering_all[1]);
+
+    // If we use indices {0,2,3,5}, we shoud instead get
+    //         0.5          4.5
+    //------(v3---v5)----(v2---v0)-----------------------------------v4--v1-----
+    vector<Eigen::VectorXd> centers_subset(centers);
+    vector<size_t> indices_subset = {0, 2, 3, 5};
+    vector<size_t> clustering_subset;
+    kmeans::cluster(vectors, indices_subset, max_num_iterations, num_threads,
+		    distance_type, verbose, &centers_subset,
+		    &clustering_subset);
+    EXPECT_EQ(2, centers_subset.size());
+    EXPECT_EQ(4, clustering_subset.size());
+    EXPECT_NEAR(0.5, centers_subset[0](0), 1e-15);  // Mean of cluster 1
+    EXPECT_NEAR(4.5, centers_subset[1](0), 1e-15);  // Mean of cluster 2
+    EXPECT_EQ(0, clustering_subset[2]);  // indices_subset[2] -> v3
+    EXPECT_EQ(0, clustering_subset[3]);  // indices_subset[3] -> v5
+    EXPECT_EQ(1, clustering_subset[1]);  // indices_subset[1] -> v2
+    EXPECT_EQ(1, clustering_subset[0]);  // indices_subset[0] -> v0
+}
+
+// Checks the correctness of k-means center selection from a strict subset of
+// vectors.
+TEST(KMeansOnStrictSubset, CheckCenterSelection) {
+    size_t num_vectors = 100;
+    size_t dim = 10;
+    vector<Eigen::VectorXd> vectors;  // Random vectors
+    vector<size_t> indices_even;
+    for (size_t i = 0; i < num_vectors; ++i) {
+	vectors.push_back(Eigen::VectorXd::Random(dim));
+	if (i % 2 == 0) { indices_even.push_back(i); }
+    }
+    size_t num_centers = 5;
+    size_t num_threads = 1;
+    size_t distance_type = 0;
+    size_t num_restarts = 10;
+
+    // Check that odd indices are never selected as centers.
+    vector<size_t> center_indices;
+
+    // k-means++
+    for (size_t restart_num = 0; restart_num < num_restarts; ++restart_num) {
+	kmeans::select_center_indices(vectors, indices_even, num_centers, "pp",
+				      num_threads, distance_type,
+				      &center_indices);
+	EXPECT_EQ(num_centers, center_indices.size());
+	for (size_t j = 0; j < num_centers; ++j) {
+	    EXPECT_TRUE(center_indices[j] % 2 == 0);
+	}
+    }
+
+    // Uniform
+    for (size_t restart_num = 0; restart_num < num_restarts; ++restart_num) {
+	kmeans::select_center_indices(vectors, indices_even, num_centers,
+				      "uniform", num_threads, distance_type,
+				      &center_indices);
+	EXPECT_EQ(num_centers, center_indices.size());
+	for (size_t j = 0; j < num_centers; ++j) {
+	    EXPECT_TRUE(center_indices[j] % 2 == 0);
+	}
+    }
+
+    // Front
+    kmeans::select_center_indices(vectors, indices_even, num_centers,
+				  "front", num_threads, distance_type,
+				  &center_indices);
+    EXPECT_EQ(num_centers, center_indices.size());
+    for (size_t j = 0; j < num_centers; ++j) {
+	EXPECT_TRUE(center_indices[j] % 2 == 0);
+    }
+}
+
 // Test class that provides a random set of vectors.
 class RandomVectors : public testing::Test {
 protected:
     virtual void SetUp() {
-	vector<Eigen::VectorXd> vectors(num_vectors_);
 	for (size_t i = 0; i < num_vectors_; ++i) {
 	    vectors_.push_back(Eigen::VectorXd::Random(dim_));
+	    indices_.push_back(i);
 	}
     }
     vector<Eigen::VectorXd> vectors_;
+    vector<size_t> indices_;
     size_t num_vectors_ = 197;
     size_t dim_ = 10;
     size_t num_clusters_ = 10;
@@ -34,14 +150,17 @@ TEST_F(RandomVectors, KMeansPlusPlusInitialization) {
     size_t num_threads = 4;
     size_t num_fewer_vectors = (num_vectors_ > 40) ? 40 : num_vectors_;
     vector<Eigen::VectorXd> fewer_vectors(num_fewer_vectors);
+    vector<size_t> fewer_indices(num_fewer_vectors);
     for (size_t i = 0; i < num_fewer_vectors; ++i) {
 	fewer_vectors[i] = vectors_[i];
+	fewer_indices[i] = i;
     }
     vector<size_t> center_indices;
 
     // Draw as many centers as there are vectors.
-    kmeans::select_center_indices(fewer_vectors, num_fewer_vectors, seed_method,
-				  num_threads, distance_type, &center_indices);
+    kmeans::select_center_indices(fewer_vectors, fewer_indices,
+				  num_fewer_vectors, seed_method, num_threads,
+				  distance_type, &center_indices);
 
     // Then every vector must be selected as a center under k-means++.
     unordered_map<size_t, bool> covered_indices;
@@ -51,91 +170,61 @@ TEST_F(RandomVectors, KMeansPlusPlusInitialization) {
 
 // Checks that k-means with restarts behaves correctly under multithreading.
 TEST_F(RandomVectors, KMeansWithRestarts) {
-    size_t num_restarts;
-    size_t num_threads;
     size_t distance_type = 0;  // Any distance is fine (checked in other test).
     vector<vector<Eigen::VectorXd> > list_centers;
     vector<vector<size_t> > list_clustering;
     vector<double> list_objective;
 
     // Vary numbers of restarts and threads and check with deterministic seeds.
-    num_restarts = 4;
-    num_threads = 4;  // Equal number of restarts and threads
-    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
-		    num_clusters_, "front", num_restarts, &list_centers,
-		    &list_clustering, &list_objective);
-    for (size_t r = 1; r < num_restarts; ++r) {
-	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
-    }
-
-    num_restarts = 7;
-    num_threads = 2;  // More restarts than threads.
-    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
-		    num_clusters_, "front", num_restarts, &list_centers,
-		    &list_clustering, &list_objective);
-    for (size_t r = 1; r < num_restarts; ++r) {
-	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
-    }
-
-    num_restarts = 3;
-    num_threads = 11;  // More threads than restarts.
-    kmeans::cluster(vectors_, max_num_iterations_, num_threads, distance_type,
-		    num_clusters_, "front", num_restarts, &list_centers,
-		    &list_clustering, &list_objective);
-    for (size_t r = 1; r < num_restarts; ++r) {
-	EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+    vector<pair<size_t, size_t> > pairs;
+    pairs.push_back(make_pair(4, 4));  // Equal number of restarts and threads
+    pairs.push_back(make_pair(7, 2));  // More restarts than threads
+    pairs.push_back(make_pair(3, 11));  // More threads than restarts
+    for (auto &restart_thread_pair : pairs) {
+	size_t num_restarts = restart_thread_pair.first;
+	size_t num_threads = restart_thread_pair.second;
+	kmeans::cluster(vectors_, indices_, max_num_iterations_, num_threads,
+			distance_type, num_clusters_, "front", num_restarts,
+			&list_centers, &list_clustering, &list_objective);
+	for (size_t r = 1; r < num_restarts; ++r) {
+	    EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+	}
     }
 }
 
-// Checks that k-means with Euclidean distance behaves correctly under
-// multithreading.
+// Checks that k-means behaves correctly under multithreading.
 TEST_F(RandomVectors, KMeansEuclideanMultithreading) {
-    size_t distance_type = 0;  // Squared Euclidean distance
-    vector<size_t> clustering;
-    vector<size_t> clustering_multi;
-
     // Use front vectors as initial centers.
+    vector<size_t> center_indices;
+    kmeans::select_center_indices(vectors_, indices_, num_clusters_, "front", 1,
+				  0, &center_indices);
     vector<Eigen::VectorXd> centers;
-    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
-    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
-					   1, distance_type, verbose_, &centers,
-					   &clustering);  // 1 thread
-
-    // Centers have been modified, reset.
-    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0,  &centers);
-    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
-					   4, distance_type, verbose_, &centers,
-					   &clustering_multi);  // 4 threads
-
-    EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
-    for (size_t i = 0; i < num_vectors_; ++i) {
-	EXPECT_EQ(clustering[i], clustering_multi[i]);
+    for (size_t center_index : center_indices) {
+	centers.push_back(vectors_[center_index]);
     }
-}
 
-// Checks that k-means with Manhattan distance behaves correctly under
-// multithreading.
-TEST_F(RandomVectors, KMeansManhattanMultithreading) {
-    size_t distance_type = 1;  // Manhattan distance
-    vector<size_t> clustering;
-    vector<size_t> clustering_multi;
+    vector<size_t> distance_types = {0, 1};  // Specify distance types.
+    for (size_t distance_type : distance_types) {
+	vector<size_t> clustering;
+	vector<size_t> clustering_multi;
 
-    // Use front vectors as initial centers.
-    vector<Eigen::VectorXd> centers;
-    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
-    double value_thread1 = kmeans::cluster(vectors_, max_num_iterations_,
-					   1, distance_type, verbose_, &centers,
-					   &clustering);  // 1 thread
+	vector<Eigen::VectorXd> centers_thread1(centers);
+	double value_thread1 = kmeans::cluster(vectors_, indices_,
+					       max_num_iterations_, 1,
+					       distance_type, verbose_,
+					       &centers_thread1, &clustering);
 
-    // Centers have been modified, reset.
-    kmeans::select_centers(vectors_, num_clusters_, "front", 1, 0, &centers);
-    double value_thread4 = kmeans::cluster(vectors_, max_num_iterations_,
-					   4, distance_type, verbose_, &centers,
-					   &clustering_multi);  // 4 threads
+	vector<Eigen::VectorXd> centers_thread4(centers);
+	double value_thread4 = kmeans::cluster(vectors_, indices_,
+					       max_num_iterations_, 4,
+					       distance_type, verbose_,
+					       &centers_thread4,
+					       &clustering_multi);
 
-    EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
-    for (size_t i = 0; i < num_vectors_; ++i) {
-	EXPECT_EQ(clustering[i], clustering_multi[i]);
+	EXPECT_NEAR(value_thread1, value_thread4, 1e-5);
+	for (size_t i = 0; i < num_vectors_; ++i) {
+	    EXPECT_EQ(clustering[i], clustering_multi[i]);
+	}
     }
 }
 
@@ -165,8 +254,10 @@ protected:
 	vectors_.push_back(v4);
 	vectors_.push_back(v5);
 	vectors_.push_back(v6);
+	for (size_t i = 0; i < vectors_.size(); ++i) { indices_.push_back(i); }
     }
     vector<Eigen::VectorXd> vectors_;
+    vector<size_t> indices_;
 };
 
 // Checks that 3-means can result in an empty cluster.
@@ -217,16 +308,16 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     //   |______________________________________
 
     // With 2 iterations, the example results in an empty cluster.
-    kmeans::cluster(vectors_, 2, num_threads, distance_type, verbose, &centers,
-		    &clustering);
+    kmeans::cluster(vectors_, indices_, 2, num_threads, distance_type, verbose,
+		    &centers, &clustering);
     vector<vector<size_t> > clustering_inverse;
     kmeans::invert_clustering(clustering, &clustering_inverse);
     EXPECT_EQ(0, clustering_inverse[1].size());
 
     // But the implementation should handle the empty cluster!
     centers = {vectors_[0], vectors_[5], vectors_[6]};  // Reset centers.
-    kmeans::cluster(vectors_, 10, num_threads, distance_type, verbose, &centers,
-		    &clustering);
+    kmeans::cluster(vectors_, indices_, 10, num_threads, distance_type, verbose,
+		    &centers, &clustering);
     kmeans::invert_clustering(clustering, &clustering_inverse);
     EXPECT_TRUE(clustering_inverse[1].size() > 0);
 }

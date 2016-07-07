@@ -22,26 +22,23 @@ namespace kmeans {
     double compute_distance(const Eigen::VectorXd &v1,
 			    const Eigen::VectorXd &v2, size_t distance_type);
 
-    // Runs k-means on n vectors of length d for T iterations. Runtime O(Tndk)
-    // and memory O(ndk). Returns the final objective value. Calculates:
-    //    - centers[j]   : mean of cluster j (initialized from given centers)
-    //    - clustering[i]: cluster of vector i (an index in {1...k})
+    // Runs k-means on length-d vectors at n given indices for T iterations.
+    // Runtime O(Tndk), memory O(ndk). Returns objective value.
+    //       centers[j] = mean of cluster j (initialized from given centers)
+    //    clustering[i] = cluster of vectors.at(indices.at(i))
     double cluster(const vector<Eigen::VectorXd> &vectors,
+		   const vector<size_t> &indices,
 		   size_t max_num_iterations, size_t num_threads,
 		   size_t distance_type, bool verbose,
 		   vector<Eigen::VectorXd> *centers,
 		   vector<size_t> *clustering);
 
-    // Selects centers from given vectors.
+    // Selects center indices from given vector indices.
     void select_center_indices(const vector<Eigen::VectorXd> &vectors,
+			       const vector<size_t> &indices,
 			       size_t num_centers, const string &seed_method,
 			       size_t num_threads, size_t distance_type,
 			       vector<size_t> *center_indices);
-
-    void select_centers(const vector<Eigen::VectorXd> &vectors,
-			size_t num_centers, const string &seed_method,
-			size_t num_threads, size_t distance_type,
-			vector<Eigen::VectorXd> *centers);
 
     // Runs k-means with multiple restarts. In each restart, initial centers are
     // chosen according to seed_method. The number of threads is split across
@@ -50,14 +47,16 @@ namespace kmeans {
     //    - list_clustering[r]: clustering of restart r
     //    - list_objective[r] : objective value of restart r
     void cluster(const vector<Eigen::VectorXd> &vectors,
-		 size_t max_num_iterations, size_t num_threads,
-		 size_t distance_type, size_t num_centers,
+		 const vector<size_t> &indices, size_t max_num_iterations,
+		 size_t num_threads, size_t distance_type, size_t num_centers,
 		 const string &seed_method, size_t num_restarts,
 		 vector<vector<Eigen::VectorXd> > *list_centers,
 		 vector<vector<size_t> > *list_clustering,
 		 vector<double> *list_objective);
 
-    // Inverts the mapping vector->cluster to the mapping cluster->{vectors}.
+    // Inverts clustering:
+    //                clustering[i] = cluster of indices.at(i)
+    //        clustering_inverse[c] = {i: indices.at(i) in cluster c}
     void invert_clustering(const vector<size_t> &clustering,
 			   vector<vector<size_t> > *clustering_inverse);
 }
