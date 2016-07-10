@@ -22,6 +22,14 @@ namespace kmeans {
     double compute_distance(const Eigen::VectorXd &v1,
 			    const Eigen::VectorXd &v2, size_t distance_type);
 
+    // Computes the cost of each cluster. Returns the total sum.
+    double compute_cost(const vector<Eigen::VectorXd> &vectors,
+			const vector<size_t> &indices,
+			size_t num_threads, size_t distance_type,
+			const vector<Eigen::VectorXd> &centers,
+			const vector<size_t> &clustering,
+			vector<double> *costs);
+
     // Runs k-means on length-d vectors at n given indices for T iterations.
     // Runtime O(Tndk), memory O(ndk). Returns objective value.
     //       centers[j] = mean of cluster j (initialized from given centers)

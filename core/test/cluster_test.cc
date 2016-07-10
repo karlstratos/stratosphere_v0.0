@@ -10,6 +10,48 @@
 
 #include "../cluster.h"
 
+// Checks the correctness of k-means cost computation.
+TEST(KMeansCosts, CheckCorrect) {
+    vector<Eigen::VectorXd> vectors;
+    size_t max_num_iterations = 1000;
+    size_t num_threads = 4;
+    size_t distance_type = 1;  // Manhattan distance
+    bool verbose = false;
+
+    Eigen::VectorXd v0(1);
+    Eigen::VectorXd v1(1);
+    Eigen::VectorXd v2(1);
+    Eigen::VectorXd v3(1);
+    Eigen::VectorXd v4(1);
+    Eigen::VectorXd v5(1);
+    v3 << 0.0;
+    v5 << 1.0;
+    v2 << 7.0;
+    v0 << 10.0;
+    v4 << 30.0;
+    v1 << 31.0;
+
+    //        0   1         7     10                                 30  31
+    //------[v3]--v5-------v2----[v0]--------------------------------v4--v1-----
+    vectors = {v0, v1, v2, v3, v4, v5};
+    vector<Eigen::VectorXd> centers = {v3, v0};
+
+    // If we use indices {0,2,3,5}, we shoud instead get
+    //         0.5            8.5
+    //------(v3---v5)-----(v2------v0)-------------------------------v4--v1-----
+    vector<size_t> indices = {0, 2, 3, 5};
+    vector<size_t> clustering;
+    kmeans::cluster(vectors, indices, max_num_iterations, num_threads,
+		    distance_type, verbose, &centers, &clustering);
+    vector<double> costs;
+    double total_cost = kmeans::compute_cost(vectors, indices, num_threads,
+					     distance_type, centers, clustering,
+					     &costs);
+    EXPECT_NEAR(1.0, costs[0], 1e-15);  // 0.5 + 0.5 = 1
+    EXPECT_NEAR(3.0, costs[1], 1e-15);  // 1.5 + 1.5 = 3
+    EXPECT_NEAR(4, total_cost, 1e-15);
+}
+
 // Checks the correctness of k-means for clustering a strict subset of vectors.
 TEST(KMeansOnStrictSubset, CheckClustering) {
     vector<Eigen::VectorXd> vectors;
@@ -187,7 +229,7 @@ TEST_F(RandomVectors, KMeansWithRestarts) {
 			distance_type, num_clusters_, "front", num_restarts,
 			&list_centers, &list_clustering, &list_objective);
 	for (size_t r = 1; r < num_restarts; ++r) {
-	    EXPECT_NEAR(list_objective[r-1], list_objective[r], 1e-10);
+	    EXPECT_NEAR(list_objective[r - 1], list_objective[r], 1e-10);
 	}
     }
 }

@@ -28,6 +28,62 @@ namespace kmeans {
 	return dist;
     }
 
+    double compute_cost(const vector<Eigen::VectorXd> &vectors,
+			const vector<size_t> &indices,
+			size_t num_threads, size_t distance_type,
+			const vector<Eigen::VectorXd> &centers,
+			const vector<size_t> &clustering,
+			vector<double> *costs) {
+	costs->resize(centers.size());
+
+	// Prepare variables for multithreading.
+	ASSERT(num_threads > 0, "Number of threads must be at least 1!");
+	size_t num_vectors_per_worker = indices.size() / num_threads;
+	size_t extra_num_vectors_last_worker = indices.size() % num_threads;
+	vector<vector<double> > partial_costs(num_threads);
+	for (size_t t = 0; t < num_threads; ++t) {
+	    partial_costs[t].resize(centers.size());
+	}
+
+	// Lambda function for handling vectors(indices.at(i)) for i in
+	// [start ... end).
+	auto code = [&vectors, &indices, distance_type, &centers,
+		     &clustering, &partial_costs]
+	    (size_t start, size_t end, size_t thread_num) -> void {
+	    for (size_t i = start; i < end; ++i) {
+		size_t j = clustering.at(i);
+		partial_costs[thread_num][j] +=
+		compute_distance(vectors.at(indices.at(i)), centers.at(j),
+				 distance_type);
+	    }
+	};
+
+	size_t start = 0;
+	size_t end = num_vectors_per_worker;
+	vector<thread> workers;
+	for (size_t t = 0; t < num_threads; ++t) {
+	    if (t == num_threads - 1) {  // Last worker does extra work.
+		end += extra_num_vectors_last_worker;
+	    }
+	    workers.push_back(thread(code, start, end, t));
+	    start = end;
+	    end += num_vectors_per_worker;
+	}
+	for (thread &worker : workers) { worker.join(); }
+	workers.clear();
+
+	// Sum over workers to get global costs.
+	fill(costs->begin(), costs->end(), 0.0);
+	double total_cost = 0.0;
+	for (size_t t = 0; t < num_threads; ++t) {
+	    for (size_t j = 0; j < centers.size(); ++j) {
+		(*costs)[j] += partial_costs[t][j];
+		total_cost += partial_costs[t][j];
+	    }
+	}
+	return total_cost;
+    }
+
     double cluster(const vector<Eigen::VectorXd> &vectors,
 		   const vector<size_t> &indices,
 		   size_t max_num_iterations, size_t num_threads,
@@ -63,6 +119,7 @@ namespace kmeans {
 	}
 
 	// Start the k-means loop.
+	bool converged = false;
 	double old_objective = numeric_limits<double>::infinity();
 	double new_objective = numeric_limits<double>::infinity();
 	for (size_t iteration_num = 1; iteration_num <= max_num_iterations;
@@ -252,13 +309,19 @@ namespace kmeans {
 		   "Clustering objective increased, something is wrong!");
 	    if (old_objective - new_objective < 1e-15) {
 		if (verbose) { cerr << " CONVERGED" << endl; }
+		converged = true;
 		break;
 	    }
 	    old_objective = new_objective;
 	    if (verbose) { cerr << endl; }
 	}
 
-	return new_objective;
+	vector<double> costs;
+	double final_objective = (converged) ?
+	    new_objective : compute_cost(vectors, indices, num_threads,
+					 distance_type, *centers, *clustering,
+					 &costs);
+	return final_objective;
     }
 
     void select_center_indices(const vector<Eigen::VectorXd> &vectors,
