@@ -67,7 +67,67 @@ namespace kmeans {
     //        clustering_inverse[c] = {i: indices.at(i) in cluster c}
     void invert_clustering(const vector<size_t> &clustering,
 			   vector<vector<size_t> > *clustering_inverse);
-}
+}  // namespace kmeans
+
+// Class for divisive clustering.
+class DivisiveClustering {
+public:
+    // Clusters the given vectors into a heirarchy, returns the sum of costs
+    // at leaf nodes. Calcultes a mapping from cluster paths to vector indices:
+    // for instance, leaves["0110"] = {59, 20, 0, 3}.
+    double Cluster(const vector<Eigen::VectorXd> &vectors,
+		   size_t num_leaf_clusters,
+		   unordered_map<string, vector<size_t> > *leaves);
+
+    // Inverts a mapping from cluster paths to vector indices.
+    void Invert(const unordered_map<string, vector<size_t> > &leaves,
+		unordered_map<size_t, string> *path_from_root);
+
+    // Sets the maximum number of iterations in k-means.
+    void set_max_num_iterations_kmeans(size_t max_num_iterations_kmeans) {
+	max_num_iterations_kmeans_ = max_num_iterations_kmeans;
+    }
+
+    // Sets the number of threads.
+    void set_num_threads(size_t num_threads) { num_threads_ = num_threads; }
+
+    // Sets the distance type in k-means.
+    void set_distance_type(size_t distance_type) {
+	distance_type_ = distance_type;
+    }
+
+    // Sets the seed method in k-means.
+    void set_seed_method(const string &seed_method) {
+	seed_method_ = seed_method;
+    }
+
+    // Sets the number of restarts in k-means.
+    void set_num_restarts(size_t num_restarts) {
+	num_restarts_ = num_restarts;
+    }
+
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
+
+private:
+    // Maximum number of iterations in k-means.
+    size_t max_num_iterations_kmeans_ = 100;
+
+    // Number of threads.
+    size_t num_threads_ = 12;
+
+    // Distance type in k-means.
+    size_t distance_type_ = 0;  // Squared Euclidean distance
+
+    // Seed method in k-means.
+    string seed_method_ = "pp";  // k-means++ initialization
+
+    // Number of restarts in k-means.
+    size_t num_restarts_ = 4;
+
+    // Print messages to stderr?
+    bool verbose_ = true;
+};
 
 // Class for agglomerative clustering. Since complex index manipulation is
 // needed, we will have the following convention.

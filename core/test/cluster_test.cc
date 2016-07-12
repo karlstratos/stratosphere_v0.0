@@ -364,6 +364,88 @@ TEST_F(KMeansEmptyClusterVectors, EmptyClusterWith3Means) {
     EXPECT_TRUE(clustering_inverse[1].size() > 0);
 }
 
+// Test class that provides a set of vectors for divisive clustering.
+class VectorsDivisive : public testing::Test {
+protected:
+    virtual void SetUp() {
+	Eigen::VectorXd v0(1);
+	Eigen::VectorXd v1(1);
+	Eigen::VectorXd v2(1);
+	Eigen::VectorXd v3(1);
+	Eigen::VectorXd v4(1);
+	Eigen::VectorXd v5(1);
+	v0 << 0.0;
+	v3 << 1.0;
+	v1 << 3.0;
+	v4 << 5.0;
+	v2 << 10.0;
+	v5 << 14.0;
+	//       0 1          3     5                             10     14
+	//------v0-v3---------v1----v4----------------------------v2-----v5-----
+	vectors_.push_back(v0);
+	vectors_.push_back(v1);
+	vectors_.push_back(v2);
+	vectors_.push_back(v3);
+	vectors_.push_back(v4);
+	vectors_.push_back(v5);
+
+	divisive_.set_max_num_iterations_kmeans(max_num_iterations_kmeans_);
+	divisive_.set_num_threads(num_threads_);
+	divisive_.set_distance_type(distance_type_);
+	divisive_.set_seed_method(seed_method_);
+	divisive_.set_num_restarts(num_restarts_);
+	divisive_.set_verbose(false);
+    }
+    vector<Eigen::VectorXd> vectors_;
+    DivisiveClustering divisive_;
+    size_t max_num_iterations_kmeans_ = 100;
+    size_t num_threads_ = 4;
+    size_t distance_type_ = 0;  // Squared Euclidean distance
+    string seed_method_ = "pp";  // k-means++ initialization
+    size_t num_restarts_ = 4;
+};
+
+// Checks divisive clustering with all 6 leaves.
+TEST_F(VectorsDivisive, DivisiveAll6Leaves) {
+    unordered_map<string, vector<size_t> > leaves;
+    double total_cost = divisive_.Cluster(vectors_, 10, &leaves);
+    EXPECT_EQ(6, leaves.size());
+    EXPECT_NEAR(0.0, total_cost, 1e-15);  // Singleton clusters
+
+    unordered_map<size_t, string> path_from_root;
+    divisive_.Invert(leaves, &path_from_root);
+    //                                 /\
+    //                                /  \
+    //                               /    \
+    //                              /\    / \
+    //                            v2 v5  /   \
+    //                                  /\   /\
+    //                                v0 v3 v1 v4
+    EXPECT_EQ(path_from_root[2].substr(0, 1), path_from_root[5].substr(0, 1));
+    EXPECT_EQ(path_from_root[1].substr(0, 2), path_from_root[4].substr(0, 2));
+    EXPECT_EQ(path_from_root[0].substr(0, 2), path_from_root[3].substr(0, 2));
+}
+
+// Checks divisive clustering with 3 leaves.
+TEST_F(VectorsDivisive, Divisive3Leaves) {
+    unordered_map<string, vector<size_t> > leaves;
+    double total_cost = divisive_.Cluster(vectors_, 3, &leaves);
+    EXPECT_EQ(3, leaves.size());
+    EXPECT_NEAR(10.5, total_cost, 1e-15);  // 0.5 + 2 + 8 = 10.5
+
+    unordered_map<size_t, string> path_from_root;
+    divisive_.Invert(leaves, &path_from_root);
+    //                                 /\
+    //                                /  \
+    //                               /    \
+    //                           {v2 v5}  /\
+    //                                   /   \
+    //                               {v0 v3}{v1 v4}
+    EXPECT_EQ(path_from_root[2], path_from_root[5]);
+    EXPECT_EQ(path_from_root[1], path_from_root[4]);
+    EXPECT_EQ(path_from_root[0], path_from_root[3]);
+}
+
 // Test class that provides a set of vectors for agglomerative clustering.
 class VectorsAgglomerative : public testing::Test {
 protected:

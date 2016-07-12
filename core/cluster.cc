@@ -6,6 +6,7 @@
 #include <limits>
 #include <stack>
 #include <thread>
+#include <queue>
 #include <random>
 
 namespace kmeans {
@@ -475,6 +476,7 @@ namespace kmeans {
 
     void invert_clustering(const vector<size_t> &clustering,
 			   vector<vector<size_t> > *clustering_inverse) {
+	clustering_inverse->clear();
 	for (size_t i = 0; i < clustering.size(); ++i) {
 	    size_t cluster_num = clustering.at(i);
 	    if (cluster_num >= clustering_inverse->size()) {
@@ -484,6 +486,94 @@ namespace kmeans {
 	}
     }
 }  // namespace kmeans
+
+double DivisiveClustering::Cluster(const vector<Eigen::VectorXd> &vectors,
+				   size_t num_leaf_clusters,
+				   unordered_map<string, vector<size_t> >
+				   *leaves) {
+    // Number of clusters shouldn't be more than number of vectors.
+    num_leaf_clusters = min(num_leaf_clusters, vectors.size());
+    leaves->clear();
+
+    // Greedily split cluster with highest cost:
+    //    q.top() = {(cluster_indices, higest_cost, path_from_root)}
+    auto cmp = [](tuple<vector<size_t>, double, string> triple1,
+		  tuple<vector<size_t>, double, string> triple2) {
+	return get<1>(triple1) < get<1>(triple2);
+    };
+    std::priority_queue<tuple<vector<size_t>, double, string>,
+			vector<tuple<vector<size_t>, double, string> >,
+			decltype(cmp)> q(cmp);
+    vector<size_t> indices;
+    for (size_t i = 0; i < vectors.size(); ++i) { indices.push_back(i); }
+    q.emplace(indices, 0.0, "");  // Initially a single cluster.
+
+    // Start splitting.
+    while (q.size() < num_leaf_clusters) {
+	const vector<size_t> &current_indices = get<0>(q.top());
+	string current_path = get<2>(q.top());
+	if (verbose_) {
+	    cerr << "(" << q.size() << "/" << num_leaf_clusters - 1 << ") "
+		 << "2-means on " << current_indices.size() << " vectors: ";
+	}
+
+	vector<vector<Eigen::VectorXd> > list_centers;
+	vector<vector<size_t> > list_clustering;
+	vector<double> list_objective;
+	kmeans::cluster(vectors, current_indices, max_num_iterations_kmeans_,
+			num_threads_, distance_type_, 2, seed_method_,
+			num_restarts_, &list_centers, &list_clustering,
+			&list_objective);
+
+	// Use the restart with smallest objective value.
+	double min_objective = numeric_limits<double>::infinity();
+	size_t best_restart_num = 0;
+	for (size_t restart_num = 0; restart_num < num_restarts_;
+	     ++restart_num) {
+	    if (list_objective[restart_num] < min_objective) {
+		min_objective = list_objective[restart_num];
+		best_restart_num = restart_num;
+	    }
+	    if (verbose_) { cerr << list_objective[restart_num] << " "; }
+	}
+	if (verbose_) { cerr << endl; }
+
+	// Compute each cluster's cost.
+	vector<double> costs;
+	kmeans::compute_cost(vectors, current_indices, num_threads_,
+			     distance_type_, list_centers[best_restart_num],
+			     list_clustering[best_restart_num], &costs);
+
+	// Recover indices of vectors in each cluster.
+	vector<vector<size_t> > split_indices(2);
+	for (size_t i = 0; i < list_clustering[best_restart_num].size(); ++i) {
+	    size_t cluster_num = list_clustering[best_restart_num][i];  // 0, 1
+	    split_indices[cluster_num].push_back(current_indices.at(i));
+	}
+
+	q.pop();  // Do not pop until done with current_indices!
+	q.emplace(split_indices[0], costs[0], current_path + "0");
+	q.emplace(split_indices[1], costs[1], current_path + "1");
+    }
+
+    double total_cost = 0.0;
+    while (q.size() > 0) {
+	(*leaves)[get<2>(q.top())] = get<0>(q.top());
+	total_cost += get<1>(q.top());
+	q.pop();
+    }
+
+    return total_cost;
+}
+
+void DivisiveClustering::Invert(
+    const unordered_map<string, vector<size_t> > &leaves,
+    unordered_map<size_t, string> *path_from_root) {
+    path_from_root->clear();
+    for (auto &leaf : leaves) {
+	for (size_t i : leaf.second) { (*path_from_root)[i] = leaf.first; }
+    }
+}
 
 double AgglomerativeClustering::ClusterOrderedVectors(
     const vector<Eigen::VectorXd> &ordered_vectors, size_t num_leaf_clusters) {
