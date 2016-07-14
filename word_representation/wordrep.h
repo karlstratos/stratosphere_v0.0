@@ -97,6 +97,34 @@ public:
 	scaling_method_ = scaling_method;
     }
 
+    // Sets the clustering method.
+    void set_clustering_method(string clustering_method) {
+	clustering_method_ = clustering_method;
+    }
+
+    // Sets the maximum number of iterations in k-means.
+    void set_max_num_iterations_kmeans(size_t max_num_iterations_kmeans) {
+	max_num_iterations_kmeans_ = max_num_iterations_kmeans;
+    }
+
+    // Sets the number of threads.
+    void set_num_threads(size_t num_threads) { num_threads_ = num_threads; }
+
+    // Sets the distance type in k-means.
+    void set_distance_type(size_t distance_type) {
+	distance_type_ = distance_type;
+    }
+
+    // Sets the seed method in k-means.
+    void set_seed_method(const string &seed_method) {
+	seed_method_ = seed_method;
+    }
+
+    // Sets the number of restarts in k-means.
+    void set_num_restarts(size_t num_restarts) {
+	num_restarts_ = num_restarts;
+    }
+
     // Sets the flag for printing messages to stderr.
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
@@ -113,6 +141,7 @@ private:
     //                    hash_size_}
     //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, context_power_smooth_, scaling_method_}
+    //    version=4: 3 + {clustering_method_}
     string Signature(size_t version);
 
     // Reports status in a log file and optionally the standard output.
@@ -155,7 +184,7 @@ private:
 
     // Returns the path to the clusterered word vectors.
     string ClustersPath() {
-	return output_directory_ + "/cluster_" + Signature(3) + ".txt";
+	return output_directory_ + "/cluster_" + Signature(4) + ".txt";
     }
 
     // Report details to stderr.
@@ -205,6 +234,24 @@ private:
 
     // Scaling method.
     string scaling_method_ = "cca";
+
+    // Clustering method.
+    string clustering_method_ = "agglo";
+
+    // Maximum number of iterations in k-means.
+    size_t max_num_iterations_kmeans_ = 100;
+
+    // Number of threads.
+    size_t num_threads_ = 24;
+
+    // Distance type in k-means.
+    size_t distance_type_ = 0;  // Squared Euclidean distance
+
+    // Seed method in k-means.
+    string seed_method_ = "pp";  // k-means++ initialization
+
+    // Number of restarts in k-means.
+    size_t num_restarts_ = 3;
 
     // Print messages to stderr?
     bool verbose_ = true;

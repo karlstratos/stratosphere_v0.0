@@ -23,6 +23,12 @@ int main (int argc, char* argv[]) {
     double power_smooth = 0.5;
     double context_power_smooth = 0.75;
     string scaling_method = "cca";
+    string clustering_method = "agglo";
+    size_t max_num_iterations_kmeans = 100;
+    size_t num_threads = 24;
+    size_t distance_type = 0;  // Squared Euclidean distance
+    string seed_method = "pp";  // k-means++ initialization
+    size_t num_restarts = 3;
     bool verbose = true;
 
     // Parse command line arguments.
@@ -63,6 +69,18 @@ int main (int argc, char* argv[]) {
 	    context_power_smooth = stod(argv[++i]);
 	} else if (arg == "--scale") {
 	    scaling_method = argv[++i];
+	} else if (arg == "--cluster") {
+	    clustering_method = argv[++i];
+	} else if (arg == "--iter") {
+	    max_num_iterations_kmeans = stol(argv[++i]);
+	} else if (arg == "--threads") {
+	    num_threads = stol(argv[++i]);
+	} else if (arg == "--dist") {
+	    distance_type = stol(argv[++i]);
+	} else if (arg == "--seed") {
+	    seed_method = argv[++i];
+	} else if (arg == "--restart") {
+	    num_restarts = stol(argv[++i]);
 	} else if (arg == "--quiet" || arg == "-q") {
 	    verbose = false;
 	} else if (arg == "--help" || arg == "-h"){
@@ -109,6 +127,18 @@ int main (int argc, char* argv[]) {
 	     << "context power smoothing" << endl;
 	cout << "--scale [" << scaling_method << "]:    \t"
 	     << "data scaling: none, ppmi, reg, cca" << endl;
+	cout << "--cluster [" << clustering_method << "]:    \t"
+	     << "clustering: agglo, div" << endl;
+	cout << "--iter [" << max_num_iterations_kmeans << "]:    \t"
+	     << "maximum number of iterations in k-means" << endl;
+	cout << "--threads [" << num_threads << "]:        \t"
+	     << "number of threads" << endl;
+	cout << "--dist [" << distance_type << "]:        \t"
+	     << "distance type in k-means: 0, 1" << endl;
+	cout << "--seed [" << seed_method << "]:         \t"
+	     << "seed method in k-means: pp, uniform"  << endl;
+	cout << "--restart [" << num_restarts << "]:        \t"
+	     << "number of restarts in k-means" << endl;
 	cout << "--quiet, -q:          \t"
 	     << "do not print messages to stderr?" << endl;
 	cout << "--help, -h:           \t"
@@ -132,6 +162,12 @@ int main (int argc, char* argv[]) {
     wordrep.set_power_smooth(power_smooth);
     wordrep.set_context_power_smooth(context_power_smooth);
     wordrep.set_scaling_method(scaling_method);
+    wordrep.set_clustering_method(clustering_method);
+    wordrep.set_max_num_iterations_kmeans(max_num_iterations_kmeans);
+    wordrep.set_num_threads(num_threads);
+    wordrep.set_distance_type(distance_type);
+    wordrep.set_seed_method(seed_method);
+    wordrep.set_num_restarts(num_restarts);
     wordrep.set_verbose(verbose);
 
     // If given a corpus, extract statistics from it.

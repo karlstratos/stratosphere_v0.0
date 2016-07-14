@@ -512,6 +512,16 @@ double DivisiveClustering::Cluster(const vector<Eigen::VectorXd> &vectors,
     while (q.size() < num_leaf_clusters) {
 	const vector<size_t> &current_indices = get<0>(q.top());
 	string current_path = get<2>(q.top());
+	if (current_indices.size() <= 1) {
+	    // A singleton cluster (with cost 0) can be selected when there are
+	    // equal-valued vectors. Put it back on the queue with -infty cost
+	    // so that it's not selected again.
+	    q.emplace(current_indices, -numeric_limits<double>::infinity(),
+		      current_path);
+	    q.pop();
+	    if (verbose_) { cerr << "[Warning] Singleton selected!" << endl; }
+	    continue;
+	}
 	if (verbose_) {
 	    cerr << "(" << q.size() << "/" << num_leaf_clusters - 1 << ") "
 		 << "2-means on " << current_indices.size() << " vectors: ";
@@ -549,6 +559,22 @@ double DivisiveClustering::Cluster(const vector<Eigen::VectorXd> &vectors,
 	for (size_t i = 0; i < list_clustering[best_restart_num].size(); ++i) {
 	    size_t cluster_num = list_clustering[best_restart_num][i];  // 0, 1
 	    split_indices[cluster_num].push_back(current_indices.at(i));
+	}
+
+	if (split_indices[0].size() == 0 || split_indices[1].size() == 0.0) {
+	    // Vectors could not be split because they were equal-valued.
+	    // Then it doesn't matter how we split, so just pick the middle.
+	    size_t middle_index = current_indices.size() / 2;  // At least 1.
+	    costs[0] = 0.0;  // Cost zero
+	    split_indices[0].clear();
+	    for (size_t i = 0; i < middle_index; ++i) {
+		split_indices[0].push_back(current_indices.at(i));
+	    }
+	    costs[1] = 0.0;  // Cost zero
+	    split_indices[1].clear();
+	    for (size_t i = middle_index; i < current_indices.size(); ++i) {
+		split_indices[1].push_back(current_indices.at(i));
+	    }
 	}
 
 	q.pop();  // Do not pop until done with current_indices!
@@ -607,16 +633,24 @@ double AgglomerativeClustering::ClusterOrderedVectors(
     tight_.resize(m + 1);  // Is the current lowerbound tight?
     size_t num_extra_tightening = 0;  // Number of tightening operations.
 
-    // Initialize the first m clusters.
-    for (size_t a1 = 0; a1 < m; ++a1) {  // Tightening m clusters: O(dm^2).
+    // Initialize the first m clusters tightened: O(dm^2).
+    for (size_t a1 = 0; a1 < m; ++a1) {
 	size_[a1] = 1;
 	active_[a1] = a1;
 	mean_[a1] = ordered_vectors[a1];
 	lb_[a1] = DBL_MAX;
 	for (size_t a2 = 0; a2 < a1; ++a2) {
 	    double dist = ComputeDistance(ordered_vectors, a1, a2);
-	    UpdateLowerbounds(a1, a2, dist);
+	    if (dist < lb_[a1]) {
+		lb_[a1] = dist;
+		twin_[a1] = a2;
+	    }
+	    if (dist < lb_[a2]) {
+		lb_[a2] = dist;
+		twin_[a2] = a1;
+	    }
 	}
+	tight_[a1] = true;
     }
 
     // Main loop: Perform n-1 merges.
@@ -627,11 +661,21 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	    size_[next_singleton] = 1;
 	    active_[m] = next_singleton;
 	    mean_[m] = ordered_vectors[next_singleton];
+
+	    // Tighten the added cluster: O(dm).
 	    lb_[m] = DBL_MAX;
-	    for (int a = 0; a < m; ++a) {  // Tightening 1 cluster: O(dm).
+	    for (int a = 0; a < m; ++a) {
 		double dist = ComputeDistance(ordered_vectors, m, a);
-		UpdateLowerbounds(m, a, dist);
+		if (dist < lb_[m]) {
+		    lb_[m] = dist;
+		    twin_[m] = a;
+		}
+		if (dist < lb_[a]) {
+		    lb_[a] = dist;
+		    twin_[a] = m;
+		}
 	    }
+	    tight_[m] = true;
 	    ++next_singleton;
 	}
 
@@ -657,8 +701,16 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 		if (a == candidate_index) continue;  // Skip self.
 		double dist =
 		    ComputeDistance(ordered_vectors, candidate_index, a);
-		UpdateLowerbounds(candidate_index, a, dist);
+		if (dist < lb_[candidate_index]) {
+		    lb_[candidate_index] = dist;
+		    twin_[candidate_index] = a;
+		}
+		if (dist < lb_[a]) {
+		    lb_[a] = dist;
+		    twin_[a] = candidate_index;
+		}
 	    }
+	    tight_[candidate_index] = true;
 	    ++num_extra_tightening;
 
 	    // Again, find an active cluster with the smallest lowerbound: O(m).
@@ -718,8 +770,16 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	    if (a == alpha) continue;  // Skip self.
 	    if (a == beta) continue;  // beta will be overwritten anyway.
 	    double dist = ComputeDistance(ordered_vectors, alpha, a);
-	    UpdateLowerbounds(alpha, a, dist);
+	    if (dist < lb_[alpha]) {
+		lb_[alpha] = dist;
+		twin_[alpha] = a;
+	    }
+	    if (dist < lb_[a]) {
+		lb_[a] = dist;
+		twin_[a] = alpha;
+	    }
 	}
+	tight_[alpha] = true;
 
 	// Shift the elements past beta to the left by one (overwriting beta).
 	for (size_t a = 0; a < num_active_clusters - 1; ++a) {
@@ -772,21 +832,6 @@ double AgglomerativeClustering::ComputeDistance(
     double scale = 2.0 * size1 * size2 / (size1 + size2);
     Eigen::VectorXd diff = mean_[active_index1] - mean_[active_index2];
     return scale * diff.squaredNorm();
-}
-
-void AgglomerativeClustering::UpdateLowerbounds(size_t active_index1,
-						size_t active_index2,
-						double distance) {
-    if (distance < lb_[active_index1]) {
-	lb_[active_index1] = distance;
-	twin_[active_index1] = active_index2;
-	tight_[active_index1] = true;
-    }
-    if (distance < lb_[active_index2]) {
-	lb_[active_index2] = distance;
-	twin_[active_index2] = active_index1;
-	tight_[active_index2] = true;
-    }
 }
 
 void AgglomerativeClustering::ComputeMergedMean(

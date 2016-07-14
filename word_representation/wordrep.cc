@@ -199,32 +199,49 @@ void WordRep::ClusterWordVectors() {
     corpus::load_sorted_word_vectors(WordVectorsPath(), &sorted_word_counts,
 				     &sorted_word_strings, &sorted_word_vectors,
 				     normalized);
-    Report("\n");
-    Report(util_string::buffer_string("[AGGLOMERATIVE CLUSTERING]",
-				      80, '-', "right"));
+
+    Report(util_string::buffer_string("[CLUSTERING]", 80, '-', "right"));
+    Report(util_string::printf_format("   Method: %s",
+				      clustering_method_.c_str()));
     Report(util_string::printf_format("   Number of clusters: %ld", dim_));
-    time_t begin_time = time(NULL);
-    AgglomerativeClustering cluster;
-    double gamma = cluster.ClusterOrderedVectors(sorted_word_vectors, dim_);
-    Report(util_string::printf_format(
-	       "   Average number of tightening: %.2f (not %ld)", gamma, dim_));
-    string duration = util_string::difftime_string(time(NULL), begin_time);
-    Report(util_string::buffer_string("[" + duration + "]", 80, '-',
-				      "right"));
+    unordered_map<string, vector<size_t> > leaves;
+    string duration;
+
+    if (clustering_method_ == "agglo") {
+	AgglomerativeClustering agglo;
+	time_t begin_time = time(NULL);
+	double gamma = agglo.ClusterOrderedVectors(sorted_word_vectors, dim_);
+	duration = util_string::difftime_string(time(NULL), begin_time);
+	Report(util_string::printf_format("   Average number of tightening: "
+					  "%.2f (not %ld)", gamma, dim_));
+	leaves = *agglo.leaves();
+    } else if (clustering_method_ == "div") {
+	DivisiveClustering divisive;
+	divisive.set_max_num_iterations_kmeans(max_num_iterations_kmeans_);
+	divisive.set_num_threads(num_threads_);
+	divisive.set_distance_type(distance_type_);
+	divisive.set_seed_method(seed_method_);
+	divisive.set_num_restarts(num_restarts_);
+	time_t begin_time = time(NULL);
+	divisive.Cluster(sorted_word_vectors, dim_, &leaves);
+	duration = util_string::difftime_string(time(NULL), begin_time);
+    } else {
+	ASSERT(false, "Unknown clustering method: " << clustering_method_);
+    }
+    Report(util_string::buffer_string("[" + duration + "]", 80, '-', "right"));
 
     // Lexicographically sort bit strings for enhanced readability.
     vector<string> bitstring_types;
-    for (const auto &bitstring_pair : *cluster.leaves()) {
+    for (const auto &bitstring_pair : leaves) {
 	bitstring_types.push_back(bitstring_pair.first);
     }
     sort(bitstring_types.begin(), bitstring_types.end());
 
     // Write the bit strings and their associated word types.
     ofstream clusters_file(ClustersPath(), ios::out);
-    unordered_map<string, vector<size_t> > *leaves = cluster.leaves();
     for (const auto &bitstring : bitstring_types) {
 	vector<pair<string, size_t> > v;  // Sort word types in each cluster.
-	for (Word word : leaves->at(bitstring)) {
+	for (Word word : leaves[bitstring]) {
 	    string word_string = sorted_word_strings[word];
 	    size_t word_count = sorted_word_counts[word];
 	    v.emplace_back(word_string, word_count);
@@ -336,7 +353,7 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
 }
 
 string WordRep::Signature(size_t version) {
-    ASSERT(version <= 3, "Unrecognized signature version: " << version);
+    ASSERT(version <= 4, "Unrecognized signature version: " << version);
 
     string signature = (lowercase_) ? "lowercased" : "caseintact";  // Version 0
 
@@ -364,6 +381,10 @@ string WordRep::Signature(size_t version) {
 	    util_string::convert_to_alphanumeric_string(context_power_smooth_,
 							2);
 	signature += "_" + scaling_method_;
+    }
+
+    if (version >= 4) {
+	signature += "_" + clustering_method_;
     }
 
     return signature;

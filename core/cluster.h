@@ -114,7 +114,7 @@ private:
     size_t max_num_iterations_kmeans_ = 100;
 
     // Number of threads.
-    size_t num_threads_ = 12;
+    size_t num_threads_ = 24;
 
     // Distance type in k-means.
     size_t distance_type_ = 0;  // Squared Euclidean distance
@@ -123,7 +123,7 @@ private:
     string seed_method_ = "pp";  // k-means++ initialization
 
     // Number of restarts in k-means.
-    size_t num_restarts_ = 4;
+    size_t num_restarts_ = 3;
 
     // Print messages to stderr?
     bool verbose_ = true;
@@ -160,10 +160,6 @@ private:
     // Computes the distance between two active clusters.
     double ComputeDistance(const vector<Eigen::VectorXd> &ordered_vectors,
 			   size_t active_index1, size_t active_index2);
-
-    // Updates two active clusters' lowerbounds/twins given their distance.
-    void UpdateLowerbounds(size_t active_index1, size_t active_index2,
-			   double distance);
 
     // Computes the new mean resulting from merging two active clusters.
     void ComputeMergedMean(const vector<Eigen::VectorXd> &ordered_vectors,
