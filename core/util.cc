@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <algorithm>
+#include <chrono>
 #include <random>
 
 namespace util_string {
