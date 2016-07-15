@@ -494,6 +494,8 @@ protected:
 	//                                   /\
 	//                      {v0,v1,v3,v4} {v2,v5}
 	two_leaves_pruned_paths_ = {"0", "0", "1", "0", "0", "1"};
+
+	agglomerative_.set_verbose(false);
     }
     vector<Eigen::VectorXd> ordered_vectors_;
     AgglomerativeClustering agglomerative_;

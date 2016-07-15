@@ -126,7 +126,7 @@ private:
     size_t num_restarts_ = 3;
 
     // Print messages to stderr?
-    bool verbose_ = true;
+    bool verbose_ = false;
 };
 
 // Class for agglomerative clustering. Since complex index manipulation is
@@ -155,6 +155,9 @@ public:
 
     // Sets whether to prune the hierarchy (have only m leaf clusters, not n).
     void set_prune(bool prune) { prune_ = prune; }
+
+    // Sets the flag for printing messages to stderr.
+    void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
     // Computes the distance between two active clusters.
@@ -215,6 +218,9 @@ private:
 
     // Mapping from a vector index to the path from the root (as bits).
     unordered_map<size_t, string> path_from_root_;
+
+    // Print messages to stderr?
+    bool verbose_ = true;
 };
 
 #endif  // CORE_CLUSTER_H

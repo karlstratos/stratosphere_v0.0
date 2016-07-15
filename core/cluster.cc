@@ -634,6 +634,10 @@ double AgglomerativeClustering::ClusterOrderedVectors(
     size_t num_extra_tightening = 0;  // Number of tightening operations.
 
     // Initialize the first m clusters tightened: O(dm^2).
+    if (verbose_) {
+	cerr << "Initializing/tightening first " << m << " clusters" << endl;
+    }
+
     for (size_t a1 = 0; a1 < m; ++a1) {
 	size_[a1] = 1;
 	active_[a1] = a1;
@@ -656,6 +660,9 @@ double AgglomerativeClustering::ClusterOrderedVectors(
     // Main loop: Perform n-1 merges.
     size_t next_singleton = m;
     for (size_t merge_num = 0; merge_num < n - 1; ++merge_num) {
+	if (verbose_) {
+	    cerr << "Merge " << merge_num + 1 << "/" << n - 1 << endl;
+	}
 	if (next_singleton < n) {
 	    // Set the next remaining vector as the (m+1)-th active cluster.
 	    size_[next_singleton] = 1;
@@ -693,11 +700,15 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	    }
 	}
 
+	size_t num_tightening = 0;
 	while (!tight_[candidate_index]) {
+	    ++num_tightening;
+	    size_t num_tight_active_clusters = 0;
 	    // The current candidate turns out to have a loose lowerbound.
 	    // Tighten it: O(dm).
 	    lb_[candidate_index] = DBL_MAX;  // Recompute lowerbound.
 	    for (size_t a = 0; a < num_active_clusters; ++a) {
+		if (tight_[a]) { ++num_tight_active_clusters; }
 		if (a == candidate_index) continue;  // Skip self.
 		double dist =
 		    ComputeDistance(ordered_vectors, candidate_index, a);
@@ -710,8 +721,13 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 		    twin_[a] = candidate_index;
 		}
 	    }
+	    if (verbose_) {
+		cerr << "\tAt tighten " << num_tightening << ": "
+		     << num_tight_active_clusters << "/" << num_active_clusters
+		     << " tight" << endl;
+	    }
 	    tight_[candidate_index] = true;
-	    ++num_extra_tightening;
+	    num_extra_tightening += num_tightening;
 
 	    // Again, find an active cluster with the smallest lowerbound: O(m).
 	    smallest_lowerbound = DBL_MAX;

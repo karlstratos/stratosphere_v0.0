@@ -209,11 +209,12 @@ void WordRep::ClusterWordVectors() {
 
     if (clustering_method_ == "agglo") {
 	AgglomerativeClustering agglo;
+	agglo.set_verbose(verbose_);
 	time_t begin_time = time(NULL);
 	double gamma = agglo.ClusterOrderedVectors(sorted_word_vectors, dim_);
 	duration = util_string::difftime_string(time(NULL), begin_time);
 	Report(util_string::printf_format("   Average number of tightening: "
-					  "%.2f (not %ld)", gamma, dim_));
+					  "%.2f", gamma));
 	leaves = *agglo.leaves();
     } else if (clustering_method_ == "div") {
 	DivisiveClustering divisive;
@@ -222,6 +223,7 @@ void WordRep::ClusterWordVectors() {
 	divisive.set_distance_type(distance_type_);
 	divisive.set_seed_method(seed_method_);
 	divisive.set_num_restarts(num_restarts_);
+	divisive.set_verbose(verbose_);
 	time_t begin_time = time(NULL);
 	divisive.Cluster(sorted_word_vectors, dim_, &leaves);
 	duration = util_string::difftime_string(time(NULL), begin_time);
