@@ -6,6 +6,8 @@
 //   2006).
 // - Fast and memory efficient implementation of the exact pnn (Franti et al.,
 //   2000).
+// - Vector quantization by lazy pairwise nearest neighbour method (Kaukoranta
+//   et al., 1999).
 
 #ifndef CORE_CLUSTER_H
 #define CORE_CLUSTER_H
@@ -160,13 +162,19 @@ public:
     void set_verbose(bool verbose) { verbose_ = verbose; }
 
 private:
-    // Computes the distance between two active clusters.
-    double ComputeDistance(const vector<Eigen::VectorXd> &ordered_vectors,
-			   size_t active_index1, size_t active_index2);
+    // Computes the distance between two active clusters. For lazy updates, the
+    // distance must satisfy the monotonicity condition (Kaukoranta et al.,
+    // 2000). That is, merging never decreases nearest neighbor distances:
+    //                x                              x
+    //               /                             / *
+    //              /         ------>             / *
+    //             /                             / *
+    //       y****z                       (y) y+z (z)
+    //                                                             [*** <=  ---]
+    double ComputeDistance(size_t active_index1, size_t active_index2);
 
     // Computes the new mean resulting from merging two active clusters.
-    void ComputeMergedMean(const vector<Eigen::VectorXd> &ordered_vectors,
-			   size_t active_index1, size_t active_index2,
+    void ComputeMergedMean(size_t active_index1, size_t active_index2,
 			   Eigen::VectorXd *new_mean);
 
     // Based on the computed hierarchy, create a mapping from a leaf-node bit

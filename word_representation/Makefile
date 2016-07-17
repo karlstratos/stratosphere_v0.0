@@ -19,7 +19,7 @@ WARN = -Wall
 OPT = -O3
 
 # Flags passed to the C++ compiler.
-CFLAGS = -isystem $(GTEST)/include $(WARN) -std=c++11
+CFLAGS = $(WARN) $(OPT) -std=c++11
 ifeq ($(shell uname), Darwin)  # Apple clang version 4.0
 	CFLAGS += -stdlib=libc++
 endif
@@ -31,7 +31,7 @@ all: $(TARGETS)
 
 wordrep: main.o wordrep.o $(CORE)/corpus.o $(CORE)/util.o $(CORE)/sparsesvd.o \
 	$(CORE)/evaluate.o $(CORE)/cluster.o $(SVDLIBC)/libsvd.a
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ -pthread
 
 main.o: main.cc wordrep.o
 	$(CC) -I $(EIGEN) $(CFLAGS) -c $< -o $@

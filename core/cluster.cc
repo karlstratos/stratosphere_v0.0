@@ -633,18 +633,15 @@ double AgglomerativeClustering::ClusterOrderedVectors(
     tight_.resize(m + 1);  // Is the current lowerbound tight?
     size_t num_extra_tightening = 0;  // Number of tightening operations.
 
-    // Initialize the first m clusters tightened: O(dm^2).
-    if (verbose_) {
-	cerr << "Initializing/tightening first " << m << " clusters" << endl;
-    }
-
+    // Initialize/tighten the first m clusters: O(dm^2).
+    if (verbose_) { cerr << "Initializing first " << m << " clusters" << endl; }
     for (size_t a1 = 0; a1 < m; ++a1) {
 	size_[a1] = 1;
 	active_[a1] = a1;
 	mean_[a1] = ordered_vectors[a1];
 	lb_[a1] = DBL_MAX;
 	for (size_t a2 = 0; a2 < a1; ++a2) {
-	    double dist = ComputeDistance(ordered_vectors, a1, a2);
+	    double dist = ComputeDistance(a1, a2);
 	    if (dist < lb_[a1]) {
 		lb_[a1] = dist;
 		twin_[a1] = a2;
@@ -661,7 +658,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
     size_t next_singleton = m;
     for (size_t merge_num = 0; merge_num < n - 1; ++merge_num) {
 	if (verbose_) {
-	    cerr << "Merge " << merge_num + 1 << "/" << n - 1 << endl;
+	    cerr << "Merge " << merge_num + 1 << "/" << n - 1 << ": ";
 	}
 	if (next_singleton < n) {
 	    // Set the next remaining vector as the (m+1)-th active cluster.
@@ -672,7 +669,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	    // Tighten the added cluster: O(dm).
 	    lb_[m] = DBL_MAX;
 	    for (int a = 0; a < m; ++a) {
-		double dist = ComputeDistance(ordered_vectors, m, a);
+		double dist = ComputeDistance(m, a);
 		if (dist < lb_[m]) {
 		    lb_[m] = dist;
 		    twin_[m] = a;
@@ -680,6 +677,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 		if (dist < lb_[a]) {
 		    lb_[a] = dist;
 		    twin_[a] = m;
+		    tight_[a] = true;  // New lb tight by monotonicity.
 		}
 	    }
 	    tight_[m] = true;
@@ -702,16 +700,13 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 
 	size_t num_tightening = 0;
 	while (!tight_[candidate_index]) {
-	    ++num_tightening;
-	    size_t num_tight_active_clusters = 0;
 	    // The current candidate turns out to have a loose lowerbound.
 	    // Tighten it: O(dm).
+	    ++num_tightening;
 	    lb_[candidate_index] = DBL_MAX;  // Recompute lowerbound.
 	    for (size_t a = 0; a < num_active_clusters; ++a) {
-		if (tight_[a]) { ++num_tight_active_clusters; }
 		if (a == candidate_index) continue;  // Skip self.
-		double dist =
-		    ComputeDistance(ordered_vectors, candidate_index, a);
+		double dist =  ComputeDistance(candidate_index, a);
 		if (dist < lb_[candidate_index]) {
 		    lb_[candidate_index] = dist;
 		    twin_[candidate_index] = a;
@@ -719,15 +714,10 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 		if (dist < lb_[a]) {
 		    lb_[a] = dist;
 		    twin_[a] = candidate_index;
+		    tight_[a] = true;  // New lb tight by monotonicity.
 		}
 	    }
-	    if (verbose_) {
-		cerr << "\tAt tighten " << num_tightening << ": "
-		     << num_tight_active_clusters << "/" << num_active_clusters
-		     << " tight" << endl;
-	    }
 	    tight_[candidate_index] = true;
-	    num_extra_tightening += num_tightening;
 
 	    // Again, find an active cluster with the smallest lowerbound: O(m).
 	    smallest_lowerbound = DBL_MAX;
@@ -738,6 +728,10 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 		}
 	    }
 	}
+	if (verbose_) {
+	    cerr << "Tightened " << num_tightening << " times " << endl;
+	}
+	num_extra_tightening += num_tightening;
 
 	// At this point, we have a pair of active clusters with minimum
 	// pairwise distance. Denote their active indices by "alpha" and "beta".
@@ -764,7 +758,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	size_[merged_cluster] = size_[active_[alpha]] + size_[active_[beta]];
 
 	// MUST compute the merge mean before modifying active clusters!
-	ComputeMergedMean(ordered_vectors, alpha, beta, &mean_[alpha]);
+	ComputeMergedMean(alpha, beta, &mean_[alpha]);
 
 	//----------------------------------------------------------------------
 	// SHIFTING (Recall: alpha < beta)
@@ -785,7 +779,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	for (size_t a = 0; a < num_active_clusters; ++a) {
 	    if (a == alpha) continue;  // Skip self.
 	    if (a == beta) continue;  // beta will be overwritten anyway.
-	    double dist = ComputeDistance(ordered_vectors, alpha, a);
+	    double dist = ComputeDistance(alpha, a);
 	    if (dist < lb_[alpha]) {
 		lb_[alpha] = dist;
 		twin_[alpha] = a;
@@ -793,6 +787,7 @@ double AgglomerativeClustering::ClusterOrderedVectors(
 	    if (dist < lb_[a]) {
 		lb_[a] = dist;
 		twin_[a] = alpha;
+		tight_[a] = true;  // New lb tight by monotonicity.
 	    }
 	}
 	tight_[alpha] = true;
@@ -840,9 +835,10 @@ string AgglomerativeClustering::path_from_root(size_t vector_index) {
     return path_from_root_[vector_index];
 }
 
-double AgglomerativeClustering::ComputeDistance(
-    const vector<Eigen::VectorXd> &ordered_vectors, size_t active_index1,
-    size_t active_index2) {
+double AgglomerativeClustering::ComputeDistance(size_t active_index1,
+						size_t active_index2) {
+    // In Ward's algorithm, the distance between clusters c, c' is
+    //    d(c,c') = |c| * |c'| / (|c| + |c'|) || mean_c - mean_{c'} ||^2
     size_t size1 = size_[active_[active_index1]];
     size_t size2 = size_[active_[active_index2]];
     double scale = 2.0 * size1 * size2 / (size1 + size2);
@@ -850,9 +846,9 @@ double AgglomerativeClustering::ComputeDistance(
     return scale * diff.squaredNorm();
 }
 
-void AgglomerativeClustering::ComputeMergedMean(
-    const vector<Eigen::VectorXd> &ordered_vectors, size_t active_index1,
-    size_t active_index2, Eigen::VectorXd *new_mean) {
+void AgglomerativeClustering::ComputeMergedMean(size_t active_index1,
+						size_t active_index2,
+						Eigen::VectorXd *new_mean) {
     double size1 = size_[active_[active_index1]];
     double size2 = size_[active_[active_index2]];
     double total_size = size1 + size2;
