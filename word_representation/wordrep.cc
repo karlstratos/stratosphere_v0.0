@@ -201,9 +201,20 @@ void WordRep::ClusterWordVectors() {
 				     normalized);
 
     Report(util_string::buffer_string("[CLUSTERING]", 80, '-', "right"));
-    Report(util_string::printf_format("   Method: %s",
+    Report(util_string::printf_format("   Number of clusters: %ld\n"
+				      "   Clustering method: %s",
+				      num_clusters_,
 				      clustering_method_.c_str()));
-    Report(util_string::printf_format("   Number of clusters: %ld", dim_));
+    if (clustering_method_ != "agglo") {
+	Report(util_string::printf_format(
+		   "   Maximum number of iterations: %ld\n"
+		   "   Number of threads: %ld\n"
+		   "   Distance type: %ld\n"
+		   "   Seed method: %s\n"
+		   "   Number of restarts: %ld",
+		   max_num_iterations_kmeans_, num_threads_, distance_type_,
+		   seed_method_.c_str(), num_restarts_));
+    }
     unordered_map<string, vector<size_t> > leaves;
     string duration;
 
@@ -211,7 +222,8 @@ void WordRep::ClusterWordVectors() {
 	AgglomerativeClustering agglo;
 	agglo.set_verbose(verbose_);
 	time_t begin_time = time(NULL);
-	double gamma = agglo.ClusterOrderedVectors(sorted_word_vectors, dim_);
+	double gamma = agglo.ClusterOrderedVectors(sorted_word_vectors,
+						   num_clusters_);
 	duration = util_string::difftime_string(time(NULL), begin_time);
 	Report(util_string::printf_format("   Average number of tightening: "
 					  "%.2f", gamma));
@@ -225,7 +237,7 @@ void WordRep::ClusterWordVectors() {
 	divisive.set_num_restarts(num_restarts_);
 	divisive.set_verbose(verbose_);
 	time_t begin_time = time(NULL);
-	divisive.Cluster(sorted_word_vectors, dim_, &leaves);
+	divisive.Cluster(sorted_word_vectors, num_clusters_, &leaves);
 	duration = util_string::difftime_string(time(NULL), begin_time);
     } else {
 	ASSERT(false, "Unknown clustering method: " << clustering_method_);
@@ -386,7 +398,14 @@ string WordRep::Signature(size_t version) {
     }
 
     if (version >= 4) {
+	signature += "_c" + to_string(num_clusters_);
 	signature += "_" + clustering_method_;
+	if (clustering_method_ != "agglo") {
+	    signature += "_iter" + to_string(max_num_iterations_kmeans_);
+	    signature += "_dist" + to_string(distance_type_);
+	    signature += "_" + seed_method_;
+	    signature += "_restarts" + to_string(num_restarts_);
+	}
     }
 
     return signature;

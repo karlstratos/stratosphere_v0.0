@@ -306,9 +306,9 @@ namespace kmeans {
 	    }
 
 	    // Check if converged.
-	    ASSERT(old_objective - new_objective > -1e-32,
+	    ASSERT(old_objective - new_objective > -1e-10,
 		   "Clustering objective increased, something is wrong!");
-	    if (old_objective - new_objective < 1e-15) {
+	    if (old_objective - new_objective < 1e-10) {
 		if (verbose) { cerr << " CONVERGED" << endl; }
 		converged = true;
 		break;

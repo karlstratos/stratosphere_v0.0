@@ -102,6 +102,9 @@ public:
 	clustering_method_ = clustering_method;
     }
 
+    // Sets the number of clusters.
+    void set_num_clusters(size_t num_clusters) { num_clusters_ = num_clusters; }
+
     // Sets the maximum number of iterations in k-means.
     void set_max_num_iterations_kmeans(size_t max_num_iterations_kmeans) {
 	max_num_iterations_kmeans_ = max_num_iterations_kmeans;
@@ -141,7 +144,9 @@ private:
     //                    hash_size_}
     //    version=3: 2 + {dim_, transformation_method_, add_smooth_,
     //                    power_smooth_, context_power_smooth_, scaling_method_}
-    //    version=4: 3 + {clustering_method_}
+    //    version=4: 3 + {num_clusters_, clustering_method_,
+    //                    max_num_iterations_kmeans_, distance_type_,
+    //                    seed_method_, num_restarts_}
     string Signature(size_t version);
 
     // Reports status in a log file and optionally the standard output.
@@ -149,7 +154,7 @@ private:
 
     // Returns the path to the log file.
     string LogPath() {
-	return output_directory_ + "/log_" + Signature(3) + ".txt";
+	return output_directory_ + "/log_" + Signature(4) + ".txt";
     }
 
     // Returns the path to the sorted word types file.
@@ -237,6 +242,9 @@ private:
 
     // Clustering method.
     string clustering_method_ = "agglo";
+
+    // Number of clusters.
+    size_t num_clusters_;
 
     // Maximum number of iterations in k-means.
     size_t max_num_iterations_kmeans_ = 100;

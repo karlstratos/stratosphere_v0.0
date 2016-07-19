@@ -24,6 +24,7 @@ int main (int argc, char* argv[]) {
     double context_power_smooth = 0.75;
     string scaling_method = "cca";
     string clustering_method = "agglo";
+    size_t num_clusters = 0;  // 0 means same as dimension.
     size_t max_num_iterations_kmeans = 100;
     size_t num_threads = 24;
     size_t distance_type = 0;  // Squared Euclidean distance
@@ -71,6 +72,8 @@ int main (int argc, char* argv[]) {
 	    scaling_method = argv[++i];
 	} else if (arg == "--cluster") {
 	    clustering_method = argv[++i];
+	} else if (arg == "--c") {
+	    num_clusters = stol(argv[++i]);
 	} else if (arg == "--iter") {
 	    max_num_iterations_kmeans = stol(argv[++i]);
 	} else if (arg == "--threads") {
@@ -129,6 +132,8 @@ int main (int argc, char* argv[]) {
 	     << "data scaling: none, ppmi, reg, cca" << endl;
 	cout << "--cluster [" << clustering_method << "]:    \t"
 	     << "clustering: agglo, div" << endl;
+	cout << "--c [" << num_clusters << "]:        \t"
+	     << "number of clusters (0 means same as dimension)" << endl;
 	cout << "--iter [" << max_num_iterations_kmeans << "]:    \t"
 	     << "maximum number of iterations in k-means" << endl;
 	cout << "--threads [" << num_threads << "]:        \t"
@@ -145,6 +150,9 @@ int main (int argc, char* argv[]) {
 	     << "show options and quit?" << endl;
 	exit(0);
     }
+
+    // If the number of clusters is 0, set it to the dimension.
+    if (num_clusters == 0) { num_clusters = dim; }
 
     // Initialize a WordRep object.
     WordRep wordrep(output_directory);
@@ -163,6 +171,7 @@ int main (int argc, char* argv[]) {
     wordrep.set_context_power_smooth(context_power_smooth);
     wordrep.set_scaling_method(scaling_method);
     wordrep.set_clustering_method(clustering_method);
+    wordrep.set_num_clusters(num_clusters);
     wordrep.set_max_num_iterations_kmeans(max_num_iterations_kmeans);
     wordrep.set_num_threads(num_threads);
     wordrep.set_distance_type(distance_type);
