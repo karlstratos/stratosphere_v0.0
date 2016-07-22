@@ -275,7 +275,6 @@ size_t Corpus::CountWords(unordered_map<string, size_t> *word_count) {
 	    vector<string> word_strings;
 	    ++line_num;
 	    util_file::read_line(&file, &word_strings);
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    for (string word_string : word_strings) {
 		if (Skip(word_string)) { continue; }
 		if (lowercase_) {
@@ -373,7 +372,6 @@ size_t Corpus::SlideWindow(const unordered_map<string, Word> &word_dictionary,
 	    vector<string> word_strings;
 	    util_file::read_line(&file, &word_strings);
 	    ++line_num;
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    for (string word_string : word_strings) {
 		if (Skip(word_string)) { continue; }
 		if (lowercase_) {
@@ -437,7 +435,6 @@ void Corpus::CountTransitions(
 	    vector<string> word_strings;
 	    util_file::read_line(&file, &word_strings);
 	    ++line_num;
-	    if (word_strings.size() > kMaxSentenceLength_) { continue; }
 	    Word w_prev;
 	    for (size_t i = 0; i < word_strings.size(); ++i) {
 		string word_string = (!lowercase_) ? word_strings[i] :

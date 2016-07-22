@@ -173,9 +173,6 @@ private:
     // Returns true if the string is to be skipped.
     bool Skip(const string &word_string);
 
-    // Maximum sentence length to consider.
-    const size_t kMaxSentenceLength_ = 1000;
-
     // Maximum word length to consider.
     const size_t kMaxWordLength_ = 100;
 
