@@ -39,7 +39,7 @@ public:
     void InduceWordVectors();
 
     // Clusters cached word vectors.
-    void ClusterWordVectors();
+    void ClusterWordVectors(const string &corpus_file);
 
     // Sets the flag for lowercasing all word strings.
     void set_lowercase(bool lowercase) { lowercase_ = lowercase; }
@@ -135,6 +135,10 @@ private:
     // Evaluates word vectors on lexical tasks.
     void EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
 			     &word_vectors);
+
+    // Computes mutual information of adjacent clusters in the corpus.
+    double ComputeClusterMI(const string &corpus_file, const
+			    unordered_map<string, string> &word_to_cluster);
 
     // Returns a string signature of parameters.
     //    version=0: {lowercase_}

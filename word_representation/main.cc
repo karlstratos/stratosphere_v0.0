@@ -179,15 +179,13 @@ int main (int argc, char* argv[]) {
     wordrep.set_num_restarts(num_restarts);
     wordrep.set_verbose(verbose);
 
-    // If given a corpus, extract statistics from it.
-    if (!corpus_path.empty()) {
-	if (from_scratch) { wordrep.ResetOutputDirectory(); }
-	wordrep.ExtractStatistics(corpus_path);
-    }
+    // Extract statistics from a corpus.
+    if (from_scratch) { wordrep.ResetOutputDirectory(); }
+    wordrep.ExtractStatistics(corpus_path);
 
     // Induce word vectors from cached statistics.
     wordrep.InduceWordVectors();
 
     // Cluster cached word vectors.
-    wordrep.ClusterWordVectors();
+    wordrep.ClusterWordVectors(corpus_path);
 }

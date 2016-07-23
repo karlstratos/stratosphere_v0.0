@@ -32,6 +32,7 @@ void WordRep::ResetOutputDirectory() {
 }
 
 void WordRep::ExtractStatistics(const string &corpus_file) {
+    if (corpus_file.empty()) { return; }
     Corpus corpus(corpus_file, verbose_);
     corpus.set_lowercase(lowercase_);
     corpus.set_subsampling_threshold(subsampling_threshold_);
@@ -187,7 +188,7 @@ void WordRep::InduceWordVectors() {
     EvaluateWordVectors(word_vectors);
 }
 
-void WordRep::ClusterWordVectors() {
+void WordRep::ClusterWordVectors(const string &corpus_file) {
     if (!util_file::exists(WordVectorsPath())) { return; }
     if (util_file::exists(ClustersPath())) { return; }
 
@@ -215,7 +216,7 @@ void WordRep::ClusterWordVectors() {
 		   max_num_iterations_kmeans_, num_threads_, distance_type_,
 		   seed_method_.c_str(), num_restarts_));
     }
-    unordered_map<string, vector<size_t> > leaves;
+    unordered_map<string, vector<Word> > leaves;
     string duration;
 
     if (clustering_method_ == "agglo") {
@@ -253,12 +254,14 @@ void WordRep::ClusterWordVectors() {
 
     // Write the bit strings and their associated word types.
     ofstream clusters_file(ClustersPath(), ios::out);
+    unordered_map<string, string> word_to_cluster;  // Used later.
     for (const auto &bitstring : bitstring_types) {
 	vector<pair<string, size_t> > v;  // Sort word types in each cluster.
 	for (Word word : leaves[bitstring]) {
 	    string word_string = sorted_word_strings[word];
 	    size_t word_count = sorted_word_counts[word];
 	    v.emplace_back(word_string, word_count);
+	    word_to_cluster[word_string] = bitstring;
 	}
 	sort(v.begin(), v.end(),
 	     util_misc::sort_pairs_second<string, size_t, greater<size_t> >());
@@ -267,6 +270,11 @@ void WordRep::ClusterWordVectors() {
 	    clusters_file << bitstring << " " << word_pair.first << " "
 			  << word_pair.second << endl;
 	}
+    }
+
+    if (!corpus_file.empty()) {
+	double mi = ComputeClusterMI(corpus_file, word_to_cluster);
+	Report(util_string::printf_format("   Cluster MI: %.3f", mi));
     }
 }
 
@@ -364,6 +372,63 @@ void WordRep::EvaluateWordVectors(const unordered_map<string, Eigen::VectorXd>
     duration = util_string::difftime_string(time(NULL), begin_time);
     Report(util_string::buffer_string("[" + duration + "]", 80, '-',
 				      "right"));
+}
+
+double WordRep::ComputeClusterMI(const string &corpus_file,
+				 const unordered_map<string, string>
+				 &word_to_cluster) {
+    // Count cluster cooccurrences.
+    size_t num_samples = 0;
+    unordered_map<string, unordered_map<string, size_t> > c1c2_count;
+    unordered_map<string, size_t> c1_count;
+    unordered_map<string, size_t> c2_count;
+
+    vector<string> file_list;
+    util_file::list_files(corpus_file, &file_list);
+    bool not_first = false;
+    for (size_t file_num = 0; file_num < file_list.size(); ++file_num) {
+	string c1;
+	string file_path = file_list[file_num];
+	ifstream file(file_path, ios::in);
+	ASSERT(file.is_open(), "Cannot open file: " << file_path);
+	while (file.good()) {
+	    vector<string> word_strings;
+	    util_file::read_line(&file, &word_strings);
+	    for (size_t i = 0; i < word_strings.size(); ++i) {
+		string word_string = (!lowercase_) ? word_strings[i] :
+		    util_string::lowercase(word_strings[i]);
+		if (word_to_cluster.find(word_string) ==
+		    word_to_cluster.end()) {
+		    word_string = corpus::kRareString;
+		}
+
+		string c = word_to_cluster.at(word_string);
+		if (not_first) {
+		    ++num_samples;
+		    ++c1c2_count[c1][c];
+		    ++c1_count[c1];
+		    ++c2_count[c];
+		} else {
+		    not_first = true;
+		}
+		c1 = c;
+	    }
+	}
+    }
+
+    double mi = 0.0;
+    for (auto &c1_pair : c1c2_count) {
+	string c1 = c1_pair.first;
+	for (auto &c2_pair : c1c2_count[c1]) {
+	    string c2 = c2_pair.first;
+	    double prob_c1c2 = float(c2_pair.second) / num_samples;
+	    double pmi = log2(float(c2_pair.second) * num_samples /
+			      c1_count[c1] / c2_count[c2]);  // Base 2 log.
+	    mi += prob_c1c2 * pmi;
+	}
+    }
+
+    return mi;
 }
 
 string WordRep::Signature(size_t version) {

@@ -68,7 +68,7 @@ def compute_mi(args):
 
     mi = 0.0
     for (c1, c2) in c1c2_count:
-        prob_c1c2 = c1c2_count[(c1, c2)] / num_samples
+        prob_c1c2 = float(c1c2_count[(c1, c2)]) / num_samples
         pmi = log(float(c1c2_count[(c1, c2)]) * num_samples /
                   c1_count[c1] / c2_count[c2], 2)  # Base 2 log
         mi += prob_c1c2 * pmi
