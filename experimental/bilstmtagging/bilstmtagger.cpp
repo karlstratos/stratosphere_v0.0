@@ -87,6 +87,10 @@ void BiLSTMTagger::TrainGazetteer(const string &data_path) {
     LoadEntities(training_data);
     LoadEntitiesFromGazetteerFile();
 
+    PrintTrainingInfo(data_path, sentences.size(), num_words_training,
+                      dev_data.first.size(), num_words_dev, dim_embeddings,
+                      embeddings.size());
+
     vector<pair<vector<size_t>, size_t> > gaz_data;
     vector<vector<string> > gaz_words;
     for (auto &kv : entities_) {
@@ -102,16 +106,23 @@ void BiLSTMTagger::TrainGazetteer(const string &data_path) {
     BuildModel(embeddings);
     double max_performance =  -numeric_limits<float>::infinity();
 
-    for (size_t i = 0; i < 5; ++i) {
+    // Interleave training
+    for (size_t i = 0; i < 3; ++i) {  // 3
         cnn::AdamTrainer trainer1(&model_, 1e-6, learning_rate_, 0.01, 0.9999,
                                   1e-8);
-        RunEntityClassificationEpochs(gaz_data, gaz_words, 5, &trainer1);
+        //RunEntityClassificationEpochs(gaz_data, gaz_words, 5, &trainer1);  // 5
+        RunEntityClassificationEpochs(gaz_data, gaz_words, 1, &trainer1);  // 1
 
         cnn::AdamTrainer trainer2(&model_, 1e-6, learning_rate_, 0.01, 0.9999,
                                   1e-8);
         RunTaggingEpochs(training_data, sentences, dev_data, num_words_dev, 10,
-                         &trainer2, &max_performance);
+                         &trainer2, &max_performance);  // 10
     }
+
+    // Final training, just to be sure.
+    cnn::AdamTrainer trainer(&model_, 1e-6, learning_rate_, 0.01, 0.9999, 1e-8);
+    RunTaggingEpochs(training_data, sentences, dev_data, num_words_dev,
+                     num_epochs_, &trainer, &max_performance);
 }
 
 double BiLSTMTagger::EvaluatePerformance(
@@ -495,10 +506,11 @@ void BiLSTMTagger::PrintTrainingInfo(const string &training_data_path,
     cerr << endl;
 
     if (gazetteer_.size() > 0) {
-        cerr << "Gazetteer:              " << gazetteer_path_ << endl;
-        cerr << "   This many words:     " << gazetteer_.size() << endl;
-        cerr << "   This many types:     " << entity_type_index_.size() << endl;
-        cerr << "   Types:               ";
+        cerr << "Gazetteer:                       " << gazetteer_path_ << endl;
+        cerr << "   This many words (lowercased): " << gazetteer_.size() << endl;
+        cerr << "   This many types:              "
+             << entity_type_index_.size() << endl;
+        cerr << "   Types:                        ";
         for (auto &p : entity_type_index_) {
             cerr << p.first << " ";
         }
@@ -528,61 +540,6 @@ void BiLSTMTagger::PrintTrainingInfo(const string &training_data_path,
     cerr << "Use gaz embeddings?     " << use_gazemb_ << endl;
     cerr << "Do gaz training?        " << do_gaztrain_ << endl;
     cerr << endl;
-
-    ofstream log_file(model_directory_ + "/log", ios::app);
-    log_file << "Model directory:        " << model_directory_ << endl;
-    log_file << "Training data:          " << training_data_path << endl;
-    log_file << "   Num sentences:       " << num_sentences_training << endl;
-    log_file << "   Num words:           " << num_words_training << endl;
-    log_file << endl;
-    log_file << "Dev data:               " << development_path_ << endl;
-    log_file << "   Num sentences:       " << num_sentences_dev << endl;
-    log_file << "   Num words:           " << num_words_dev << endl;
-    log_file << endl;
-
-    if (num_pretrained_word_embeddings > 0) {
-        log_file << "Word embs:     " << embedding_path_ << endl;
-        log_file << "   Dim:        " << dim_pretrained_word_embeddings << endl;
-        log_file << "   This many:  " << num_pretrained_word_embeddings << endl;
-    } else {
-        log_file << "No pretrained word embeddings given" << endl;
-    }
-    log_file << endl;
-
-    if (gazetteer_.size() > 0) {
-        log_file << "Gazetteer:          " << gazetteer_path_ << endl;
-        log_file << "   This many words: " << gazetteer_.size() << endl;
-        log_file << "   This many types: " << entity_type_index_.size() << endl;
-        log_file << "   Types:           ";
-        for (auto &p : entity_type_index_) {
-            log_file << p.first << " ";
-        }
-        log_file << endl;
-    } else {
-        log_file << "No gazetteer given" << endl;
-    }
-    log_file << endl;
-
-    log_file << "Num char types:         " << char_index_.size() << endl;
-    log_file << "Num word types:         " << word_index_.size() << endl;
-    log_file << "Num tag types:          " << tag_index_.size() << endl;
-    log_file << "Dim char embeddings:    " << dim_char_embeddings_  << endl;
-    log_file << "Dim word embeddings:    " << dim_word_embeddings_ << endl;
-    log_file << "Dim gaz embeddings:     " << dim_gazetteer_embeddings_ << endl;
-    log_file << "Dim LSTM outputs:       " << dim_lstm_outputs_ << endl;
-    log_file << "Dim hidden layers:      " << dim_hidden_layers_ << endl;
-    log_file << "Num LSTM layers:        " << num_lstm_layers_ << endl;
-    log_file << "Activation:             " << activation_ << endl;
-    log_file << "Learning rate:          " << learning_rate_ << endl;
-    log_file << "Dropout rate:           " << dropout_rate_ << endl;
-    log_file << "Number of epochs:       " << num_epochs_ << endl;
-    log_file << "Performance measure:    " << performance_measure_ << endl;
-    log_file << "Loss function:          " << loss_function_ << endl;
-    log_file << "Beam size:              " << beam_size_ << endl;
-    log_file << "Use second LSTMs?       " << use_second_lstms_ << endl;
-    log_file << "Use gaz embeddings?     " << use_gazemb_ << endl;
-    log_file << "Do gaz training?        " << do_gaztrain_ << endl;
-    log_file << endl;
 }
 
 size_t BiLSTMTagger::ReadTrainingData(
@@ -721,7 +678,9 @@ void BiLSTMTagger::LoadEntities(const vector<pair<vector<size_t>,
                     size_t g = entity_type_index_[type];
                     entities_.insert(make_pair(entity, g));
                     for (size_t i = 0; i < entity.size(); ++i) {
-                        gazetteer_[word_string_[entity[i]]][g] = true;
+                        string word =
+                            util_string::lowercase(word_string_[entity[i]]);
+                        gazetteer_[word][g] = true;
                     }
                     entity.clear();
                 }
@@ -737,7 +696,8 @@ void BiLSTMTagger::LoadEntities(const vector<pair<vector<size_t>,
             size_t g = entity_type_index_[type];
             entities_.insert(make_pair(entity, g));
             for (size_t i = 0; i < entity.size(); ++i) {
-                gazetteer_[word_string_[entity[i]]][g] = true;
+                string word = util_string::lowercase(word_string_[entity[i]]);
+                gazetteer_[word][g] = true;
             }
             entity.clear();
         }
@@ -775,7 +735,9 @@ void BiLSTMTagger::LoadEntitiesFromGazetteerFile() {
             size_t g = entity_type_index_[type];
             entities_.insert(make_pair(x_sequence, g));
             for (size_t i = 0; i < x_sequence.size(); ++i) {
-                gazetteer_[word_string_[x_sequence[i]]][g] = true;
+                string word =
+                    util_string::lowercase(word_string_[x_sequence[i]]);
+                gazetteer_[word][g] = true;
             }
         }
     }
@@ -948,7 +910,10 @@ double BiLSTMTagger::BuildGraphEntityType(const std::vector<size_t> &x_sequence,
     cnn::ComputationGraph graph;
 
     vector<Expression> word_expressions;
+    bool use_second_lstms_saved = use_second_lstms_;
+    use_second_lstms_ = false;
     ComputeWordExpressions(x_sequence, words, &graph, &word_expressions);
+    use_second_lstms_ = use_second_lstms_saved;
 
     // Get a single vector by running an LSTM over the word expressions.
     gaz_lstm_builder_.new_graph(graph);
@@ -980,18 +945,6 @@ double BiLSTMTagger::BuildGraphEntityType(const std::vector<size_t> &x_sequence,
             }
         }
         *prediction = best_g;
-        /*
-        for (string word : words) {
-            cout << word << " ";
-        }
-        cout << "Gold=" << entity_type_string_[gold_label] << " ";
-        cout << "Pred=" << entity_type_string_[best_g] << " ";
-
-        if (gold_label != best_g) {
-            cout << "<----------------------INCORRECT";
-        }
-        cout<< endl;
-        */
     } else {  // Test time: compute prediction
         vector<float> scores =
             cnn::as_vector(graph.get_value(weights));
@@ -1235,9 +1188,11 @@ void BiLSTMTagger::ComputeWordExpressions(
             {char_forward, char_backward, word_embedding};
 
         if (use_gazemb_) {
-            if (gazetteer_.find(word) != gazetteer_.end()) {
+            string word_lower = util_string::lowercase(word);
+            if (gazetteer_.find(word_lower) != gazetteer_.end()) {
                 for (size_t g = 0; g < entity_type_index_.size(); ++g) {
-                    if (gazetteer_[word].find(g) != gazetteer_[word].end()) {
+                    if (gazetteer_[word_lower].find(g) !=
+                        gazetteer_[word_lower].end()) {
                         inputs.push_back(lookup(*graph,
                                                 in_gazetteer_embeddings_, g));
                     } else {
