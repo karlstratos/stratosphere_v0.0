@@ -4,7 +4,7 @@
 GTEST = ../../third_party/gtest-1.7.0
 
 # Where to find the Eigen package.
-EIGEN = ../../third_party/eigen-eigen-10219c95fe65
+EIGEN = ../../third_party/eigen-eigen-5a0156e40feb
 
 # Where to find the SVDLIBC package.
 SVDLIBC = ../../third_party/SVDLIBC

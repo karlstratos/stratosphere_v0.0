@@ -4,7 +4,7 @@
 SVDLIBC = ../third_party/SVDLIBC
 
 # Where to find the Eigen package.
-EIGEN = ../third_party/eigen-eigen-10219c95fe65
+EIGEN = ../third_party/eigen-eigen-5a0156e40feb
 
 # Where to find the core files.
 CORE = ../core
