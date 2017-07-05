@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 
 # Where to find the SVDLIBC package.
 SVDLIBC = ../third_party/SVDLIBC

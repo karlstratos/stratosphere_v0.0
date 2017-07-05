@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 
 # Where to find the core files.
 CORE = ../core

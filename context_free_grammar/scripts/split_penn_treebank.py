@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 """
 This module is used to process the original Penn Treebank WSJ dataset into the
 standard split of train/dev/test portions: the resulting files contain a single

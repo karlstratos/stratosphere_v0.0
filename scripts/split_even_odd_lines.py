@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 """
 This module is used to split a text file into even lines and odd lines.
 """

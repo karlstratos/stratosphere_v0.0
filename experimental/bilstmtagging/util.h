@@ -1,4 +1,4 @@
-// Author: Karl Stratos (stratos@cs.columbia.edu)
+// Author: Karl Stratos (me@karlstratos.com)
 //
 // Various utility functions for the C++ standard library.
 

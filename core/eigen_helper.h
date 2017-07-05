@@ -1,4 +1,4 @@
-// Author: Karl Stratos (stratos@cs.columbia.edu)
+// Author: Karl Stratos (me@karlstratos.com)
 //
 // Various helper functions for the Eigen library. Some conventions:
 //    - A "basis" is always a matrix whose columns are the basis elements.

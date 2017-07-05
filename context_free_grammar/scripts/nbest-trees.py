@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 """
 This module is used to extract n-best parses from trees. Note that we only use
 (n-1) trees from the parser if the gold tree is already in the list.

@@ -1,4 +1,4 @@
-# Author: Karl Stratos (stratos@cs.columbia.edu)
+# Author: Karl Stratos (me@karlstratos.com)
 
 # Where to find the root of Google Test.
 GTEST = ../../third_party/gtest-1.7.0
