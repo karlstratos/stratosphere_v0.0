@@ -63,6 +63,9 @@ public:
     // Appends the given node to the children vector to the right.
     void AppendToChildren(Node *child);
 
+    // Returns the number of leaves.
+    size_t NumLeaves() { return span_end_ - span_begin_ + 1; }
+
     // Gets the leaves of this node as a sequence of terminal strings.
     void Leaves(vector<string> *terminal_strings);
 

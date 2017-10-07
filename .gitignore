@@ -2,6 +2,7 @@
 data/universal_treebanks_v2.0
 data/sequence_labeling
 data/parsing
+interactive_clustering/data
 
 # "._" files
 ._*

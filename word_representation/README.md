@@ -1,3 +1,5 @@
 ./wordrep --corpus ~/Desktop/linear-algebra/data/gigaword_eng_v4/gigaword_10000sents --output /tmp/temp --rare 5 --sentences --window 5 --context bag --dim 50 --transform power --add 0.0 --power 0.5 --cpower 0.75 --scale cca -f
 
 ./wordrep --corpus ~/Desktop/linear-algebra/data/gigaword_eng_v4/gigaword_10000sents --output /tmp/temp --rare 3 --sentences --window 3 --context list --sub 0 --cooccur unif --dim 200 --transform power --add 10 --power 1 --cpower 1 --scale cca --cluster div --c 50 --iter 100 --threads 4 --dist 0 --seed pp --restart 3 -f
+
+./wordrep --corpus ../../data/universal_treebanks_v2.0/pos-version/en/unlabeled/universal_en.all --output ../interactive_clustering/en_divall --rare 0 --sentences --window 3 --context list --sub 0 --cooccur unif --dim 200 --transform power --add 10 --power 1 --cpower 1 --scale cca --cluster div --c 46348 --iter 100 --threads 4 --dist 0 --seed pp --restart 3

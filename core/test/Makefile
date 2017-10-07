@@ -26,7 +26,8 @@ endif
 
 # Top-level commands.
 TESTS = util_test eigen_helper_test optimize_test sparsesvd_test corpus_test \
-	cluster_test evaluate_test trees_test features_test icluster_test
+	cluster_test evaluate_test trees_test features_test icluster_test \
+	pruner_test
 
 all: $(TESTS)
 
@@ -132,6 +133,17 @@ icluster_test.o: icluster_test.cc
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(CORE)/icluster.o: $(CORE)/icluster.cc $(CORE)/icluster.h $(CORE)/util.o
+	$(CC) $(CFLAGS) -c $< -o $@
+
+pruner_test: pruner_test.o $(CORE)/pruner.o $(CORE)/trees.o $(CORE)/util.o \
+	gtest_main.a
+	$(CC) $(CFLAGS) $^ -o $@
+
+pruner_test.o: pruner_test.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(CORE)/pruner.o: $(CORE)/pruner.cc $(CORE)/pruner.h $(CORE)/trees.o \
+	$(CORE)/util.o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 evaluate_test: evaluate_test.o $(CORE)/evaluate.o $(CORE)/util.o gtest_main.a
