@@ -9,6 +9,8 @@
 int main (int argc, char* argv[]) {
     string tree_path;
     string prototype_path;
+    string oracle_path;
+    size_t num_queries = 100;
     string output_path;
 
     // Parse command line arguments.
@@ -19,6 +21,10 @@ int main (int argc, char* argv[]) {
 	    tree_path = argv[++i];
 	} else if (arg == "--proto") {
 	    prototype_path = argv[++i];
+	} else if (arg == "--oracle") {
+	    oracle_path = argv[++i];
+	} else if (arg == "--num-queries") {
+	    num_queries = stoi(argv[++i]);
 	} else if (arg == "--out") {
 	    output_path = argv[++i];
 	} else if (arg == "--help" || arg == "-h"){
@@ -35,6 +41,10 @@ int main (int argc, char* argv[]) {
 	     << "path to a tree" << endl;
 	cout << "--proto [-]:        \t"
 	     << "path to a list of labeled prototypes" << endl;
+	cout << "--oracle [-]:        \t"
+	     << "path to an oracle labeler" << endl;
+	cout << "--num-queries [-]:        \t"
+	     << "number of queries in active learning" << endl;
 	cout << "--out [-]:        \t"
 	     << "output path for propagated labels" << endl;
 	cout << "--help, -h:           \t"
@@ -44,8 +54,14 @@ int main (int argc, char* argv[]) {
 
     Pruner pruner;
     pruner.ReadTree(tree_path);
-    unordered_map<string, string> proto2label =
-	pruner.ReadPrototypes(prototype_path);
+    unordered_map<string, string> proto2label;
+    if (!prototype_path.empty()) {
+	proto2label = pruner.ReadPrototypes(prototype_path);
+    } else {
+	ASSERT(!oracle_path.empty(), "Need oracle access to find prototypes");
+	unordered_map<string, string> oracle = pruner.ReadOracle(oracle_path);
+
+    }
 
     unordered_map<string, vector<Node *> > pure_subtrees;
     vector<pair<Node *, string> > unknown_subtrees;
