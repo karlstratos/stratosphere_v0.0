@@ -31,6 +31,15 @@ public:
     // Reads labeled prototypes from a file: <label> <p_1> ... <p_k>
     unordered_map<string, string> ReadPrototypes(const string &file_path);
 
+    // Reads an oracle labeler x->C(x) from a file: <C(x)> <x>.
+    unordered_map<string, string> ReadOracle(const string &file_path);
+
+    // Sample prototypes.
+    void SamplePrototypes(const unordered_map<string, string> &oracle,
+			  const vector<string> &leaves,
+			  size_t num_proto,
+			  unordered_map<string, string> *proto2label);
+
     // Propagates the labels of the given prototypes through the tree.
     um2v PropagateLabels(const um2v &prototypes);
 
@@ -76,6 +85,9 @@ private:
     // Special strings to represent parentheses.
     const string kRRB_ = "<[-RRB-]>";
     const string kLRB_ = "<[-LRB-]>";
+
+    // Randomness engine
+    mt19937 mt;
 };
 
 #endif  // CORE_PRUNER_H_

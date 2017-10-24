@@ -83,6 +83,76 @@ unordered_map<string, string> Pruner::ReadPrototypes(const string &file_path) {
     return proto2label;
 }
 
+unordered_map<string, string> Pruner::ReadOracle(const string &file_path) {
+    unordered_map<string, string> oracle;
+    ifstream file(file_path, ios::in);
+    ASSERT(file.is_open(), "Cannot open " << file_path);
+    while (file.good()) {
+	vector<string> tokens;  // <C(x)> <x>
+	util_file::read_line(&file, &tokens);
+	if (tokens.size() == 0) { continue; }  // Skip empty lines.
+	oracle[tokens[1]] = tokens[0];
+    }
+    return oracle;
+}
+
+void Pruner::SamplePrototypes(const unordered_map<string, string> &oracle,
+			      const vector<string> &leaves,
+			      size_t num_proto,
+			      unordered_map<string, string> *proto2label) {
+    unordered_map<string, size_t> leaf2index;
+    for (size_t i = 0; i < leaf2index.size(); ++i) {
+	leaf2index[leaves.at(i)] = i;
+    }
+    vector<pair<size_t, size_t> > endpoints
+	= { make_pair(0, leaves.size() - 1) };
+    size_t num_available = leaves.size();  // TODO: make sure to change this.
+
+    int nearest_enemy1 = -1;        //            1         2
+    int nearest_enemy2 = -1;        //  ?-?-V-?-?-V-?-?-?-?-N-N-?-?
+    for (const auto &pair1 : proto2label) {
+	for (const auto &pair2 : proto2label) {
+	    if (pair1.first == pair2.first) { continue; }
+	    if (pair1.second != pair2.second) {
+		size_t e1 = leaf2index[pair1.first];
+		size_t e2 = leaf2index[pair2.second];
+		if (e1 > e2) { swap(e1, e2); }
+		if (e2 - e1 <= nearest_enemy2 - nearest_enemy1) {
+		    nearest_enemy1 = e1;
+		    nearest_enemy2 = e2;
+		}
+	    }
+	}
+    }
+
+    while (proto2label->size() < num_proto) {
+	string query;
+
+	if (neareast_enemy1 < 0) {
+	    // Random sampling
+	    uniform_int_distribution<> dis(0, num_available - 1);
+	    size_t random_available_index = dis(mt);
+	    size_t pointer = 0;
+	    for (const auto &pair : endpoints) {
+		for (size_t i = pair.first; i <= pair.second; ++i) {
+		    if (pointer == random_available_index) {
+			query = leaves.at(i);
+			break;
+		    }
+		    ++pointer;
+		}
+	    }
+	} else {
+	    // Bisect
+	}
+
+	// Query the oracle.
+	(*proto2label)[query] = oracle.at(query);
+
+	// Update the nearest enemies.
+    }
+}
+
 unordered_map<string, vector<string> > Pruner::PropagateLabels(
     const unordered_map<string, vector<string> > &prototypes) {
     ASSERT(prototypes.size() > 0, "No prototype to propagate");
