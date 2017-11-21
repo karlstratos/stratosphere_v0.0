@@ -43,7 +43,7 @@ int main (int argc, char* argv[]) {
 	     << "path to a list of labeled prototypes" << endl;
 	cout << "--oracle [-]:        \t"
 	     << "path to an oracle labeler" << endl;
-	cout << "--num-proto [-]:        \t"
+	cout << "--num-proto [" << num_proto << "]:    \t"
 	     << "number of prototypes to query in active learning" << endl;
 	cout << "--out [-]:        \t"
 	     << "output path for propagated labels" << endl;

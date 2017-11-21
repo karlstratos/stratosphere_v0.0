@@ -6,6 +6,7 @@
 #define CORE_PRUNER_H_
 
 #include <iostream>
+#include <random>
 #include <stack>
 #include <string>
 #include <unordered_map>
